@@ -1,0 +1,126 @@
+
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Trabajador {
+  id String @id @default(uuid())
+
+  // Identificación Interna
+  id_trabajador String? @unique @map("id_trabajador") // Custom ID from sheet if needed
+
+  // Información Personal
+  nombre_completo  String
+  cargo            String
+  estado_laboral   String  @default("Activo") // 'Activo', 'Inactivo'
+  nacionalidad     String?
+  fecha_nacimiento DateTime?
+  url_foto         String?
+
+  // Documentación Personal
+  numero_pasaporte            String?
+  fecha_vencimiento_pasaporte DateTime?
+
+  documento_identidad         String?
+  fecha_vencimiento_identidad DateTime?
+
+  permiso_residencia           String?
+  fecha_vencimiento_residencia DateTime?
+
+  // Documentación Conducción
+  licencia_conducir            String?
+  fecha_vencimiento_licencia   DateTime?
+  traduccion_licencia          String?
+  fecha_vencimiento_traduccion DateTime?
+
+  // Documentación Fiscal / Legal
+  codigo_fiscal            String?
+  fecha_vencimiento_fiscal DateTime?
+  codigo_cu_2024           String?
+
+  // Contratos
+  tipo_contrato              String?
+  fecha_vencimiento_contrato DateTime?
+  dimision                   String? // Motivo o Fecha de salida
+  
+  // Contacto
+  telefono           String?
+  email_personal     String?
+  direccion          String?
+  area_trabajo       String?
+  email_supervisor   String?
+
+  // Otros
+  permiso_univex     String?
+  carta_responsiva   String?
+
+  creado_en          DateTime @default(now())
+  actualizado_en     DateTime @updatedAt
+  
+  @@map("trabajadores")
+}
+
+model Vehiculo {
+  id             String @id @default(uuid())
+  placa          String @unique // 'TARGA'
+
+  // Detalles Técnicos
+  marca_modelo        String?
+  anio_fabricacion    Int?
+  tipo_unidad         String? // 'DHL', 'Farmacia', etc.
+  estado_vehiculo     String? // 'Activo', 'Mantenimiento'
+  aislamiento_termico String? // 'COIBENTAZI'
+
+  // Documentación
+  tarjeta_circulacion      String? // 'LIBRETO'
+  poliza_seguro            String? // 'ASEGURAZIONE'
+  fecha_vencimiento_seguro DateTime? // Segunda columna de segurazione?
+  revision_tecnica         String? // 'R.TECNICA'
+  permisos_especiales      String? // 'DEROGHE'
+  id_interno_furgon        String? // 'ID_FURGON'
+
+  // Telemetría y Rastreo (Futuro)
+  kilometraje_actual Int?      @default(0)
+  ultima_latitud     Float?
+  ultima_longitud    Float?
+  ultima_actualizacion DateTime?
+
+  creado_en      DateTime @default(now())
+  actualizado_en DateTime @updatedAt
+  
+  @@map("vehiculos")
+}
+
+model Programacion {
+  id String @id @default(uuid())
+
+  // Core info
+  fecha            DateTime // 'FECHA'
+  id_programacion  String?  @unique
+  
+  // Loose linking to allow ID_FURGON (e.g. F014) or PLACA
+  vehiculo_id      String?  // 'MEZZO' (Could be F014 or Placa)
+  trabajador_id    String?  // 'ID_AUTISTA'
+  
+  // Route Info
+  cliente          String?  // 'CLIENTE'
+  lugar_retiro     String?  // 'LUOGO RITIRO'
+  lugar_entrega    String?  // 'LUOGO CONSEGNA'
+  hora_retiro      String?  // 'ORA RITIRO'
+  eta              String?  // 'ETA'
+  
+  nota             String?  // 'NOTA'
+
+  creado_en        DateTime @default(now())
+  actualizado_en   DateTime @updatedAt
+
+  @@map("programacion")
+}
