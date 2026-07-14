@@ -19,6 +19,7 @@ export class PeajesController {
             estado: query.estado,
             skip: query.skip ? parseInt(query.skip, 10) || 0 : 0,
             take: query.take ? Math.min(parseInt(query.take, 10) || 10, 100) : 10,
+            ownerCodigo: req.user.soloPropios ? req.user.trabajadorCodigo : undefined,
         });
     }
 

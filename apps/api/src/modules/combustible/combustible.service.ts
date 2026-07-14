@@ -25,11 +25,13 @@ export class CombustibleService {
 
     async findAll(
         tenantId: string,
-        opts: { q?: string; area?: string; skip?: number; take?: number } = {},
+        opts: { q?: string; area?: string; skip?: number; take?: number; trabajadorCodigo?: string } = {},
     ) {
-        const { q, area, skip = 0, take = 10 } = opts;
+        const { q, area, skip = 0, take = 10, trabajadorCodigo } = opts;
 
         const where: Prisma.CombustibleWhereInput = { tenant_id: tenantId };
+        // Owner scoping: a "solo_propios" user only sees their own records.
+        if (trabajadorCodigo) where.trabajador_id = trabajadorCodigo;
         if (q) {
             where.OR = [
                 { targa: { contains: q } },
@@ -49,7 +51,9 @@ export class CombustibleService {
         const areaGroups: Array<{ area: string | null }> =
             await (this.prisma.combustible.groupBy as any)({
                 by: ['area'],
-                where: { tenant_id: tenantId },
+                where: trabajadorCodigo
+                    ? { tenant_id: tenantId, trabajador_id: trabajadorCodigo }
+                    : { tenant_id: tenantId },
             });
         const areas = areaGroups.map((g) => g.area).filter(Boolean) as string[];
 

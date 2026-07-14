@@ -31,13 +31,15 @@ export class PeajesService {
 
     async findAll(
         tenantId: string,
-        opts: { q?: string; estado?: string; skip?: number; take?: number } = {},
+        opts: { q?: string; estado?: string; skip?: number; take?: number; ownerCodigo?: string } = {},
     ) {
-        const { q, estado, skip = 0, take = 10 } = opts;
+        const { q, estado, skip = 0, take = 10, ownerCodigo } = opts;
 
         // Base scope = tenant + optional search. Estado is applied only to the list
         // (not to the counts) so the tabs keep showing the full per-estado tally.
         const baseWhere: Prisma.PeajeWhereInput = { tenant_id: tenantId };
+        // Owner scoping: restricted users (solo_propios) only see their own peajes.
+        if (ownerCodigo) baseWhere.trabajador_id = ownerCodigo;
         if (q) {
             baseWhere.OR = [
                 { targa: { contains: q } },

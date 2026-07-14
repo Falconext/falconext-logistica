@@ -2,11 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Truck, Map, Wrench, ShieldCheck, LogOut, Bell, CalendarDays, BarChart3, FileSpreadsheet, MessageSquare, PlayCircle, HelpCircle, Briefcase, ChevronsLeft, Receipt, Fuel, UserCog } from 'lucide-react';
+import { LayoutDashboard, Users, Truck, Map, Wrench, ShieldCheck, LogOut, Bell, CalendarDays, BarChart3, FileSpreadsheet, MessageSquare, PlayCircle, HelpCircle, Briefcase, ChevronsLeft, Receipt, Fuel, UserCog, KeyRound } from 'lucide-react';
 import clsx from 'clsx';
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '../lib/store';
-import { canAccessModule, isAdminRole } from '../lib/modules';
+import { canAccessModule, isAdmin as isAdminUser } from '../lib/modules';
 
 const primaryItems = [
     { key: 'dashboard', name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -34,7 +34,7 @@ export function Sidebar() {
     useEffect(() => setMounted(true), []);
 
     const isAdmin = user?.role === 'SUPERADMIN';
-    const isManager = isAdminRole(user?.role); // SUPERADMIN o ADMIN
+    const isManager = isAdminUser(user); // rol con es_admin o SUPERADMIN
     const visiblePrimary = primaryItems.filter((i) => canAccessModule(user, i.key));
     const visibleTracking = trackingItems.filter((i) => canAccessModule(user, i.key));
 
@@ -106,6 +106,7 @@ export function Sidebar() {
                         <SectionDivider />
                         <div className="space-y-1">
                             <NavLink href="/admin/usuarios" name="Usuarios" Icon={UserCog} />
+                            <NavLink href="/admin/roles" name="Roles" Icon={KeyRound} />
                             {isAdmin && <NavLink href="/admin/tenants" name="Admin Empresas" Icon={Briefcase} />}
                             <NavLink href="/admin/sheets" name="Integración Sheets" Icon={FileSpreadsheet} />
                         </div>

@@ -14,6 +14,11 @@ export class DocumentosController {
 
     @Get()
     findAll(@Req() req, @Query('entidad') entidad?: string, @Query('entidad_id') entidadId?: string) {
+        if (req.user.soloPropios && req.user.trabajadorId) {
+            // Usuario restringido: solo ve SUS documentos (los del trabajador vinculado),
+            // ignorando los filtros de query entidad/entidad_id.
+            return this.documentosService.findAll(req.user.tenantId, 'TRABAJADOR', req.user.trabajadorId);
+        }
         return this.documentosService.findAll(req.user.tenantId, entidad, entidadId);
     }
 

@@ -109,7 +109,9 @@ export default function UsuariosPage() {
                             ) : usuarios.length === 0 ? (
                                 <tr><td colSpan={5} className="text-center py-16 text-slate-400">No hay usuarios registrados.</td></tr>
                             ) : usuarios.map((u) => {
-                                const admin = isAdminLike(u.role);
+                                const isSuper = (u.role || '').toUpperCase() === 'SUPERADMIN';
+                                const admin = isSuper || !!u.rol?.es_admin;
+                                const rolNombre = isSuper ? 'Super Admin' : (u.rol?.nombre || '— sin rol —');
                                 const isSelf = currentUser?.id === u.id;
                                 return (
                                     <tr key={u.id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
@@ -124,13 +126,21 @@ export default function UsuariosPage() {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-5 py-3.5"><RoleBadge role={u.role} /></td>
+                                        <td className="px-5 py-3.5">
+                                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold ${admin ? 'bg-[#FFC933] text-[#1a1a1c]' : 'bg-slate-100 text-slate-600'}`}>
+                                                {admin ? <ShieldCheck size={12} /> : <UserIcon size={12} />}
+                                                {rolNombre}
+                                            </span>
+                                            {u.rol?.solo_propios && (
+                                                <span className="ml-1.5 text-[11px] text-amber-600 font-medium">solo lo suyo</span>
+                                            )}
+                                        </td>
                                         <td className="px-5 py-3.5">
                                             {admin ? (
                                                 <span className="text-sm font-medium text-slate-700">Todos</span>
                                             ) : (
                                                 <span className="text-sm text-slate-600">
-                                                    {(u.modulos?.length || 0)} de {MODULES.length}
+                                                    {(u.rol?.modulos?.length ?? 0)} de {MODULES.length}
                                                 </span>
                                             )}
                                         </td>

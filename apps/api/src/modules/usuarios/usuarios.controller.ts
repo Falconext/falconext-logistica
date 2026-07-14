@@ -3,12 +3,10 @@ import { UsuariosService } from './usuarios.service';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
+import { EsAdminGuard } from '../auth/es-admin.guard';
 
 @Controller('usuarios')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('SUPERADMIN', 'ADMIN')
+@UseGuards(JwtAuthGuard, EsAdminGuard)
 export class UsuariosController {
     constructor(private readonly usuariosService: UsuariosService) { }
 

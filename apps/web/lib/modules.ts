@@ -34,12 +34,20 @@ export function isAdminRole(role?: string | null): boolean {
 interface UserLike {
   role?: string | null;
   modulos?: string[] | null;
+  es_admin?: boolean | null;
 }
 
-/** Los admins ven todos los módulos; el resto solo los asignados. */
+/** ¿El usuario es administrador (ve todo)? Usa es_admin del rol; fallback a role string. */
+export function isAdmin(user: UserLike | null | undefined): boolean {
+  if (!user) return false;
+  if (typeof user.es_admin === 'boolean') return user.es_admin;
+  return isAdminRole(user.role);
+}
+
+/** Los admins ven todos los módulos; el resto solo los asignados por su rol. */
 export function canAccessModule(user: UserLike | null | undefined, key: string): boolean {
   if (!user) return false;
-  if (isAdminRole(user.role)) return true;
+  if (isAdmin(user)) return true;
   return Array.isArray(user.modulos) && user.modulos.includes(key);
 }
 

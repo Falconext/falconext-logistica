@@ -27,12 +27,15 @@ export class ProgramacionService {
 
     async findAll(
         tenantId: string,
-        opts: { from?: string; to?: string; q?: string; estados?: string[]; skip?: number; take?: number } = {},
+        opts: { from?: string; to?: string; q?: string; estados?: string[]; skip?: number; take?: number; ownerCodigo?: string } = {},
     ) {
-        const { from, to, q, estados, skip = 0, take = 60 } = opts;
+        const { from, to, q, estados, skip = 0, take = 60, ownerCodigo } = opts;
 
         // Base scope: always the caller's tenant, plus optional date window + search.
         const baseWhere: Prisma.ProgramacionWhereInput = { tenant_id: tenantId };
+        // Owner scoping: restricted users only see programaciones for their own
+        // trabajador (id_trabajador like 'G001'). ADMIN/SUPERADMIN pass undefined.
+        if (ownerCodigo) baseWhere.trabajador_id = ownerCodigo;
         if (from || to) {
             baseWhere.fecha = {};
             if (from) (baseWhere.fecha as Prisma.DateTimeFilter).gte = new Date(from);

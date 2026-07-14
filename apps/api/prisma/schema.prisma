@@ -197,8 +197,30 @@ model Tenant {
   peajes         Peaje[]
   combustibles   Combustible[]
   documentos     Documento[]
+  roles          Rol[]
 
   @@map("tenants")
+}
+
+// Rol/puesto configurable por empresa. Define qué módulos ve el usuario y su
+// comportamiento (administrador / solo sus propios registros).
+model Rol {
+  id           String  @id @default(uuid())
+  nombre       String
+  descripcion  String?
+  modulos      String[] @default([]) // claves de módulos permitidos
+  es_admin     Boolean @default(false) // ve todo y puede administrar usuarios/roles
+  solo_propios Boolean @default(false) // los usuarios de este rol solo ven sus registros
+
+  tenant_id String
+  tenant    Tenant @relation(fields: [tenant_id], references: [id])
+  usuarios  User[]
+
+  creado_en      DateTime @default(now())
+  actualizado_en DateTime @updatedAt
+
+  @@unique([tenant_id, nombre])
+  @@map("roles")
 }
 
 // Documento genérico: escaneos/archivos asociados a una entidad
@@ -230,6 +252,14 @@ model User {
   nombre    String? // nombre visible del usuario
   activo    Boolean @default(true)
   modulos   String[] @default([]) // claves de módulos permitidos (los ADMIN ven todos)
+
+  // Vínculo a un trabajador para filtrado por dueño (row-level)
+  trabajador_id      String? // UUID del Trabajador vinculado (docs/alertas)
+  trabajador_codigo  String? // id_trabajador (ej. G001) — clave en peajes/combustible/programacion
+  solo_propios       Boolean @default(false) // override legacy; el rol es la fuente principal
+
+  rol_id String? // rol/puesto asignado (define módulos y comportamiento)
+  rol    Rol?    @relation(fields: [rol_id], references: [id])
 
   tenant_id String
   tenant    Tenant @relation(fields: [tenant_id], references: [id])

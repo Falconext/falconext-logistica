@@ -17,6 +17,8 @@ export class ProgramacionController {
             estados: query.estados ? String(query.estados).split(',').filter(Boolean) : undefined,
             skip: query.skip ? parseInt(query.skip, 10) || 0 : 0,
             take: query.take ? Math.min(parseInt(query.take, 10) || 60, 1000) : 60,
+            // Owner scoping: restricted users (solo_propios) only see their own rows.
+            ownerCodigo: req.user.soloPropios ? req.user.trabajadorCodigo : undefined,
         });
     }
 

@@ -30,10 +30,19 @@ export class AlertsService {
         return 'info';
     }
 
-    async getExpiringDocuments(tenantId: string, daysAhead: number = 90): Promise<DocumentAlert[]> {
+    async getExpiringDocuments(
+        tenantId: string,
+        daysAhead: number = 90,
+        ownerTrabajadorId?: string,
+    ): Promise<DocumentAlert[]> {
         const now = new Date();
         const futureDate = new Date();
         futureDate.setDate(futureDate.getDate() + daysAhead);
+
+        // Si el usuario está restringido a sus propios registros (soloPropios),
+        // solo debe ver alertas de SU trabajador y ninguna alerta de vehículos
+        // (los vehículos son de flota, no del usuario).
+        const restrictToOwner = !!ownerTrabajadorId;
 
         const alerts: DocumentAlert[] = [];
 
@@ -43,6 +52,7 @@ export class AlertsService {
         const workers = await this.prisma.trabajador.findMany({
             where: {
                 tenant_id: tenantId,
+                ...(restrictToOwner ? { id: ownerTrabajadorId } : {}),
                 estado_laboral: 'Activo',
                 OR: [
                     { fecha_vencimiento_pasaporte: { lte: futureDate, gte: now } },
@@ -103,8 +113,10 @@ export class AlertsService {
         // ------------------------------------------------------------------
         // 2) Vencimientos de VEHÍCULOS (seguro).
         //    revision_tecnica es String en el schema (no es fecha) => no aplica.
+        //    Los vehículos son de flota: si el usuario está restringido a sus
+        //    propios registros, NO se incluyen alertas de vehículos.
         // ------------------------------------------------------------------
-        const vehiculos = await this.prisma.vehiculo.findMany({
+        const vehiculos = restrictToOwner ? [] : await this.prisma.vehiculo.findMany({
             where: {
                 tenant_id: tenantId,
                 fecha_vencimiento_seguro: { lte: futureDate, gte: now },
@@ -144,6 +156,7 @@ export class AlertsService {
         const documentos = await this.prisma.documento.findMany({
             where: {
                 tenant_id: tenantId,
+                ...(restrictToOwner ? { entidad_id: ownerTrabajadorId } : {}),
                 fecha_vencimiento: { lte: futureDate, gte: now },
             },
             select: {
@@ -216,8 +229,8 @@ export class AlertsService {
         return alerts.sort((a, b) => a.daysRemaining - b.daysRemaining);
     }
 
-    async getAlertsSummary(tenantId: string): Promise<{ critical: number; warning: number; info: number; total: number }> {
-        const alerts = await this.getExpiringDocuments(tenantId, 90);
+    async getAlertsSummary(tenantId: string, ownerTrabajadorId?: string): Promise<{ critical: number; warning: number; info: number; total: number }> {
+        const alerts = await this.getExpiringDocuments(tenantId, 90, ownerTrabajadorId);
         return {
             critical: alerts.filter(a => a.severity === 'critical').length,
             warning: alerts.filter(a => a.severity === 'warning').length,

@@ -11,12 +11,14 @@ export class AlertsController {
     async getExpiringDocuments(@Req() req: any, @Query('days') days?: string) {
         const tenantId = req.user.tenantId;
         const daysAhead = days ? parseInt(days) : 90;
-        return this.alertsService.getExpiringDocuments(tenantId, daysAhead);
+        const ownerTrabajadorId = req.user.soloPropios ? req.user.trabajadorId : undefined;
+        return this.alertsService.getExpiringDocuments(tenantId, daysAhead, ownerTrabajadorId);
     }
 
     @Get('summary')
     async getAlertsSummary(@Req() req: any) {
         const tenantId = req.user.tenantId;
-        return this.alertsService.getAlertsSummary(tenantId);
+        const ownerTrabajadorId = req.user.soloPropios ? req.user.trabajadorId : undefined;
+        return this.alertsService.getAlertsSummary(tenantId, ownerTrabajadorId);
     }
 }

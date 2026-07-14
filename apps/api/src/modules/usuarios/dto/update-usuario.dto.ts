@@ -22,4 +22,12 @@ export class UpdateUsuarioDto {
     @IsString()
     @MinLength(6)
     password?: string;
+
+    @IsOptional()
+    @IsString()
+    trabajador_id?: string | null; // UUID del trabajador vinculado (null para desvincular)
+
+    @IsOptional()
+    @IsString()
+    rol_id?: string | null; // rol/puesto (null para desasignar)
 }

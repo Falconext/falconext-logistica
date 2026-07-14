@@ -4,7 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '../lib/store';
-import { MODULES, moduleForPath, canAccessModule, isAdminRole } from '../lib/modules';
+import { MODULES, moduleForPath, canAccessModule, isAdmin } from '../lib/modules';
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
@@ -30,7 +30,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
         // Rutas de administración: solo ADMIN/SUPERADMIN.
         if (pathname.startsWith('/admin')) {
-            if (!isAdminRole(user?.role) && firstAllowed) router.replace(firstAllowed);
+            if (!isAdmin(user) && firstAllowed) router.replace(firstAllowed);
             return;
         }
 

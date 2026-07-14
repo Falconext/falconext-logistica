@@ -1,4 +1,4 @@
-import { IsArray, IsEmail, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsArray, IsBoolean, IsEmail, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateUsuarioDto {
     @IsEmail()
@@ -12,11 +12,11 @@ export class CreateUsuarioDto {
     @IsString()
     nombre?: string;
 
-    @IsIn(['ADMIN', 'USER'])
-    role: string;
+    @IsOptional()
+    @IsString()
+    rol_id?: string | null; // rol/puesto asignado (define módulos y comportamiento)
 
     @IsOptional()
-    @IsArray()
-    @IsString({ each: true })
-    modulos?: string[];
+    @IsString()
+    trabajador_id?: string | null; // UUID del trabajador vinculado
 }

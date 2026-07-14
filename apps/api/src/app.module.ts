@@ -15,6 +15,7 @@ import { DocumentosModule } from './modules/documentos/documentos.module';
 import { PeajesModule } from './modules/peajes/peajes.module';
 import { CombustibleModule } from './modules/combustible/combustible.module';
 import { UsuariosModule } from './modules/usuarios/usuarios.module';
+import { RolesModule } from './modules/roles/roles.module';
 
 @Module({
     imports: [
@@ -34,6 +35,7 @@ import { UsuariosModule } from './modules/usuarios/usuarios.module';
         AlertsModule, // Kept existing modules
         SheetsModule,
         UsuariosModule,
+        RolesModule,
     ],
     controllers: [],
     providers: [],

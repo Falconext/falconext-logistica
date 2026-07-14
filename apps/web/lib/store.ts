@@ -9,7 +9,12 @@ interface User {
     tenant: string;
     tenant_id?: string;
     moneda?: string; // PEN | USD | EUR (moneda base de la empresa)
-    modulos?: string[]; // claves de módulos permitidos (ADMIN ven todos)
+    es_admin?: boolean; // ve todos los módulos y administra
+    modulos?: string[]; // claves de módulos permitidos (efectivos del rol)
+    rol_id?: string | null;
+    rol_nombre?: string | null;
+    trabajador_id?: string | null;
+    solo_propios?: boolean;
 }
 
 interface AuthState {
