@@ -7,17 +7,19 @@ import { CreateVehiculoDto } from './dto/create-vehiculo.dto';
 export class VehiculosService {
     constructor(private prisma: PrismaService) { }
 
-    async create(data: CreateVehiculoDto) {
+    async create(data: CreateVehiculoDto, tenantId: string) {
         return this.prisma.vehiculo.create({
             data: {
                 ...data,
-                // Conversions if necessary
+                tenant_id: tenantId,
             },
         });
     }
 
-    async findAll() {
-        return this.prisma.vehiculo.findMany();
+    async findAll(tenantId: string) {
+        return this.prisma.vehiculo.findMany({
+            where: { tenant_id: tenantId }
+        });
     }
 
     async findOne(id: string) {

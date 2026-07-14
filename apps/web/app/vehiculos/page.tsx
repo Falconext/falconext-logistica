@@ -1,192 +1,372 @@
-
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import api from '../../lib/api';
 import { Vehiculo } from '../../types';
-import { Truck, Calendar, FileText, AlertCircle, MoreVertical, LayoutGrid, Table, Shield } from 'lucide-react';
-import clsx from 'clsx';
+import { Truck, Eye, Trash2, Search, SlidersHorizontal, Download, Plus, ChevronsUpDown, Crosshair, ArrowLeft, ArrowRight, Loader2, AlertTriangle, Check, X } from 'lucide-react';
+import Link from 'next/link';
+import { toast } from 'sonner';
+import VehiculoModal from './VehiculoModal';
+
+const PAGE_SIZE = 10;
 
 export default function VehiculosPage() {
     const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
     const [loading, setLoading] = useState(true);
-    const [view, setView] = useState<'grid' | 'table'>('table'); // Default to table for vehicles
+    const [query, setQuery] = useState('');
+    const [page, setPage] = useState(1);
+
+    const [modalOpen, setModalOpen] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<Vehiculo | null>(null);
+    const [deleting, setDeleting] = useState(false);
+
+    const [showFilters, setShowFilters] = useState(false);
+    const [estadoFilter, setEstadoFilter] = useState<Set<string>>(new Set());
+    const [tipoFilter, setTipoFilter] = useState<Set<string>>(new Set());
+
+    const fetchVehiculos = () => {
+        setLoading(true);
+        api.get('/vehiculos')
+            .then(res => setVehiculos(res.data))
+            .catch(err => console.error('Error fetching vehicles:', err))
+            .finally(() => setLoading(false));
+    };
 
     useEffect(() => {
-        async function fetchData() {
-            try {
-                const res = await api.get('/vehiculos');
-                setVehiculos(res.data);
-            } catch (error) {
-                console.error('Error fetching vehicles:', error);
-            } finally {
-                setLoading(false);
-            }
-        }
-        fetchData();
+        fetchVehiculos();
     }, []);
 
-    if (loading) {
-        return (
-            <div className="flex h-[50vh] items-center justify-center">
-                <div className="text-slate-500 animate-pulse">Cargando flota...</div>
-            </div>
-        );
-    }
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+        setDeleting(true);
+        try {
+            await api.delete(`/vehiculos/${deleteTarget.id}`);
+            setVehiculos(prev => prev.filter(v => v.id !== deleteTarget.id));
+            toast.success('Vehículo eliminado');
+            setDeleteTarget(null);
+        } catch (err: any) {
+            console.error(err);
+            toast.error(err?.response?.data?.message || 'Error al eliminar el vehículo');
+        } finally {
+            setDeleting(false);
+        }
+    };
+
+    // Distinct option values for the filter dropdown (derived from live data)
+    const estadoOptions = useMemo(
+        () => Array.from(new Set(vehiculos.map(v => v.estado_vehiculo).filter(Boolean) as string[])).sort(),
+        [vehiculos]
+    );
+    const tipoOptions = useMemo(
+        () => Array.from(new Set(vehiculos.map(v => v.tipo_unidad).filter(Boolean) as string[])).sort(),
+        [vehiculos]
+    );
+
+    const activeFilterCount = estadoFilter.size + tipoFilter.size;
+
+    const toggleSetValue = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, value: string) => {
+        setter(prev => {
+            const next = new Set(prev);
+            next.has(value) ? next.delete(value) : next.add(value);
+            return next;
+        });
+    };
+
+    const clearFilters = () => { setEstadoFilter(new Set()); setTipoFilter(new Set()); };
+
+    const filtered = useMemo(() => vehiculos.filter(v => {
+        const matchesQuery =
+            v.placa?.toLowerCase().includes(query.toLowerCase()) ||
+            v.marca_modelo?.toLowerCase().includes(query.toLowerCase());
+        const matchesEstado = estadoFilter.size === 0 || (v.estado_vehiculo ? estadoFilter.has(v.estado_vehiculo) : false);
+        const matchesTipo = tipoFilter.size === 0 || (v.tipo_unidad ? tipoFilter.has(v.tipo_unidad) : false);
+        return matchesQuery && matchesEstado && matchesTipo;
+    }), [vehiculos, query, estadoFilter, tipoFilter]);
+
+    useEffect(() => setPage(1), [query, estadoFilter, tipoFilter]);
+
+    const exportToExcel = () => {
+        if (filtered.length === 0) return toast.error('No hay vehículos para exportar');
+        import('xlsx').then(xlsx => {
+            const ws = xlsx.utils.json_to_sheet(filtered.map(v => ({
+                Placa: v.placa,
+                'Marca / Modelo': v.marca_modelo || '',
+                Tipo: v.tipo_unidad || '',
+                'Año': v.anio_fabricacion || '',
+                Seguro: v.poliza_seguro || '',
+                'Revisión Técnica': v.revision_tecnica || '',
+                Estado: v.estado_vehiculo || '',
+            })));
+            const wb = xlsx.utils.book_new();
+            xlsx.utils.book_append_sheet(wb, ws, 'Vehículos');
+            xlsx.writeFile(wb, 'Reporte_Vehiculos.xlsx');
+            toast.success('Excel generado');
+        }).catch(() => toast.error('Error al generar el Excel'));
+    };
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    const currentPage = Math.min(page, totalPages);
+    const pageRows = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
     return (
-        <div className="space-y-8">
+        <div className="max-w-[1400px] mx-auto animate-in fade-in duration-500">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-6 transition-colors">
-                <div>
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Flota de Vehículos</h1>
-                    <p className="text-slate-500 dark:text-slate-400 mt-1">Gestión de {vehiculos.length} unidades de transporte.</p>
-                </div>
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center bg-slate-100 dark:bg-slate-900 rounded-lg p-1 border border-slate-200 dark:border-slate-800">
-                        <button
-                            onClick={() => setView('grid')}
-                            className={clsx(
-                                "p-2 rounded-md transition-all",
-                                view === 'grid'
-                                    ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm"
-                                    : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-                            )}
-                        >
-                            <LayoutGrid size={18} />
-                        </button>
-                        <button
-                            onClick={() => setView('table')}
-                            className={clsx(
-                                "p-2 rounded-md transition-all",
-                                view === 'table'
-                                    ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm"
-                                    : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-                            )}
-                        >
-                            <Table size={18} />
-                        </button>
+                    <h1 className="text-2xl font-bold tracking-tight text-slate-900">Vehículos</h1>
+                    <span className="min-w-[28px] h-6 px-2 flex items-center justify-center rounded-md bg-[#FFC933] text-[#1a1a1c] text-sm font-bold">
+                        {vehiculos.length}
+                    </span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                        <input
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            placeholder="Buscar"
+                            className="w-56 pl-9 pr-3 py-2.5 rounded-xl bg-white border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900 placeholder:text-slate-400 transition"
+                        />
                     </div>
-                    <button className="rounded-xl bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 font-medium transition-all shadow-lg shadow-blue-500/20 active:scale-95">
-                        + Nuevo Vehículo
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowFilters(v => !v)}
+                            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white border text-sm transition ${showFilters || activeFilterCount > 0 ? 'border-slate-400 text-slate-900' : 'border-slate-200 hover:border-slate-300 text-slate-700'}`}
+                        >
+                            <SlidersHorizontal size={16} /> Filtros
+                            {activeFilterCount > 0 && (
+                                <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-[#FFC933] text-[#1a1a1c] text-[11px] font-bold">
+                                    {activeFilterCount}
+                                </span>
+                            )}
+                        </button>
+
+                        {showFilters && (
+                            <>
+                                <div className="fixed inset-0 z-10" onClick={() => setShowFilters(false)} />
+                                <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 p-4 z-20 animate-in fade-in zoom-in-95 duration-150">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <span className="text-sm font-semibold text-slate-900">Filtrar por</span>
+                                        {activeFilterCount > 0 && (
+                                            <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-700 transition">
+                                                <X size={12} /> Limpiar
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400 mb-1.5">Estado</p>
+                                    <div className="space-y-1 mb-3">
+                                        {estadoOptions.length === 0 && <p className="text-xs text-slate-400">Sin datos</p>}
+                                        {estadoOptions.map((e) => {
+                                            const on = estadoFilter.has(e);
+                                            return (
+                                                <button
+                                                    key={e}
+                                                    onClick={() => toggleSetValue(setEstadoFilter, e)}
+                                                    className="w-full flex items-center gap-2.5 px-1.5 py-1.5 rounded-lg hover:bg-slate-50 transition text-left"
+                                                >
+                                                    <span className={`w-4 h-4 rounded flex items-center justify-center border ${on ? 'bg-[#FFC933] border-[#FFC933]' : 'border-slate-300'}`}>
+                                                        {on && <Check size={11} className="text-[#1a1a1c]" />}
+                                                    </span>
+                                                    <span className="text-sm text-slate-700 flex-1 truncate">{e}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400 mb-1.5">Tipo de unidad</p>
+                                    <div className="space-y-1">
+                                        {tipoOptions.length === 0 && <p className="text-xs text-slate-400">Sin datos</p>}
+                                        {tipoOptions.map((t) => {
+                                            const on = tipoFilter.has(t);
+                                            return (
+                                                <button
+                                                    key={t}
+                                                    onClick={() => toggleSetValue(setTipoFilter, t)}
+                                                    className="w-full flex items-center gap-2.5 px-1.5 py-1.5 rounded-lg hover:bg-slate-50 transition text-left"
+                                                >
+                                                    <span className={`w-4 h-4 rounded flex items-center justify-center border ${on ? 'bg-[#FFC933] border-[#FFC933]' : 'border-slate-300'}`}>
+                                                        {on && <Check size={11} className="text-[#1a1a1c]" />}
+                                                    </span>
+                                                    <span className="text-sm text-slate-700 flex-1 truncate">{t}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                    <button
+                        onClick={exportToExcel}
+                        className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 hover:border-slate-300 text-sm text-slate-700 transition"
+                    >
+                        <Download size={16} /> Exportar
+                    </button>
+                    <button
+                        onClick={() => setModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition"
+                    >
+                        <Plus size={16} /> Nuevo vehículo
                     </button>
                 </div>
             </div>
 
-            {/* Grid View */}
-            {view === 'grid' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {vehiculos.map((vehiculo) => (
-                        <div key={vehiculo.id} className="group bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-blue-500/50 p-6 space-y-6 transition-all duration-300 shadow-sm">
-                            <div className="flex justify-between items-start">
-                                <div className="flex gap-4">
-                                    <div className="h-12 w-12 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400">
-                                        <Truck size={24} />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-bold text-slate-900 dark:text-white">{vehiculo.placa}</h3>
-                                        <p className="text-sm text-slate-500 dark:text-slate-400">{vehiculo.marca_modelo}</p>
-                                    </div>
-                                </div>
-                                <span className={`px-2 py-1 rounded text-xs font-semibold border ${vehiculo.estado_vehiculo === 'ACTIVO'
-                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
-                                    : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20'
-                                    }`}>
-                                    {vehiculo.estado_vehiculo || 'DESCONOCIDO'}
-                                </span>
-                            </div>
-
-                            <div className="space-y-3">
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-slate-500 dark:text-slate-400">Tipo</span>
-                                    <span className="font-medium text-slate-700 dark:text-slate-300">{vehiculo.tipo_unidad || '-'}</span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-slate-500 dark:text-slate-400">Seguro</span>
-                                    <span className="font-medium text-slate-700 dark:text-slate-300">{vehiculo.poliza_seguro || '-'}</span>
-                                </div>
-                            </div>
-
-                            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex gap-2">
-                                <button className="flex-1 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">Ver Detalles</button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-
-            {/* Table View */}
-            {view === 'table' && (
-                <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm text-slate-600 dark:text-slate-400">
-                            <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800 text-xs uppercase font-semibold text-slate-500 dark:text-slate-400">
-                                <tr>
-                                    <th className="px-6 py-4">Vehículo</th>
-                                    <th className="px-6 py-4">Año / Tipo</th>
-                                    <th className="px-6 py-4">Estado</th>
-                                    <th className="px-6 py-4">Documentación</th>
-                                    <th className="px-6 py-4">Mantenimiento</th>
-                                    <th className="px-6 py-4 text-right">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                                {vehiculos.map((v) => (
-                                    <tr key={v.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-                                                    <Truck size={18} />
+            {/* Table */}
+            <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead>
+                            <tr className="border-b border-slate-100 text-slate-400">
+                                {['Unidad', 'Marca / Modelo', 'Tipo', 'Año', 'Seguro', 'Rev. Técnica', 'GPS', 'Estado'].map((h) => (
+                                    <th key={h} className="px-5 py-3.5 font-medium">
+                                        <span className="inline-flex items-center gap-1">{h} <ChevronsUpDown size={13} className="text-slate-300" /></span>
+                                    </th>
+                                ))}
+                                <th className="px-5 py-3.5 font-medium text-right">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {loading ? (
+                                <tr><td colSpan={9} className="text-center py-16 text-slate-400">Cargando flota...</td></tr>
+                            ) : pageRows.length === 0 ? (
+                                <tr><td colSpan={9} className="text-center py-16 text-slate-400">No se encontraron vehículos.</td></tr>
+                            ) : pageRows.map((v) => {
+                                const estado = (v.estado_vehiculo || '').toUpperCase();
+                                const available = estado === 'ACTIVO' || estado === 'DISPONIBLE';
+                                return (
+                                    <tr key={v.id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
+                                        <td className="px-5 py-3.5">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                                                    <Truck size={16} />
                                                 </div>
-                                                <div>
-                                                    <div className="font-bold text-slate-900 dark:text-white">{v.placa}</div>
-                                                    <div className="text-xs">{v.marca_modelo}</div>
-                                                </div>
+                                                <span className="font-semibold text-slate-900">{v.placa}</span>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4">
-                                            <div className="text-slate-900 dark:text-slate-200">{v.anio_fabricacion || '-'}</div>
-                                            <div className="text-xs text-slate-500 dark:text-slate-500">{v.tipo_unidad}</div>
+                                        <td className="px-5 py-3.5 text-slate-600">{v.marca_modelo || '-'}</td>
+                                        <td className="px-5 py-3.5 text-slate-600">{v.tipo_unidad || '-'}</td>
+                                        <td className="px-5 py-3.5 text-slate-600">{v.anio_fabricacion || '-'}</td>
+                                        <td className="px-5 py-3.5">
+                                            {v.poliza_seguro
+                                                ? <span className="text-slate-600">{v.poliza_seguro}</span>
+                                                : <span className="text-red-500 text-xs font-medium">Sin seguro</span>}
                                         </td>
-                                        <td className="px-6 py-4">
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${v.estado_vehiculo === 'ACTIVO'
-                                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
-                                                : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20'
-                                                }`}>
-                                                {v.estado_vehiculo || 'DESCONOCIDO'}
+                                        <td className="px-5 py-3.5 text-slate-600">{v.revision_tecnica || <span className="text-amber-500 text-xs font-medium">Pendiente</span>}</td>
+                                        <td className="px-5 py-3.5">
+                                            <span className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500">
+                                                <Crosshair size={15} />
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex flex-col gap-1">
-                                                <div className="flex items-center gap-2 text-xs">
-                                                    <FileText size={12} className="text-slate-400" />
-                                                    {v.tarjeta_circulacion ? 'Circulación OK' : <span className="text-red-400">Falta Circulación</span>}
-                                                </div>
-                                                <div className="flex items-center gap-2 text-xs">
-                                                    <Shield size={12} className="text-slate-400" />
-                                                    {v.poliza_seguro ? 'Seguro Vigente' : <span className="text-red-400">Sin Seguro</span>}
-                                                </div>
-                                            </div>
+                                        <td className="px-5 py-3.5">
+                                            <span className={`text-sm font-medium ${available ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                                {available ? 'Disponible' : 'No disponible'}
+                                            </span>
                                         </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                                                <AlertCircle size={12} />
-                                                <span>Rev. Técnica: {v.revision_tecnica || 'Pendiente'}</span>
+                                        <td className="px-5 py-3.5">
+                                            <div className="flex items-center justify-end gap-1.5">
+                                                <Link href={`/vehiculos/${v.id}`} title="Ver" className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-100 flex items-center justify-center text-slate-500 transition">
+                                                    <Eye size={15} />
+                                                </Link>
+                                                <button
+                                                    title="Eliminar"
+                                                    onClick={() => setDeleteTarget(v)}
+                                                    className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-red-50 hover:border-red-200 hover:text-red-500 flex items-center justify-center text-slate-500 transition"
+                                                >
+                                                    <Trash2 size={15} />
+                                                </button>
                                             </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-slate-900 dark:hover:text-white">
-                                                <MoreVertical size={18} />
-                                            </button>
                                         </td>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Pagination */}
+                {!loading && filtered.length > 0 && (
+                    <Pagination page={currentPage} totalPages={totalPages} onChange={setPage} />
+                )}
+            </div>
+
+            {/* Create modal */}
+            <VehiculoModal
+                isOpen={modalOpen}
+                onClose={() => setModalOpen(false)}
+                onSuccess={() => fetchVehiculos()}
+            />
+
+            {/* Delete confirmation */}
+            {deleteTarget && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl w-full max-w-md border border-slate-200 shadow-2xl overflow-hidden">
+                        <div className="p-6 flex items-start gap-4">
+                            <div className="w-11 h-11 rounded-xl bg-red-50 text-red-500 flex items-center justify-center shrink-0">
+                                <AlertTriangle size={22} />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-900">Eliminar vehículo</h3>
+                                <p className="text-sm text-slate-500 mt-1">
+                                    ¿Seguro que deseas eliminar la unidad <span className="font-semibold text-slate-700">{deleteTarget.placa}</span>? Esta acción no se puede deshacer.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="px-6 pb-6 flex justify-end gap-3">
+                            <button
+                                onClick={() => setDeleteTarget(null)}
+                                disabled={deleting}
+                                className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition disabled:opacity-60"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleDelete}
+                                disabled={deleting}
+                                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-medium transition flex items-center gap-2 disabled:opacity-60 disabled:pointer-events-none"
+                            >
+                                {deleting ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />}
+                                Eliminar
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
+        </div>
+    );
+}
+
+function Pagination({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
+    const pages = Array.from({ length: totalPages }, (_, i) => i + 1).slice(0, 6);
+    return (
+        <div className="flex items-center justify-between px-5 py-3.5 border-t border-slate-100">
+            <button
+                onClick={() => onChange(Math.max(1, page - 1))}
+                disabled={page === 1}
+                className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+                <ArrowLeft size={16} /> Anterior
+            </button>
+            <div className="flex items-center gap-1.5">
+                {pages.map((p) => (
+                    <button
+                        key={p}
+                        onClick={() => onChange(p)}
+                        className={`w-9 h-9 rounded-lg text-sm font-medium transition ${p === page
+                            ? 'border-2 border-blue-500 text-slate-900'
+                            : 'border border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+                    >
+                        {p}
+                    </button>
+                ))}
+            </div>
+            <button
+                onClick={() => onChange(Math.min(totalPages, page + 1))}
+                disabled={page === totalPages}
+                className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+                Siguiente <ArrowRight size={16} />
+            </button>
         </div>
     );
 }

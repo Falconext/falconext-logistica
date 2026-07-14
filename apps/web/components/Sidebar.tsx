@@ -1,75 +1,137 @@
-
 'use client';
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Truck, Settings, Moon, Sun, Map } from 'lucide-react';
+import { LayoutDashboard, Users, Truck, Map, Wrench, ShieldCheck, LogOut, Bell, CalendarDays, BarChart3, FileSpreadsheet, MessageSquare, PlayCircle, HelpCircle, Briefcase, ChevronsLeft, Receipt, Fuel } from 'lucide-react';
 import clsx from 'clsx';
-import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
+import { useAuthStore } from '../lib/store';
 
-const menuItems = [
+const primaryItems = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Operaciones', href: '/operaciones', icon: Map },
     { name: 'Trabajadores', href: '/trabajadores', icon: Users },
     { name: 'Vehículos', href: '/vehiculos', icon: Truck },
+    { name: 'Mantenimiento', href: '/mantenimiento', icon: Wrench },
+    { name: 'Peajes/Multas', href: '/peajes', icon: Receipt },
+    { name: 'Combustible', href: '/combustible', icon: Fuel },
+    { name: 'Calendario', href: '/calendario', icon: CalendarDays },
+    { name: 'Reportes', href: '/reportes', icon: BarChart3 },
+];
+
+const trackingItems = [
+    { name: 'Alertas', href: '/alertas', icon: Bell },
+    { name: 'Dispositivos GPS', href: '/dispositivos', icon: ShieldCheck },
+    { name: 'Geocercas', href: '/geocercas', icon: Map },
 ];
 
 export function Sidebar() {
     const pathname = usePathname();
-    const { theme, setTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
+    const { user } = useAuthStore();
 
     useEffect(() => setMounted(true), []);
 
+    const isAdmin = user?.role === 'SUPERADMIN';
+
+    const NavLink = ({ href, name, Icon, badge }: { href: string; name: string; Icon: any; badge?: number }) => {
+        const isActive = pathname === href;
+        return (
+            <Link
+                href={href}
+                className={clsx(
+                    'flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm transition-colors',
+                    isActive
+                        ? 'bg-[#FFC933] text-[#1a1a1c] font-semibold'
+                        : 'text-zinc-400 hover:bg-white/[0.06] hover:text-white'
+                )}
+            >
+                <Icon size={18} className={clsx(isActive ? 'text-[#1a1a1c]' : 'text-zinc-400')} />
+                <span className="flex-1">{name}</span>
+                {badge ? (
+                    <span className="min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-md bg-[#FFC933] text-[#1a1a1c] text-[11px] font-bold">
+                        {badge}
+                    </span>
+                ) : null}
+            </Link>
+        );
+    };
+
+    const SectionDivider = () => <div className="my-3 border-t border-white/[0.07]" />;
+
     return (
-        <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-white/80 dark:bg-[#020617]/80 border-r border-slate-200 dark:border-slate-800/60 backdrop-blur-xl text-slate-900 dark:text-white transition-all duration-300 ease-in-out hidden md:flex flex-col">
-            <div className="flex h-24 items-center px-6 border-b border-slate-200 dark:border-slate-800/60">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-blue-400 flex items-center justify-center font-bold text-white shadow-lg shadow-blue-500/20">
-                        <Truck className="text-white" size={20} />
+        <aside className="w-[260px] shrink-0 h-full flex flex-col text-white">
+            {/* Logo */}
+            <div className="p-3">
+                <div className="flex items-center gap-3 rounded-2xl bg-white/[0.05] px-3 py-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#FFD84D] to-[#F5A623] flex items-center justify-center relative overflow-hidden shrink-0">
+                        <span className="absolute w-4 h-4 rounded-full bg-white/40 -left-0.5 -top-0.5" />
+                        <span className="absolute w-4 h-4 rounded-full bg-black/10 -right-0.5 -bottom-0.5" />
                     </div>
-                    <div>
-                        <h1 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white leading-none">Logistica</h1>
-                        <span className="text-xs text-slate-500 font-medium tracking-wide">PREMIUM</span>
+                    <div className="flex-1 min-w-0">
+                        <h1 className="text-[15px] font-bold tracking-tight text-white leading-tight truncate">Logistica</h1>
+                        <span className="text-xs text-zinc-500">Company</span>
                     </div>
+                    <ChevronsLeft size={18} className="text-zinc-500" />
                 </div>
             </div>
 
-            <nav className="flex-1 space-y-1 p-4 mt-2">
-                {menuItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = pathname === item.href;
-                    return (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            className={clsx(
-                                'flex items-center gap-3 rounded-xl px-4 py-3.5 text-sm font-medium transition-all duration-300 group',
-                                isActive
-                                    ? 'bg-blue-50 dark:bg-blue-600/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-600/20'
-                                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/40 hover:text-slate-900 dark:hover:text-slate-200 border border-transparent'
-                            )}
-                        >
-                            <Icon size={20} className={clsx("transition-colors", isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 group-hover:text-slate-400 dark:group-hover:text-slate-300')} />
-                            {item.name}
-                        </Link>
-                    );
-                })}
+            {/* Nav */}
+            <nav className="flex-1 overflow-y-auto px-3 pb-3">
+                <div className="space-y-1">
+                    {primaryItems.map((item) => (
+                        <NavLink key={item.href} href={item.href} name={item.name} Icon={item.icon} />
+                    ))}
+                </div>
+
+                <SectionDivider />
+
+                <div className="space-y-1">
+                    {trackingItems.map((item) => (
+                        <NavLink key={item.href} href={item.href} name={item.name} Icon={item.icon} />
+                    ))}
+                </div>
+
+                <SectionDivider />
+
+                <div className="space-y-1">
+                    {(isAdmin || user?.role === 'ADMIN') && (
+                        <>
+                            {isAdmin && <NavLink href="/admin/tenants" name="Admin Empresas" Icon={Briefcase} />}
+                            <NavLink href="/admin/sheets" name="Integración Sheets" Icon={FileSpreadsheet} />
+                        </>
+                    )}
+                    <NavLink href="/reportes" name="Reportes" Icon={BarChart3} />
+                </div>
+
+                <SectionDivider />
+
+                <div className="space-y-1">
+                    <NavLink href="/tutoriales" name="Tutoriales" Icon={PlayCircle} />
+                    <NavLink href="/ayuda" name="Centro de ayuda" Icon={HelpCircle} />
+                </div>
             </nav>
 
-            <div className="border-t border-slate-200 dark:border-slate-800 p-4 space-y-2">
-                <button
-                    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                    className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/40 transition-colors"
-                >
-                    {mounted && theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-                    {mounted && theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}
-                </button>
-                <button className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/40 transition-colors">
-                    <Settings size={20} />
-                    Configuración
-                </button>
+            {/* User card */}
+            <div className="p-3">
+                {mounted && user && (
+                    <div className="flex items-center gap-3 rounded-2xl bg-white/[0.05] px-3 py-2.5">
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-zinc-600 to-zinc-800 flex items-center justify-center text-white text-sm font-semibold shrink-0">
+                            {user.email.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-white truncate">{user.email.split('@')[0]}</p>
+                            <p className="text-xs text-zinc-500 truncate capitalize">{user.role ? user.role.toLowerCase() : 'Usuario'}</p>
+                        </div>
+                        <button
+                            onClick={useAuthStore.getState().logout}
+                            title="Cerrar Sesión"
+                            className="p-1.5 text-zinc-500 hover:text-white transition-colors"
+                        >
+                            <LogOut size={17} />
+                        </button>
+                    </div>
+                )}
             </div>
         </aside>
     );

@@ -14,6 +14,9 @@ export class CreateTrabajadorDto {
     @IsOptional()
     estado_laboral?: string;
 
+    @IsOptional()
+    sueldo_base?: number;
+
     @IsString()
     @IsOptional()
     nacionalidad?: string;

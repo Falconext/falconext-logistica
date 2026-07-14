@@ -31,6 +31,6 @@
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: var(--font-outfit), sans-serif;
+  font-family: var(--font-sans), sans-serif;
   font-feature-settings: "rlig" 1, "calt" 1;
 }

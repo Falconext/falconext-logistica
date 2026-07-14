@@ -1,20 +1,31 @@
 
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Req } from '@nestjs/common';
 import { TrabajadoresService } from './trabajadores.service';
 import { CreateTrabajadorDto } from './dto/create-trabajador.dto';
+import { ProgramacionService } from '../../modules/programacion/programacion.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('trabajadores')
+@UseGuards(JwtAuthGuard)
 export class TrabajadoresController {
-    constructor(private readonly trabajadoresService: TrabajadoresService) { }
+    constructor(
+        private readonly trabajadoresService: TrabajadoresService,
+        private readonly programacionService: ProgramacionService
+    ) { }
 
     @Post()
-    create(@Body() createTrabajadorDto: CreateTrabajadorDto) {
-        return this.trabajadoresService.create(createTrabajadorDto);
+    create(@Body() createTrabajadorDto: CreateTrabajadorDto, @Req() req) {
+        return this.trabajadoresService.create(createTrabajadorDto, req.user.tenantId);
     }
 
     @Get()
-    findAll() {
-        return this.trabajadoresService.findAll();
+    findAll(@Req() req) {
+        return this.trabajadoresService.findAll(req.user.tenantId);
+    }
+
+    @Get(':id/historial')
+    async getHistory(@Param('id') id: string, @Req() req) {
+        return this.trabajadoresService.getHistorial(id, req.user.tenantId);
     }
 
     @Get(':id')

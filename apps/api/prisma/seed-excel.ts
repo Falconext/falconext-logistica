@@ -2,6 +2,7 @@
 import { PrismaClient } from '@prisma/client';
 import * as XLSX from 'xlsx';
 import * as path from 'path';
+import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
@@ -10,6 +11,67 @@ async function main() {
     console.log(`Reading file: ${filePath}`);
 
     const workbook = XLSX.readFile(filePath, { cellDates: true });
+
+    // --- 0. CREATE TENANTS ---
+
+    // 0.1 PRIMARY TENANT (Excel Data Owner)
+    const gamonalTenant = await prisma.tenant.create({
+        data: {
+            name: 'Gamonal Trasporti',
+            slug: 'gamonal',
+            plan: 'ENTERPRISE'
+        }
+    });
+
+    // 0.2 OTHER TENANTS
+    const demoTenant = await prisma.tenant.create({
+        data: { name: 'Logistica Demo', slug: 'demo', plan: 'FREE' }
+    });
+
+    const transportesSur = await prisma.tenant.create({
+        data: { name: 'Transportes del Sur', slug: 'sur', plan: 'PRO' }
+    });
+
+    console.log(`Created Tenants: ${gamonalTenant.name}, ${demoTenant.name}, ${transportesSur.name}`);
+
+    const tenantId = gamonalTenant.id; // Assign Excel data to Gamonal
+
+    // --- 0.3 CREATE USERS ---
+
+    // Superadmin (Linked to Gamonal for convenience, or separate)
+    const password = await bcrypt.hash('admin123', 10);
+
+    await prisma.user.create({
+        data: {
+            email: 'admin@gamonal.com', // Superadmin
+            password: password,
+            role: 'SUPERADMIN',
+            tenant_id: gamonalTenant.id
+        }
+    });
+
+    // Gamonal Admin (The requested user)
+    await prisma.user.create({
+        data: {
+            email: 'gamonaltrasporti@gmail.com',
+            password: password,
+            role: 'ADMIN',
+            tenant_id: gamonalTenant.id
+        }
+    });
+
+    // Demo Admin
+    await prisma.user.create({
+        data: {
+            email: 'admin@demo.com',
+            password: password,
+            role: 'ADMIN',
+            tenant_id: demoTenant.id
+        }
+    });
+
+    console.log(`Created Users: admin@gamonal.com (SUPER), gamonaltrasporti@gmail.com (ADMIN), admin@demo.com (ADMIN)`);
+    console.log('Password for all: admin123');
 
     // --- 1. IMPORT TRABAJADORES (Hoja 1) ---
     const sheetWorkers = workbook.Sheets['Hoja 1'];
@@ -61,6 +123,7 @@ async function main() {
                         // Contract
                         tipo_contrato: row['CONTRATO '],
                         fecha_vencimiento_contrato: row['SCADENZA CONTRATO'] ? new Date(row['SCADENZA CONTRATO']) : null,
+                        tenant_id: tenantId // ADDED
                     },
                     create: {
                         id_trabajador: id_trabajador,
@@ -85,6 +148,7 @@ async function main() {
                         fecha_vencimiento_fiscal: row['SCADENZA C. FISCALE'] ? new Date(row['SCADENZA C. FISCALE']) : null,
                         tipo_contrato: row['CONTRATO '],
                         fecha_vencimiento_contrato: row['SCADENZA CONTRATO'] ? new Date(row['SCADENZA CONTRATO']) : null,
+                        tenant_id: tenantId // ADDED
                     }
                 });
             } catch (error) {
@@ -118,7 +182,9 @@ async function main() {
                         tarjeta_circulacion: row['LIBRETTO '], // Verified space
                         poliza_seguro: row['ASEGURAZIONE'],
                         id_interno_furgon: row['ID_FURGON'],
+                        revision_tecnica: row['R.TECNICA']?.toString(), // ADDED
                         kilometraje_actual: 0,
+                        tenant_id: tenantId // ADDED
                     },
                     create: {
                         placa: placa,
@@ -128,15 +194,58 @@ async function main() {
                         estado_vehiculo: row['ESTADO'],
                         tarjeta_circulacion: row['LIBRETTO '],
                         poliza_seguro: row['ASEGURAZIONE'],
+                        fecha_vencimiento_seguro: row['SCADENZA'] ? new Date(row['SCADENZA']) : null, // Assuming SCADENZA is insurance expiry
+                        revision_tecnica: row['R.TECNICA']?.toString(), // ADDED
                         id_interno_furgon: row['ID_FURGON'],
                         kilometraje_actual: 0,
+                        tenant_id: tenantId // ADDED
                     }
                 });
+
+                // --- NEW: Generate Maintenance History from Technical Review ---
+                if (row['R.TECNICA']) {
+                    let textDate: Date | null = null;
+                    if (typeof row['R.TECNICA'] === 'number') {
+                        textDate = new Date((row['R.TECNICA'] - (25567 + 2)) * 86400 * 1000);
+                    } else if (typeof row['R.TECNICA'] === 'string') {
+                        const dateParse = new Date(row['R.TECNICA']);
+                        if (!isNaN(dateParse.getTime())) textDate = dateParse;
+                    }
+
+                    if (textDate) {
+                        // Find the vehicle we just upserted to get its ID
+                        const vehicle = await prisma.vehiculo.findUnique({ where: { placa: placa } });
+                        if (vehicle) {
+                            // Check if maintenance already exists to avoid dupes
+                            const exists = await prisma.mantenimiento.findFirst({
+                                where: {
+                                    vehiculo_id: vehicle.id,
+                                    descripcion: 'Revisión Técnica Inicial (Importada)'
+                                }
+                            });
+
+                            if (!exists) {
+                                await prisma.mantenimiento.create({
+                                    data: {
+                                        vehiculo_id: vehicle.id,
+                                        tipo: 'Preventivo',
+                                        fecha: textDate,
+                                        descripcion: 'Revisión Técnica Inicial (Importada)',
+                                        costo: 150.00, // Estimated cost
+                                        taller: 'Taller Autorizado',
+                                        kilometraje: 0,
+                                        tenant_id: tenantId // ADDED
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
             } catch (error) {
                 console.error(`Error importing vehicle ${row['TARGA']}:`, error);
             }
         }
-        console.log('Vehicles imported successfully.');
+        console.log('Vehicles and Maintenance History imported successfully.');
     }
 
     // --- 3. IMPORT PROGRAMACIÓN (PROGRAMA DIARIO DHL) ---
@@ -171,6 +280,7 @@ async function main() {
                         hora_retiro: row['ORA RITIRO']?.toString(),
                         eta: row['ETA']?.toString(),
                         nota: row['NOTA'],
+                        tenant_id: tenantId // ADDED
                     },
                     create: {
                         id_programacion: id_prog.toString(),
@@ -183,6 +293,7 @@ async function main() {
                         hora_retiro: row['ORA RITIRO']?.toString(),
                         eta: row['ETA']?.toString(),
                         nota: row['NOTA'],
+                        tenant_id: tenantId // ADDED
                     }
                 });
             } catch (error) {
@@ -190,6 +301,81 @@ async function main() {
             }
         }
         console.log('Operations imported successfully.');
+    }
+
+    // --- 4. IMPORT MANTENIMIENTO (MANTENIMIENTO Sheet) ---
+    const sheetMaint = workbook.Sheets['MANTENIMIENTO'];
+    if (sheetMaint) {
+        const dataMaint = XLSX.utils.sheet_to_json(sheetMaint);
+        console.log(`Found ${dataMaint.length} maintenance records in 'MANTENIMIENTO'. Importando...`);
+
+        for (const row of dataMaint as any[]) {
+            try {
+                const id = row['ID'];
+                const targa = row['TARGA'];
+                if (!id || !targa) continue;
+
+                // Find vehicle by placa (TARGA)
+                const vehicle = await prisma.vehiculo.findFirst({
+                    where: { placa: targa }
+                });
+
+                if (!vehicle) {
+                    console.log(`Vehicle not found for TARGA: ${targa}`);
+                    continue;
+                }
+
+                // Parse date
+                let fecha: Date = new Date();
+                if (row['DATA']) {
+                    if (typeof row['DATA'] === 'number') {
+                        fecha = new Date((row['DATA'] - (25567 + 2)) * 86400 * 1000);
+                    } else if (row['DATA'] instanceof Date) {
+                        fecha = row['DATA'];
+                    } else if (typeof row['DATA'] === 'string') {
+                        fecha = new Date(row['DATA']);
+                    }
+                }
+
+                // Map TIPO to our types
+                let tipo = 'Correctivo';
+                const tipoRaw = row['TIPO']?.toString().toUpperCase();
+                if (tipoRaw?.includes('PREV') || tipoRaw?.includes('REVIS')) {
+                    tipo = 'Preventivo';
+                } else if (tipoRaw?.includes('EMERG') || tipoRaw?.includes('URGENT')) {
+                    tipo = 'Emergencia';
+                } else if (tipoRaw?.includes('REPAR') || tipoRaw?.includes('CORREC')) {
+                    tipo = 'Correctivo';
+                }
+
+                // Check if already exists
+                const exists = await prisma.mantenimiento.findFirst({
+                    where: {
+                        vehiculo_id: vehicle.id,
+                        descripcion: row['TRABAJO REALIZADO'] || 'Sin descripción'
+                    }
+                });
+
+                if (!exists) {
+                    await prisma.mantenimiento.create({
+                        data: {
+                            vehiculo_id: vehicle.id,
+                            tipo: tipo,
+                            fecha: fecha,
+                            descripcion: row['TRABAJO REALIZADO'] || row['OBSERVACIÓN'] || 'Sin descripción',
+                            costo: 0, // No cost column in Excel, default to 0
+                            taller: row['A CARGO'] || 'Taller Externo',
+                            kilometraje: row['KILOMETRAJE '] ? parseInt(row['KILOMETRAJE ']) : null,
+                            tenant_id: tenantId
+                        }
+                    });
+                    process.stdout.write('.');
+                }
+            } catch (error) {
+                console.error(`Error importing maintenance ${row['ID']}:`, error);
+            }
+        }
+        console.log('\nMaintenance records imported successfully.');
     }
 }
 

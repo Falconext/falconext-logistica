@@ -1,9 +1,25 @@
-
 node_modules
 dist
-.env
-.DS_Store
 .turbo
 coverage
 .next
+
+# Secretos / entorno (NUNCA subir)
+.env
+.env.*
+!.env.example
+**/google-credentials.json
+*-credentials.json
+*.pem
+
+# Base de datos local y respaldos (contienen datos del negocio)
+*.db
+*.db-journal
+*.sqlite
+**/prisma/backups/
+
+# Expo / build móvil
+apps/logistica-app/.expo
+
+.DS_Store
 *.log

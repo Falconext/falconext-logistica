@@ -10,6 +10,9 @@ export interface Trabajador {
     url_foto?: string;
     telefono?: string;
     email_personal?: string;
+    email_supervisor?: string;
+    area_trabajo?: string;
+    sueldo_base?: string | number;
     direccion?: string;
     // Docs
     numero_pasaporte?: string;
@@ -34,6 +37,17 @@ export interface Vehiculo {
     permisos_especiales?: string;
     id_interno_furgon?: string;
     kilometraje_actual?: number;
+    url_foto?: string;
+}
+
+export interface Documento {
+    id: string;
+    entidad: 'VEHICULO' | 'TRABAJADOR' | 'MANTENIMIENTO';
+    entidad_id: string;
+    tipo: string;
+    nombre?: string;
+    url: string;
+    fecha_vencimiento?: string;
 }
 
 export interface Programacion {
@@ -46,8 +60,14 @@ export interface Programacion {
 
     cliente?: string;
     lugar_retiro?: string;
+    fecha_retiro?: string; // Added
+
     lugar_entrega?: string;
+    fecha_entrega?: string; // Added (for countdown)
+
     hora_retiro?: string;
     eta?: string;
     nota?: string;
+    estado?: string; // Added for sync status
+    ingreso_estimado?: number; // Added
 }

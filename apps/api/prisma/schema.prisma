@@ -7,7 +7,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -57,6 +57,9 @@ model Trabajador {
   direccion          String?
   area_trabajo       String?
   email_supervisor   String?
+  
+  // Financiero
+  sueldo_base        Decimal? @default(0) // Added for payroll tracking
 
   // Otros
   permiso_univex     String?
@@ -64,6 +67,9 @@ model Trabajador {
 
   creado_en          DateTime @default(now())
   actualizado_en     DateTime @updatedAt
+  
+  tenant_id          String
+  tenant             Tenant   @relation(fields: [tenant_id], references: [id])
   
   @@map("trabajadores")
 }
@@ -86,6 +92,7 @@ model Vehiculo {
   revision_tecnica         String? // 'R.TECNICA'
   permisos_especiales      String? // 'DEROGHE'
   id_interno_furgon        String? // 'ID_FURGON'
+  url_foto                 String? // Foto de la unidad (Cloudinary)
 
   // Telemetría y Rastreo (Futuro)
   kilometraje_actual Int?      @default(0)
@@ -96,7 +103,38 @@ model Vehiculo {
   creado_en      DateTime @default(now())
   actualizado_en DateTime @updatedAt
   
+  mantenimientos Mantenimiento[]
+
+  tenant_id      String
+  tenant         Tenant   @relation(fields: [tenant_id], references: [id])
+  
+  devices        Device[]
+
   @@map("vehiculos")
+}
+
+model Mantenimiento {
+  id String @id @default(uuid())
+
+  vehiculo_id String
+  vehiculo    Vehiculo @relation(fields: [vehiculo_id], references: [id])
+
+  tipo        String   // 'Preventivo', 'Correctivo', 'Emergencia'
+  fecha       DateTime
+  descripcion String
+  costo       Float
+  taller      String?
+
+  kilometraje Int?
+  evidence_url String? // URL de Cloudinary
+
+  creado_en      DateTime @default(now())
+  actualizado_en DateTime @updatedAt
+
+  tenant_id      String
+  tenant         Tenant   @relation(fields: [tenant_id], references: [id])
+
+  @@map("mantenimiento")
 }
 
 model Programacion {
@@ -113,14 +151,230 @@ model Programacion {
   // Route Info
   cliente          String?  // 'CLIENTE'
   lugar_retiro     String?  // 'LUOGO RITIRO'
+  fecha_retiro     DateTime? // New: Specific Date+Time for pickup
+  
   lugar_entrega    String?  // 'LUOGO CONSEGNA'
-  hora_retiro      String?  // 'ORA RITIRO'
-  eta              String?  // 'ETA'
+  fecha_entrega    DateTime? // New: Specific Date+Time for delivery
+  
+  hora_retiro      String?  // Deprecated? Keep for legacy
+  eta              String?  // Deprecated? Keep for legacy
   
   nota             String?  // 'NOTA'
 
+  estado           String   @default("PENDING") // PENDING, IN_TRANSIT, COMPLETED, FAILED
+  ingreso_estimado Float?   @default(0)
+
   creado_en        DateTime @default(now())
   actualizado_en   DateTime @updatedAt
+  
+  tenant_id        String
+  tenant           Tenant   @relation(fields: [tenant_id], references: [id])
 
   @@map("programacion")
+}
+
+model Tenant {
+  id    String @id @default(uuid())
+  name  String
+  slug  String @unique
+  plan  String @default("FREE") // FREE, PRO, ENTERPRISE
+  moneda String @default("EUR") // PEN | USD | EUR — moneda base de la empresa
+
+  creado_en      DateTime @default(now())
+  actualizado_en DateTime @updatedAt
+
+  // Google Sheets Integration
+  google_sheet_id String?
+  last_synced     DateTime?
+
+  users          User[]
+  trabajadores   Trabajador[]
+  vehiculos      Vehiculo[]
+  mantenimientos Mantenimiento[]
+  programaciones Programacion[]
+  devices        Device[]
+  geofences      Geofence[]
+  peajes         Peaje[]
+  combustibles   Combustible[]
+  documentos     Documento[]
+
+  @@map("tenants")
+}
+
+// Documento genérico: escaneos/archivos asociados a una entidad
+// (VEHICULO | TRABAJADOR | MANTENIMIENTO). Soporta alertas por vencimiento.
+model Documento {
+  id          String  @id @default(uuid())
+  entidad     String  // 'VEHICULO' | 'TRABAJADOR' | 'MANTENIMIENTO'
+  entidad_id  String  // id del registro dueño
+  tipo        String  // 'LICENCIA' | 'SEGURO' | 'TARJETA_CIRCULACION' | 'PASAPORTE' | 'REVISION_TECNICA' | 'OTRO'
+  nombre      String?
+  url         String  // URL de Cloudinary (imagen o PDF)
+  fecha_vencimiento DateTime?
+
+  creado_en      DateTime @default(now())
+  actualizado_en DateTime @updatedAt
+
+  tenant_id String
+  tenant    Tenant @relation(fields: [tenant_id], references: [id])
+
+  @@index([entidad, entidad_id])
+  @@map("documentos")
+}
+
+model User {
+  id        String @id @default(uuid())
+  email     String @unique
+  password  String
+  role      String @default("VIEWER") // ADMIN, MANAGER, VIEWER
+  
+  tenant_id String
+  tenant    Tenant @relation(fields: [tenant_id], references: [id])
+
+  creado_en      DateTime @default(now())
+  actualizado_en DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Device {
+  id              String   @id @default(uuid())
+  imei            String   @unique // Identificador único del hardware/app
+  name            String
+  token           String   @unique @default(uuid()) // Token para autenticación del dispositivo
+  model           String?  // Modelo del dispositivo
+  last_activity   DateTime?
+  
+  // Relacion con el negocio
+  id_programacion_actual String? // For sequential IDs (e.g. "R-001")
+
+  vehiculo_id     String?  // Vehículo asignado actualmente
+  vehiculo        Vehiculo? @relation(fields: [vehiculo_id], references: [id])
+
+  tenant_id       String
+  tenant          Tenant   @relation(fields: [tenant_id], references: [id])
+  
+  positions       Position[]
+  geofence_events GeofenceEvent[]
+  
+  creado_en       DateTime @default(now())
+  actualizado_en  DateTime @updatedAt
+
+  @@map("devices")
+}
+
+model Position {
+  id          String   @id @default(uuid())
+  device_id   String
+  device      Device   @relation(fields: [device_id], references: [id])
+  
+  latitude    Float
+  longitude   Float
+  speed       Float?   // km/h
+  heading     Float?   // dirección en grados
+  altitude    Float?
+  accuracy    Float?
+  
+  battery     Int?     // Nivel de batería si aplica
+  ignition    Boolean? // Si el motor está encendido
+  
+  timestamp   DateTime // Fecha real del reporte GPS
+  server_time DateTime @default(now()) // Fecha de recepción en servidor
+
+  @@index([device_id, timestamp])
+  @@map("positions")
+}
+
+model Geofence {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  type        String   @default("CIRCLE") // CIRCLE, POLYGON
+  
+  // Para Circulo
+  latitude    Float?
+  longitude   Float?
+  radius      Float?   // Metros
+  
+  // Para Poligono (GeoJSON stringified)
+  coordinates String?
+
+  tenant_id   String
+  tenant      Tenant   @relation(fields: [tenant_id], references: [id])
+  
+  events      GeofenceEvent[]
+
+  creado_en       DateTime @default(now())
+  actualizado_en  DateTime @updatedAt
+
+  @@map("geofences")
+}
+
+model GeofenceEvent {
+  id          String   @id @default(uuid())
+  geofence_id String
+  geofence    Geofence @relation(fields: [geofence_id], references: [id])
+  
+  device_id   String
+  device      Device   @relation(fields: [device_id], references: [id])
+  
+  event_type  String   // ENTER, EXIT
+  timestamp   DateTime @default(now())
+  
+  @@index([device_id, timestamp])
+  @@map("geofence_events")
+}
+
+// Peaje/Multa from sheet "MANCATO P."
+model Peaje {
+  id             String   @id @default(uuid())
+  id_multa       String?  @unique  // 'Id_Multas'
+  estado         String?           // 'ESTADO' (PAGADO, PENDIENTE, etc.)
+  fecha          DateTime?         // 'FECHA'
+  hora           String?           // 'HORA'
+  targa          String?           // 'TARGA' (Vehicle plate)
+  monto          Float?            // 'MONTO' (€ amount)
+  trabajador_id  String?           // 'ID_ TRABAJADOR'
+  comentarios    String?           // 'COMENTARIOS'
+  archivo        String?           // 'ARCHIVO' (PDF link)
+  recibo_pago    String?           // 'RECIBO DE PAGO'
+  tipo           String?           // 'TIPO'
+  mes            String?           // 'MES'
+  fecha_recepcion DateTime?        // 'FECHA RECEPCIÓN'
+  peaje_salida   String?           // 'PEAJE/SALIDA'
+  nota_autista   String?           // 'NOTA AUTISTA'
+  
+  tenant_id      String
+  tenant         Tenant   @relation(fields: [tenant_id], references: [id])
+  
+  creado_en      DateTime @default(now())
+  actualizado_en DateTime @updatedAt
+  
+  @@index([trabajador_id])
+  @@index([targa])
+  @@map("peajes")
+}
+
+// Combustible from sheet "COMBUSTIBLE"
+model Combustible {
+  id              String   @id @default(uuid())
+  id_registro     String?  @unique  // 'ID_REGISTRO'
+  trabajador_id   String?           // 'ID_TRABAJADOR'
+  fecha           DateTime?         // 'FECHA'
+  monto           Float?            // 'MONTO'
+  targa           String?           // 'TARGA'
+  metodo          String?           // 'METODO' (AUTOBOT / IP, etc.)
+  area            String?           // 'AREA' (DHL, FARMACIA)
+  mes             String?           // 'MES'
+  archivo         String?           // 'ARCHIVO' (Photo link)
+  
+  tenant_id       String
+  tenant          Tenant   @relation(fields: [tenant_id], references: [id])
+  
+  creado_en       DateTime @default(now())
+  actualizado_en  DateTime @updatedAt
+  
+  @@index([trabajador_id])
+  @@index([targa])
+  @@map("combustible")
 }
