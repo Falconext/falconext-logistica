@@ -17,14 +17,15 @@ export class GpsService {
        I will use MultiReplace to target specific blocks.
     */
 
-    async registerDevice(data: { imei: string, name: string, model?: string, tenantId: string, vehiculoId?: string }) {
+    async registerDevice(data: { imei: string, name: string, model?: string, tenantId: string, vehiculoId?: string, trabajadorId?: string }) {
         return this.prisma.device.create({
             data: {
                 imei: data.imei,
                 name: data.name,
                 model: data.model,
                 tenant_id: data.tenantId,
-                vehiculo_id: data.vehiculoId
+                vehiculo_id: data.vehiculoId,
+                trabajador_id: data.trabajadorId || null
             }
         });
     }
@@ -34,12 +35,39 @@ export class GpsService {
             where: { tenant_id: tenantId },
             include: {
                 positions: { take: 1, orderBy: { timestamp: 'desc' } },
-                vehiculo: true
+                vehiculo: true,
+                trabajador: {
+                    select: { id: true, nombre_completo: true, cargo: true, url_foto: true, telefono: true }
+                }
             }
         });
     }
 
-    async updateDevice(id: string, tenantId: string, data: { imei?: string, name?: string, model?: string, vehiculoId?: string }) {
+    // Última ubicación conocida de un trabajador (vía el dispositivo que tiene asignado).
+    async getTrabajadorLocation(tenantId: string, trabajadorId: string) {
+        const device = await this.prisma.device.findFirst({
+            where: { tenant_id: tenantId, trabajador_id: trabajadorId },
+            include: {
+                vehiculo: { select: { placa: true } },
+                positions: { take: 1, orderBy: { timestamp: 'desc' } }
+            }
+        });
+
+        if (!device) return { device: null, position: null };
+
+        const position = device.positions[0] || null;
+        return {
+            device: {
+                id: device.id,
+                name: device.name,
+                last_activity: device.last_activity,
+                vehiculo_placa: device.vehiculo?.placa || null
+            },
+            position
+        };
+    }
+
+    async updateDevice(id: string, tenantId: string, data: { imei?: string, name?: string, model?: string, vehiculoId?: string, trabajadorId?: string }) {
         // Ensure the device belongs to this tenant before updating
         const device = await this.prisma.device.findFirst({
             where: { id, tenant_id: tenantId }
@@ -55,7 +83,9 @@ export class GpsService {
                 imei: data.imei,
                 name: data.name,
                 model: data.model,
-                vehiculo_id: data.vehiculoId
+                vehiculo_id: data.vehiculoId,
+                // Permite asignar o quitar (null) el trabajador cuando el campo viene en el body
+                ...(data.trabajadorId !== undefined ? { trabajador_id: data.trabajadorId || null } : {})
             }
         });
     }

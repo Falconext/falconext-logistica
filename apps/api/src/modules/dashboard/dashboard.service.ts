@@ -101,11 +101,11 @@ export class DashboardService {
         const thirtyDaysFromNow = new Date();
         thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
-        // Active workers count
+        // Active workers count (valores reales en BD: ACTIVO / INACTIVO)
         const activeWorkers = await this.prisma.trabajador.count({
             where: {
                 tenant_id: tenantId,
-                estado_laboral: 'Activo'
+                estado_laboral: { equals: 'ACTIVO', mode: 'insensitive' }
             }
         });
 
@@ -114,11 +114,11 @@ export class DashboardService {
             where: { tenant_id: tenantId }
         });
 
-        // Active vehicles count
+        // Active vehicles count (valores reales en BD: DISPONIBLE / NO DISPONIBLE)
         const activeVehicles = await this.prisma.vehiculo.count({
             where: {
                 tenant_id: tenantId,
-                estado_vehiculo: 'Activo'
+                estado_vehiculo: { equals: 'DISPONIBLE', mode: 'insensitive' }
             }
         });
 
@@ -210,6 +210,32 @@ export class DashboardService {
         });
         const uniqueClients = new Set(clientsRaw.map(r => r.cliente).filter(Boolean)).size;
 
+        // ----- Costos y rentabilidad (mes actual vs mes anterior) -----
+        const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59);
+
+        const sumField = async (model: 'combustible' | 'peaje' | 'mantenimiento' | 'programacion', field: string, from: Date, to: Date) => {
+            const res = await (this.prisma[model] as any).aggregate({
+                _sum: { [field]: true },
+                where: { tenant_id: tenantId, fecha: { gte: from, lte: to } },
+            });
+            return Number(res._sum[field] || 0);
+        };
+
+        const [fuel, tolls, maint, income] = await Promise.all([
+            sumField('combustible', 'monto', startOfMonth, endOfMonth),
+            sumField('peaje', 'monto', startOfMonth, endOfMonth),
+            sumField('mantenimiento', 'costo', startOfMonth, endOfMonth),
+            sumField('programacion', 'ingreso_estimado', startOfMonth, endOfMonth),
+        ]);
+        const [fuelPrev, tollsPrev, maintPrev] = await Promise.all([
+            sumField('combustible', 'monto', lastMonthStart, lastMonthEnd),
+            sumField('peaje', 'monto', lastMonthStart, lastMonthEnd),
+            sumField('mantenimiento', 'costo', lastMonthStart, lastMonthEnd),
+        ]);
+        const totalCost = fuel + tolls + maint;
+        const prevTotalCost = fuelPrev + tollsPrev + maintPrev;
+
         return {
             workers: {
                 active: activeWorkers,
@@ -239,6 +265,17 @@ export class DashboardService {
             },
             alerts: {
                 pending: pendingAlerts
+            },
+            costs: {
+                fuel,
+                tolls,
+                maintenance: maint,
+                total: totalCost,
+                prevTotal: prevTotalCost,
+                // variación % vs mes anterior (null si no hay base)
+                changePct: prevTotalCost > 0 ? Math.round(((totalCost - prevTotalCost) / prevTotalCost) * 100) : null,
+                income,
+                margin: income - totalCost
             }
         };
     }
@@ -387,6 +424,72 @@ export class DashboardService {
                 workers: workerRanking,
                 vehicles: vehicleUsage
             }
+        };
+    }
+
+    // ----- Reporte de costos filtrable por rango de fechas -----
+    async getCostsReport(tenantId: string, from?: string, to?: string) {
+        const now = new Date();
+        const toDate = to ? new Date(to) : now;
+        // por defecto: últimos 6 meses
+        const fromDate = from ? new Date(from) : new Date(now.getFullYear(), now.getMonth() - 5, 1);
+        const range = { gte: fromDate, lte: toDate };
+
+        const [combustibles, peajes, mantenimientos, programaciones] = await Promise.all([
+            this.prisma.combustible.findMany({ where: { tenant_id: tenantId, fecha: range }, select: { fecha: true, monto: true, targa: true, area: true, trabajador_id: true } }),
+            this.prisma.peaje.findMany({ where: { tenant_id: tenantId, fecha: range }, select: { fecha: true, monto: true, targa: true, trabajador_id: true } }),
+            this.prisma.mantenimiento.findMany({ where: { tenant_id: tenantId, fecha: range }, select: { fecha: true, costo: true, vehiculo: { select: { placa: true } } } }),
+            this.prisma.programacion.findMany({ where: { tenant_id: tenantId, fecha: range }, select: { ingreso_estimado: true } }),
+        ]);
+
+        const monthKey = (d: Date | null) => (d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` : null);
+        const MES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+        const fuel = combustibles.reduce((s, r) => s + (r.monto || 0), 0);
+        const tolls = peajes.reduce((s, r) => s + (r.monto || 0), 0);
+        const maintenance = mantenimientos.reduce((s, r) => s + (r.costo || 0), 0);
+        const income = programaciones.reduce((s, r) => s + (r.ingreso_estimado || 0), 0);
+        const total = fuel + tolls + maintenance;
+
+        // Tendencia por mes
+        const trendMap: Record<string, { combustible: number; peajes: number; mantenimiento: number }> = {};
+        const bump = (d: Date | null, k: 'combustible' | 'peajes' | 'mantenimiento', v: number) => {
+            const key = monthKey(d); if (!key) return;
+            (trendMap[key] ??= { combustible: 0, peajes: 0, mantenimiento: 0 })[k] += v || 0;
+        };
+        combustibles.forEach(r => bump(r.fecha, 'combustible', r.monto || 0));
+        peajes.forEach(r => bump(r.fecha, 'peajes', r.monto || 0));
+        mantenimientos.forEach(r => bump(r.fecha, 'mantenimiento', r.costo || 0));
+        const trend = Object.entries(trendMap).sort(([a], [b]) => a.localeCompare(b)).map(([key, v]) => {
+            const [y, m] = key.split('-');
+            return { mes: `${MES[Number(m) - 1]} ${y.slice(2)}`, ...v, total: v.combustible + v.peajes + v.mantenimiento };
+        });
+
+        // Costo por área (combustible)
+        const areaMap: Record<string, number> = {};
+        combustibles.forEach(r => { const a = (r.area || 'Sin área').trim(); areaMap[a] = (areaMap[a] || 0) + (r.monto || 0); });
+        const byArea = Object.entries(areaMap).map(([area, total]) => ({ area, total })).sort((a, b) => b.total - a.total);
+
+        // Top vehículos por costo (combustible + peajes por targa)
+        const vehMap: Record<string, number> = {};
+        [...combustibles, ...peajes].forEach(r => { const t = (r.targa || '—').trim(); vehMap[t] = (vehMap[t] || 0) + (r.monto || 0); });
+        const topVehiculos = Object.entries(vehMap).map(([targa, total]) => ({ targa, total })).sort((a, b) => b.total - a.total).slice(0, 8);
+
+        // Top choferes por multas/peajes (trabajador_id = código)
+        const chofMap: Record<string, number> = {};
+        peajes.forEach(r => { const c = (r.trabajador_id || '—').trim(); chofMap[c] = (chofMap[c] || 0) + (r.monto || 0); });
+        const codes = Object.keys(chofMap).filter(c => c !== '—');
+        const trabajadores = await this.prisma.trabajador.findMany({ where: { tenant_id: tenantId, id_trabajador: { in: codes } }, select: { id_trabajador: true, nombre_completo: true } });
+        const nombreByCode: Record<string, string> = {};
+        trabajadores.forEach(t => { if (t.id_trabajador) nombreByCode[t.id_trabajador] = t.nombre_completo; });
+        const topChoferes = Object.entries(chofMap).map(([codigo, total]) => ({ codigo, nombre: nombreByCode[codigo] || codigo, total })).sort((a, b) => b.total - a.total).slice(0, 8);
+
+        return {
+            summary: { fuel, tolls, maintenance, total, income, margin: income - total },
+            trend,
+            byArea,
+            topVehiculos,
+            topChoferes,
         };
     }
 }

@@ -1,13 +1,17 @@
 
 import type { Metadata } from "next";
-import { Poppins } from "next/font/google";
+import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "../components/Sidebar";
 import { ClientLayout } from "../components/ClientLayout";
 
 import { Providers } from "../components/Providers";
 
-const poppins = Poppins({ subsets: ["latin"], weight: ['400', '500', '600', '700', '800'], variable: '--font-sans' });
+// Mismo sistema tipográfico que reparto-platform:
+// Space Grotesk (títulos) · Inter (cuerpo) · JetBrains Mono (números).
+const display = Space_Grotesk({ subsets: ["latin"], variable: "--font-display", weight: ["500", "600", "700"] });
+const body = Inter({ subsets: ["latin"], variable: "--font-body" });
+const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono", weight: ["400", "500", "600"] });
 
 export const metadata: Metadata = {
     title: "Logistica Premium",
@@ -23,7 +27,7 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="es" suppressHydrationWarning>
-            <body className={poppins.variable}>
+            <body className={`${display.variable} ${body.variable} ${mono.variable}`}>
                 <Providers>
                     <ClientLayout>
                         {children}

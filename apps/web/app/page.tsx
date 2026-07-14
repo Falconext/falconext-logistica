@@ -1,11 +1,12 @@
 'use client';
 
 import Link from "next/link";
-import { Users, Truck, ArrowUpRight, AlertTriangle, Map, Wrench, Bell, Package, TrendingUp, DollarSign, Activity } from "lucide-react";
+import { Users, Truck, ArrowUpRight, AlertTriangle, Map, Wrench, Bell, Package, TrendingUp, TrendingDown, DollarSign, Activity, Fuel, Receipt } from "lucide-react";
 import { useEffect, useState } from "react";
 import api from "../lib/api";
 import { useAuthStore } from "../lib/store";
 import { canAccessModule, moduleForPath } from "../lib/modules";
+import { useCurrency } from "../lib/useCurrency";
 
 interface DashboardStats {
     workers: { active: number; total: number; percentage: number };
@@ -15,6 +16,16 @@ interface DashboardStats {
     clients: { active: number };
     maintenance: { thisMonth: number };
     alerts: { pending: number };
+    costs: {
+        fuel: number;
+        tolls: number;
+        maintenance: number;
+        total: number;
+        prevTotal: number;
+        changePct: number | null;
+        income: number;
+        margin: number;
+    };
 }
 
 export default function Home() {
@@ -22,6 +33,7 @@ export default function Home() {
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [loading, setLoading] = useState(true);
     const { user } = useAuthStore();
+    const { format } = useCurrency();
 
     useEffect(() => {
         Promise.all([
@@ -68,6 +80,48 @@ export default function Home() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 {/* Left column */}
                 <div className="space-y-5">
+                    {/* Costos del mes */}
+                    <Card icon={<DollarSign size={17} />} title="Costos del mes" href="/reportes" actionLabel="Ver reportes">
+                        <div className="flex items-baseline gap-3 flex-wrap">
+                            <span className="text-4xl font-bold text-slate-900 tabular-nums">{format(stats?.costs?.total ?? 0)}</span>
+                            {stats?.costs?.changePct != null && (
+                                (() => {
+                                    const pct = stats.costs.changePct as number;
+                                    const up = pct > 0;
+                                    // Costo: color INVERSO. Más costo = malo (rojo/ámbar), menos = bueno (verde).
+                                    const cls = up ? 'text-red-500' : pct < 0 ? 'text-emerald-500' : 'text-slate-400';
+                                    const Icon = up ? TrendingUp : pct < 0 ? TrendingDown : null;
+                                    return (
+                                        <span className={`flex items-center gap-1 text-sm font-semibold ${cls}`}>
+                                            {Icon && <Icon size={15} />}
+                                            {up ? '+' : ''}{pct.toFixed(1)}%
+                                            <span className="text-slate-400 font-normal">vs mes anterior</span>
+                                        </span>
+                                    );
+                                })()
+                            )}
+                        </div>
+
+                        <div className="mt-4 space-y-2.5">
+                            <CostRow icon={<Fuel size={15} />} label="Combustible" value={format(stats?.costs?.fuel ?? 0)} />
+                            <CostRow icon={<Receipt size={15} />} label="Peajes / Multas" value={format(stats?.costs?.tolls ?? 0)} />
+                            <CostRow icon={<Wrench size={15} />} label="Mantenimiento" value={format(stats?.costs?.maintenance ?? 0)} />
+                        </div>
+
+                        {stats && stats.costs && stats.costs.income > 0 ? (
+                            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-sm">
+                                <span className="text-slate-500">Margen</span>
+                                <span className={`font-bold tabular-nums ${stats.costs.margin >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                                    {format(stats.costs.margin)}
+                                </span>
+                            </div>
+                        ) : (
+                            <p className="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-400">
+                                Sin ingresos registrados (configúralos en Operaciones)
+                            </p>
+                        )}
+                    </Card>
+
                     {/* Operaciones (funds-like) */}
                     <Card icon={<DollarSign size={17} />} title="Operaciones del mes" href={canGo('/operaciones') ? '/operaciones' : undefined} actionLabel="Ver detalles">
                         <div className="space-y-2.5">
@@ -175,6 +229,18 @@ function Row({ label, value }: { label: string; value: string }) {
     return (
         <div className="flex items-center justify-between text-sm">
             <span className="text-slate-500">{label}</span>
+            <span className="font-semibold text-slate-900 tabular-nums">{value}</span>
+        </div>
+    );
+}
+
+function CostRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+    return (
+        <div className="flex items-center justify-between text-sm">
+            <span className="flex items-center gap-2 text-slate-500">
+                <span className="text-slate-400">{icon}</span>
+                {label}
+            </span>
             <span className="font-semibold text-slate-900 tabular-nums">{value}</span>
         </div>
     );

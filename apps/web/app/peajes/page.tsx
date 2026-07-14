@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import api from '../../lib/api';
 import { Receipt, Plus, Search, Calendar, ArrowLeft, ArrowRight, Pencil, Trash2, Paperclip, Loader2 } from 'lucide-react';
 import PeajeModal from './PeajeModal';
+import Select from '../../components/Select';
 import { useCurrency } from '../../lib/useCurrency';
 
 const ESTADOS = ['Todos', 'PENDIENTE', 'PAGADO', 'ANULADO'] as const;
@@ -199,12 +200,13 @@ export default function PeajesPage() {
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-5">
                     <div className="flex items-center gap-2 text-sm text-slate-500">
                         <span>Mostrar</span>
-                        <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}
-                            className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 outline-none focus:border-slate-400 text-slate-900 cursor-pointer transition">
-                            <option value={10}>10</option>
-                            <option value={25}>25</option>
-                            <option value={50}>50</option>
-                        </select>
+                        <Select value={String(pageSize)} onChange={(v) => setPageSize(Number(v))}
+                            searchable={false} className="w-20"
+                            options={[
+                                { value: '10', label: '10' },
+                                { value: '25', label: '25' },
+                                { value: '50', label: '50' },
+                            ]} />
                         <span>por página</span>
                     </div>
                     <div className="flex items-center gap-3 text-sm text-slate-500">

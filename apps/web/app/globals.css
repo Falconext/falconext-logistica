@@ -31,6 +31,74 @@
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: var(--font-sans), sans-serif;
-  font-feature-settings: "rlig" 1, "calt" 1;
+  font-family: var(--font-body), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv01", "ss01";
 }
+
+/* Títulos con Space Grotesk (igual que reparto-platform) */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display), var(--font-body), sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* Números tabulares con JetBrains Mono */
+.font-mono {
+  font-family: var(--font-mono), monospace;
+  font-feature-settings: "tnum", "zero";
+}
+
+/* ─────────────────────────────────────────────
+   TEMA OSCURO — paleta de reparto-platform
+   (fondo tinta, paneles, línea, texto claro).
+   Se activa con class="dark" en <html> (next-themes).
+   ───────────────────────────────────────────── */
+.dark {
+  --r-ink: #080b14;
+  --r-panel: #0f1522;
+  --r-panel-2: #141d2e;
+  --r-panel-3: #1a2438;
+  --r-line: #202a40;
+  --r-text: #e7ecf6;
+  --r-text-2: #cdd5e5;
+  --r-muted: #7c89a6;
+  --r-faint: #66728f;
+}
+
+.dark body {
+  background:
+    radial-gradient(1200px 600px at 80% -10%, #12203a55, transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, #1a142e40, transparent 55%),
+    var(--r-ink);
+  color: var(--r-text);
+}
+
+/* Superficies (incluye variantes con opacidad: bg-white/95, bg-slate-50/60, etc.) */
+.dark .bg-white { background-color: var(--r-panel) !important; }
+.dark .bg-white\/95,
+.dark .bg-white\/90 { background-color: rgba(15, 21, 34, 0.96) !important; }
+.dark .bg-slate-50,
+.dark .bg-slate-50\/60,
+.dark .bg-slate-50\/50,
+.dark .bg-slate-50\/40 { background-color: var(--r-panel-2) !important; }
+.dark .bg-slate-100 { background-color: var(--r-panel-3) !important; }
+.dark .bg-\[\#fbfbfc\] { background-color: var(--r-ink) !important; }
+
+/* Texto */
+.dark .text-slate-900,
+.dark .text-slate-800 { color: var(--r-text) !important; }
+.dark .text-slate-700 { color: var(--r-text-2) !important; }
+.dark .text-slate-600 { color: #aab4ca !important; }
+.dark .text-slate-500 { color: var(--r-muted) !important; }
+.dark .text-slate-400 { color: var(--r-faint) !important; }
+
+/* Bordes — captura también las variantes con opacidad (/80, /60, etc.) */
+.dark [class*="border-slate-200"],
+.dark [class*="border-slate-300"] { border-color: var(--r-line) !important; }
+.dark [class*="border-slate-100"] { border-color: rgba(32, 42, 64, 0.6) !important; }
+.dark [class*="divide-slate-100"] > * + *,
+.dark [class*="divide-slate-200"] > * + * { border-color: rgba(32, 42, 64, 0.6) !important; }
+
+/* Hovers suaves (incluye variantes con opacidad: hover:bg-slate-50/60, etc.) */
+.dark [class*="hover:bg-slate-50"]:hover,
+.dark [class*="hover:bg-slate-100"]:hover { background-color: var(--r-panel-3) !important; }

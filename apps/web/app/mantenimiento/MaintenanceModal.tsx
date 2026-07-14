@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { X, Save, Loader2 } from 'lucide-react';
 import api from '../../lib/api';
 import FileUpload from '../../components/FileUpload';
+import DatePicker from '../../components/DatePicker';
+import Select from '../../components/Select';
 import { useCurrency } from '../../lib/useCurrency';
 
 interface MaintenanceModalProps {
@@ -76,7 +78,7 @@ export default function MaintenanceModal({ isOpen, onClose, onSuccess, record }:
 
     if (!isOpen) return null;
 
-    const inputClass = 'w-full p-3 rounded-xl bg-slate-50 border border-slate-200 outline-none focus:border-slate-400 focus:ring-2 focus:ring-[#FFC933]/40 transition text-slate-900';
+    const inputClass = 'w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 outline-none focus:border-slate-400 focus:ring-2 focus:ring-[#FFC933]/40 transition text-sm text-slate-900';
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -91,41 +93,36 @@ export default function MaintenanceModal({ isOpen, onClose, onSuccess, record }:
                 <form onSubmit={handleSubmit} className="p-6 space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-700">Vehículo</label>
-                            <select
-                                required
-                                className={inputClass}
+                            <Select
+                                label="Vehículo"
+                                placeholder="Seleccionar vehículo"
                                 value={formData.vehiculo_id}
-                                onChange={(e) => setFormData({ ...formData, vehiculo_id: e.target.value })}
-                            >
-                                <option value="">Seleccionar vehículo</option>
-                                {vehicles.map(v => (
-                                    <option key={v.id} value={v.id}>{v.placa}{v.marca_modelo ? ` - ${v.marca_modelo}` : ''}</option>
-                                ))}
-                            </select>
+                                onChange={(v) => setFormData({ ...formData, vehiculo_id: v })}
+                                options={vehicles.map(v => ({
+                                    value: v.id,
+                                    label: `${v.placa}${v.marca_modelo ? ` - ${v.marca_modelo}` : ''}`,
+                                }))}
+                            />
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-700">Tipo</label>
-                            <select
-                                className={inputClass}
+                            <Select
+                                label="Tipo"
                                 value={formData.tipo}
-                                onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
-                            >
-                                <option value="Preventivo">Preventivo</option>
-                                <option value="Correctivo">Correctivo</option>
-                                <option value="Emergencia">Emergencia</option>
-                            </select>
+                                onChange={(v) => setFormData({ ...formData, tipo: v })}
+                                options={[
+                                    { value: 'Preventivo', label: 'Preventivo' },
+                                    { value: 'Correctivo', label: 'Correctivo' },
+                                    { value: 'Emergencia', label: 'Emergencia' },
+                                ]}
+                            />
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-700">Fecha</label>
-                            <input
-                                type="date"
-                                required
-                                className={inputClass}
+                            <DatePicker
+                                label="Fecha"
                                 value={formData.fecha}
-                                onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
+                                onChange={(v) => setFormData({ ...formData, fecha: v })}
                             />
                         </div>
 

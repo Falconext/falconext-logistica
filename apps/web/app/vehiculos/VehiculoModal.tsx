@@ -5,6 +5,8 @@ import { X, Save, Loader2, Truck, FileText } from 'lucide-react';
 import { Vehiculo } from '../../types';
 import api from '../../lib/api';
 import { toast } from 'sonner';
+import DatePicker from '../../components/DatePicker';
+import Select from '../../components/Select';
 
 interface VehiculoModalProps {
     isOpen: boolean;
@@ -115,7 +117,7 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 top-[-30px] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white rounded-2xl w-full max-w-2xl border border-slate-200 shadow-2xl max-h-[90vh] flex flex-col">
                 {/* Header */}
                 <div className="p-6 border-b border-slate-100 flex justify-between items-center">
@@ -183,18 +185,16 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                                     onChange={(e) => set('anio_fabricacion', e.target.value)}
                                 />
                             </div>
-                            <div className="space-y-1.5">
-                                <label className={labelCls}>Estado</label>
-                                <select
-                                    className={inputCls}
-                                    value={form.estado_vehiculo}
-                                    onChange={(e) => set('estado_vehiculo', e.target.value)}
-                                >
-                                    <option value="ACTIVO">Activo</option>
-                                    <option value="MANTENIMIENTO">Mantenimiento</option>
-                                    <option value="INACTIVO">Inactivo</option>
-                                </select>
-                            </div>
+                            <Select
+                                label="Estado"
+                                value={form.estado_vehiculo}
+                                onChange={(v) => set('estado_vehiculo', v)}
+                                options={[
+                                    { value: 'ACTIVO', label: 'Activo' },
+                                    { value: 'MANTENIMIENTO', label: 'Mantenimiento' },
+                                    { value: 'INACTIVO', label: 'Inactivo' },
+                                ]}
+                            />
                             <div className="space-y-1.5">
                                 <label className={labelCls}>Kilometraje actual</label>
                                 <input
@@ -250,12 +250,10 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <label className={labelCls}>Venc. seguro</label>
-                                <input
-                                    type="date"
-                                    className={inputCls}
+                                <DatePicker
+                                    label="Venc. seguro"
                                     value={form.fecha_vencimiento_seguro}
-                                    onChange={(e) => set('fecha_vencimiento_seguro', e.target.value)}
+                                    onChange={(v) => set('fecha_vencimiento_seguro', v)}
                                 />
                             </div>
                             <div className="space-y-1.5">

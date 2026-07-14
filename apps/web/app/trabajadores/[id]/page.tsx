@@ -2,11 +2,17 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import api from '../../../lib/api';
-import { Truck, FileText, Phone, Mail, MapPin, User, ArrowLeft, Fuel, Receipt, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { Truck, FileText, Phone, Mail, MapPin, ArrowLeft, Fuel, Receipt, ChevronLeft, ChevronRight, Calendar, Navigation, X, Radio } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import clsx from 'clsx';
 import { useCurrency } from '../../../lib/useCurrency';
+import { LiveMapReal } from '../../../components/tracking/LiveMapReal';
+
+interface WorkerLocation {
+    device: { id: string; name: string; last_activity: string | null; vehiculo_placa: string | null } | null;
+    position: { latitude: number | string; longitude: number | string; timestamp: string; speed?: number | null } | null;
+}
 
 interface HistorialData {
     rutas: any[];
@@ -15,6 +21,16 @@ interface HistorialData {
 }
 
 const ITEMS_PER_PAGE = 15;
+
+function timeAgo(ts: string): string {
+    const diff = Date.now() - new Date(ts).getTime();
+    const min = Math.floor(diff / 60000);
+    if (min < 1) return 'ahora';
+    if (min < 60) return `hace ${min} min`;
+    const h = Math.floor(min / 60);
+    if (h < 24) return `hace ${h} h`;
+    return `hace ${Math.floor(h / 24)} d`;
+}
 
 export default function TrabajadorDetailsPage() {
     const params = useParams();
@@ -27,6 +43,8 @@ export default function TrabajadorDetailsPage() {
     const [activeTab, setActiveTab] = useState<'rutas' | 'peajes' | 'combustible'>('rutas');
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedMonth, setSelectedMonth] = useState<string>('all');
+    const [location, setLocation] = useState<WorkerLocation | null>(null);
+    const [showLocationMap, setShowLocationMap] = useState(false);
 
     useEffect(() => {
         if (!id) return;
@@ -45,6 +63,23 @@ export default function TrabajadorDetailsPage() {
             }
         }
         fetchData();
+    }, [id]);
+
+    // Ubicación en vivo (refresco cada 15s mientras la ficha esté abierta)
+    useEffect(() => {
+        if (!id) return;
+        let cancelled = false;
+        const fetchLocation = async () => {
+            try {
+                const res = await api.get(`/gps/trabajador/${id}/ubicacion`);
+                if (!cancelled) setLocation(res.data);
+            } catch (error) {
+                console.error('Error fetching worker location:', error);
+            }
+        };
+        fetchLocation();
+        const t = setInterval(fetchLocation, 15000);
+        return () => { cancelled = true; clearInterval(t); };
     }, [id]);
 
     // Reset page when tab or month changes
@@ -160,11 +195,12 @@ export default function TrabajadorDetailsPage() {
                     <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
                         <div className="flex items-center gap-3 mb-4">
                             <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 overflow-hidden border-2 border-slate-50 dark:border-slate-900">
-                                {worker.url_foto ? (
-                                    <img src={worker.url_foto} alt={worker.nombre_completo} className="w-full h-full object-cover" />
-                                ) : (
-                                    <User size={28} />
-                                )}
+                                <img
+                                    src={worker.url_foto || '/default-avatar.svg'}
+                                    alt={worker.nombre_completo}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/default-avatar.svg'; }}
+                                />
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="font-bold text-slate-900 dark:text-white truncate">{worker.nombre_completo}</div>
@@ -182,6 +218,59 @@ export default function TrabajadorDetailsPage() {
                                 <MapPin size={12} /> {worker.area_trabajo || '-'}
                             </div>
                         </div>
+                    </div>
+
+                    {/* Ubicación en vivo */}
+                    <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                            <Navigation size={14} className="text-emerald-500" /> Ubicación
+                        </h3>
+                        {location === null ? (
+                            <p className="text-xs text-slate-400">Cargando…</p>
+                        ) : !location.device ? (
+                            <div className="text-xs text-slate-500 space-y-2">
+                                <p>Este trabajador no tiene un dispositivo asignado.</p>
+                                <Link href="/dispositivos" className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 font-medium hover:underline">
+                                    Asignar dispositivo →
+                                </Link>
+                            </div>
+                        ) : !location.position ? (
+                            <div className="text-xs text-slate-500 space-y-1">
+                                <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300 font-medium">
+                                    <Radio size={12} className="text-slate-400" /> {location.device.name}
+                                </div>
+                                <p>Sin señal GPS todavía. Se mostrará cuando el dispositivo envíe su ubicación.</p>
+                            </div>
+                        ) : (() => {
+                            const online = Date.now() - new Date(location.position.timestamp).getTime() < 5 * 60 * 1000;
+                            return (
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-2 text-xs">
+                                        <span className={clsx('w-2 h-2 rounded-full', online ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600')} />
+                                        <span className={clsx('font-semibold', online ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500')}>
+                                            {online ? 'En línea' : 'Desconectado'}
+                                        </span>
+                                        <span className="text-slate-400">· {timeAgo(location.position.timestamp)}</span>
+                                    </div>
+                                    <div className="text-xs text-slate-500 space-y-1">
+                                        <div className="flex items-center gap-2">
+                                            <Radio size={12} className="text-slate-400" /> {location.device.name}
+                                            {location.device.vehiculo_placa && <span className="font-mono text-blue-600 dark:text-blue-400">· {location.device.vehiculo_placa}</span>}
+                                        </div>
+                                        <div className="flex items-center gap-2 font-mono">
+                                            <MapPin size={12} className="text-slate-400" />
+                                            {parseFloat(String(location.position.latitude)).toFixed(5)}, {parseFloat(String(location.position.longitude)).toFixed(5)}
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowLocationMap(true)}
+                                        className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 text-sm font-medium transition"
+                                    >
+                                        <Navigation size={15} /> Ver en mapa
+                                    </button>
+                                </div>
+                            );
+                        })()}
                     </div>
 
                     {/* Documents */}
@@ -445,6 +534,41 @@ export default function TrabajadorDetailsPage() {
                     )}
                 </div>
             </div>
+
+            {/* Modal mapa en vivo */}
+            {showLocationMap && location?.device && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-5xl h-[80vh] rounded-2xl overflow-hidden flex flex-col shadow-2xl">
+                        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
+                            <div>
+                                <h2 className="font-bold text-lg dark:text-white flex items-center gap-2">
+                                    <Navigation size={18} className="text-emerald-500" />
+                                    Ubicación en vivo: {worker.nombre_completo}
+                                </h2>
+                                <p className="text-xs text-slate-500">
+                                    {location.device.name}
+                                    {location.device.vehiculo_placa ? ` · ${location.device.vehiculo_placa}` : ''}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowLocationMap(false)}
+                                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-500 transition-colors"
+                            >
+                                <X size={24} />
+                            </button>
+                        </div>
+                        <div className="flex-1 relative bg-slate-100 dark:bg-slate-950">
+                            <LiveMapReal
+                                deviceId={location.device.id}
+                                apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}
+                                vehiclePlate={location.device.vehiculo_placa || undefined}
+                                deviceName={location.device.name}
+                                workerName={worker.nombre_completo}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

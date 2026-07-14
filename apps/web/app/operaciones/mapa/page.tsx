@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { LiveMapReal } from '../../../components/tracking/LiveMapReal';
 import api from '../../../lib/api';
+import Select from '../../../components/Select';
 import { Search } from 'lucide-react';
 
 interface Device {
@@ -50,18 +51,16 @@ export default function MapaPage() {
 
                 <div className="flex items-center gap-2 w-full md:w-auto">
                     <Search className="text-slate-400" size={18} />
-                    <select
+                    <Select
+                        className="flex-1 md:w-64"
+                        placeholder="Seleccionar Vehículo"
                         value={selectedDeviceId || ''}
-                        onChange={(e) => setSelectedDeviceId(e.target.value)}
-                        className="flex-1 md:w-64 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                    >
-                        <option value="" disabled>Seleccionar Vehículo</option>
-                        {devices.map(dev => (
-                            <option key={dev.id} value={dev.id}>
-                                {dev.vehiculo?.placa ? `${dev.vehiculo.placa} - ${dev.name}` : dev.name}
-                            </option>
-                        ))}
-                    </select>
+                        onChange={(v) => setSelectedDeviceId(v)}
+                        options={devices.map(dev => ({
+                            value: dev.id,
+                            label: dev.vehiculo?.placa ? `${dev.vehiculo.placa} - ${dev.name}` : dev.name,
+                        }))}
+                    />
                 </div>
             </div>
 

@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { X, Save, Loader2, MapPin, Calendar, Clock, User, Truck, FileText } from 'lucide-react';
 import { Programacion } from '../../types';
 import api from '../../lib/api';
+import DatePicker from '../../components/DatePicker';
+import Select from '../../components/Select';
 import { toast } from 'sonner';
 
 interface NewRouteModalProps {
@@ -141,33 +143,20 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData 
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-500 uppercase">Vehículo</label>
-                                <select
-                                    required
-                                    className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 outline-none focus:ring-2 focus:ring-blue-500 text-sm text-slate-900 dark:text-white"
-                                    value={formData.vehiculo_id}
-                                    onChange={(e) => setFormData({ ...formData, vehiculo_id: e.target.value })}
-                                >
-                                    <option value="">-- Seleccionar --</option>
-                                    {vehicles.map(v => (
-                                        <option key={v.id} value={v.placa}>{v.placa} ({v.marca_modelo})</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-500 uppercase">Conductor</label>
-                                <select
-                                    className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 outline-none focus:ring-2 focus:ring-blue-500 text-sm text-slate-900 dark:text-white"
-                                    value={formData.trabajador_id}
-                                    onChange={(e) => setFormData({ ...formData, trabajador_id: e.target.value })}
-                                >
-                                    <option value="">-- Seleccionar --</option>
-                                    {workers.map(w => (
-                                        <option key={w.id} value={w.nombre_completo}>{w.nombre_completo}</option>
-                                    ))}
-                                </select>
-                            </div>
+                            <Select
+                                label="Vehículo"
+                                placeholder="-- Seleccionar --"
+                                value={formData.vehiculo_id}
+                                onChange={(v) => setFormData({ ...formData, vehiculo_id: v })}
+                                options={vehicles.map(v => ({ value: v.placa, label: `${v.placa} (${v.marca_modelo})` }))}
+                            />
+                            <Select
+                                label="Conductor"
+                                placeholder="-- Seleccionar --"
+                                value={formData.trabajador_id}
+                                onChange={(v) => setFormData({ ...formData, trabajador_id: v })}
+                                options={workers.map(w => ({ value: w.nombre_completo, label: w.nombre_completo }))}
+                            />
                             <div className="col-span-1 md:col-span-2 space-y-1.5">
                                 <label className="text-xs font-bold text-slate-500 uppercase">Cliente / Destinatario</label>
                                 <input
@@ -211,13 +200,10 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData 
                                     </div>
                                     <div className="grid grid-cols-2 gap-2">
                                         <div className="space-y-1">
-                                            <label className="text-[10px] font-bold text-slate-400 uppercase">Fecha</label>
-                                            <input
-                                                type="date"
-                                                required
-                                                className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-emerald-500/50 outline-none"
+                                            <DatePicker
+                                                label="Fecha"
                                                 value={formData.retiro_fecha}
-                                                onChange={(e) => setFormData({ ...formData, retiro_fecha: e.target.value })}
+                                                onChange={(v) => setFormData({ ...formData, retiro_fecha: v })}
                                             />
                                         </div>
                                         <div className="space-y-1">
@@ -256,13 +242,10 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData 
                                     </div>
                                     <div className="grid grid-cols-2 gap-2">
                                         <div className="space-y-1">
-                                            <label className="text-[10px] font-bold text-slate-400 uppercase">Fecha</label>
-                                            <input
-                                                type="date"
-                                                required
-                                                className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-red-500/50 outline-none"
+                                            <DatePicker
+                                                label="Fecha"
                                                 value={formData.entrega_fecha}
-                                                onChange={(e) => setFormData({ ...formData, entrega_fecha: e.target.value })}
+                                                onChange={(v) => setFormData({ ...formData, entrega_fecha: v })}
                                             />
                                         </div>
                                         <div className="space-y-1">

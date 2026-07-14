@@ -22,11 +22,12 @@ interface LiveMapRealProps {
     apiKey: string;
     vehiclePlate?: string;
     deviceName?: string;
+    workerName?: string;
 }
 
 const libraries: ("maps" | "places" | "drawing" | "geometry")[] = ["maps", "places", "drawing", "geometry"];
 
-export function LiveMapReal({ deviceId, apiKey, vehiclePlate, deviceName }: LiveMapRealProps) {
+export function LiveMapReal({ deviceId, apiKey, vehiclePlate, deviceName, workerName }: LiveMapRealProps) {
     const { isLoaded } = useJsApiLoader({
         id: 'google-map-script',
         googleMapsApiKey: apiKey,
@@ -113,10 +114,10 @@ export function LiveMapReal({ deviceId, apiKey, vehiclePlate, deviceName }: Live
                     <div>
                         <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
                             <Truck size={16} />
-                            {vehiclePlate ? `Vehículo: ${vehiclePlate}` : (deviceName || `ID: ${deviceId.substring(0, 6)}...`)}
+                            {workerName || (vehiclePlate ? `Vehículo: ${vehiclePlate}` : (deviceName || `ID: ${deviceId.substring(0, 6)}...`))}
                         </h3>
                         <p className="text-xs text-slate-500">
-                            Última act: {lastUpdate ? lastUpdate.toLocaleTimeString() : 'Esperando data...'}
+                            {[vehiclePlate && `Vehículo ${vehiclePlate}`, lastUpdate ? `Última act: ${lastUpdate.toLocaleTimeString()}` : 'Esperando data...'].filter(Boolean).join(' · ')}
                         </p>
                     </div>
                     <div className="text-right">

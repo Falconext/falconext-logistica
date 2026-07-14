@@ -6,6 +6,8 @@ import { Trabajador, Documento } from '../../types';
 import api from '../../lib/api';
 import { useCurrency } from '../../lib/useCurrency';
 import FileUpload from '../../components/FileUpload';
+import DatePicker from '../../components/DatePicker';
+import Select from '../../components/Select';
 
 interface TrabajadorModalProps {
     isOpen: boolean;
@@ -194,6 +196,7 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                     <FileUpload
                         variant="avatar"
                         label="Subir foto"
+                        placeholder="/default-avatar.svg"
                         value={form.url_foto || undefined}
                         onChange={(url) => set('url_foto', url)}
                         onClear={() => set('url_foto', '')}
@@ -217,11 +220,9 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                                     onChange={(e) => set('cargo', e.target.value)} placeholder="Ej: Conductor" />
                             </div>
                             <div className="space-y-1.5">
-                                <label className={labelCls}>Estado laboral</label>
-                                <select className={inputCls} value={form.estado_laboral}
-                                    onChange={(e) => set('estado_laboral', e.target.value)}>
-                                    {ESTADOS.map((s) => <option key={s} value={s}>{s}</option>)}
-                                </select>
+                                <Select label="Estado laboral" value={form.estado_laboral}
+                                    onChange={(v) => set('estado_laboral', v)}
+                                    options={ESTADOS.map((s) => ({ value: s, label: s }))} />
                             </div>
                             <div className="space-y-1.5">
                                 <label className={labelCls}>Área de trabajo</label>
@@ -273,9 +274,8 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                                     onChange={(e) => set('licencia_conducir', e.target.value)} placeholder="N° de licencia" />
                             </div>
                             <div className="space-y-1.5">
-                                <label className={labelCls}>Vencimiento licencia</label>
-                                <input type="date" className={inputCls} value={form.fecha_vencimiento_licencia}
-                                    onChange={(e) => set('fecha_vencimiento_licencia', e.target.value)} />
+                                <DatePicker label="Vencimiento licencia" value={form.fecha_vencimiento_licencia}
+                                    onChange={(v) => set('fecha_vencimiento_licencia', v)} />
                             </div>
                             <div className="space-y-1.5">
                                 <label className={labelCls}>N° de pasaporte</label>
@@ -283,9 +283,8 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                                     onChange={(e) => set('numero_pasaporte', e.target.value)} placeholder="N° de pasaporte" />
                             </div>
                             <div className="space-y-1.5">
-                                <label className={labelCls}>Vencimiento pasaporte</label>
-                                <input type="date" className={inputCls} value={form.fecha_vencimiento_pasaporte}
-                                    onChange={(e) => set('fecha_vencimiento_pasaporte', e.target.value)} />
+                                <DatePicker label="Vencimiento pasaporte" value={form.fecha_vencimiento_pasaporte}
+                                    onChange={(v) => set('fecha_vencimiento_pasaporte', v)} />
                             </div>
                         </div>
                     </div>
@@ -326,11 +325,9 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                             {/* Subir nuevo */}
                             <div className="flex items-center gap-2">
                                 <label className={labelCls}>Tipo</label>
-                                <select value={docTipo} onChange={(e) => setDocTipo(e.target.value as any)}
-                                    className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-700 outline-none focus:border-slate-400">
-                                    <option value="LICENCIA">Licencia</option>
-                                    <option value="PASAPORTE">Pasaporte</option>
-                                </select>
+                                <Select value={docTipo} onChange={(v) => setDocTipo(v as 'LICENCIA' | 'PASAPORTE')}
+                                    options={[{ value: 'LICENCIA', label: 'Licencia' }, { value: 'PASAPORTE', label: 'Pasaporte' }]}
+                                    className="w-44" />
                                 {savingDoc && <Loader2 className="animate-spin text-slate-400" size={16} />}
                             </div>
                             <FileUpload

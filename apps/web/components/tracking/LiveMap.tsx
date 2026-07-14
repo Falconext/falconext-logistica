@@ -73,32 +73,34 @@ export function LiveMap({ originAddress, destinationAddress, apiKey, onArrival, 
         let cancelled = false;
         const directionsService = new google.maps.DirectionsService();
 
-        // Promise form + try/catch: when Google can't route the addresses it REJECTS with a
-        // MapsRequestError (NOT_FOUND). Catching it here prevents the unhandled-error overlay.
-        (async () => {
-            try {
-                const result = await directionsService.route({
-                    origin: originAddress,
-                    destination: destinationAddress,
-                    travelMode: google.maps.TravelMode.DRIVING,
-                });
+        // Callback form (NOT the promise form): when Google can't route the addresses it returns
+        // status 'NOT_FOUND'/'ZERO_RESULTS' via the callback WITHOUT throwing. The promise form
+        // rejects AND makes the SDK log a MapsRequestError to console, which trips the Next.js dev
+        // error overlay. The callback keeps it a normal, handled outcome — no console noise, no crash.
+        directionsService.route(
+            {
+                origin: originAddress,
+                destination: destinationAddress,
+                travelMode: google.maps.TravelMode.DRIVING,
+            },
+            (result, status) => {
                 if (cancelled) return;
-                directionsCache.set(cacheKey, result);
-                setDirections(result);
-                setStatus('in_transit');
-                setRouteError(null);
-                if (result.routes[0]?.legs[0]) {
-                    setEta(result.routes[0].legs[0].duration?.text || '');
-                    setDistance(result.routes[0].legs[0].distance?.text || '');
+                if (status === google.maps.DirectionsStatus.OK && result) {
+                    directionsCache.set(cacheKey, result);
+                    setDirections(result);
+                    setStatus('in_transit');
+                    setRouteError(null);
+                    if (result.routes[0]?.legs[0]) {
+                        setEta(result.routes[0].legs[0].duration?.text || '');
+                        setDistance(result.routes[0].legs[0].distance?.text || '');
+                    }
+                } else {
+                    // Operation without valid map data — show a friendly notice, no crash.
+                    setDirections(null);
+                    setRouteError(status || 'NOT_FOUND');
                 }
-            } catch (err: any) {
-                if (cancelled) return;
-                // Operation without valid map data — show a friendly notice, no crash.
-                setDirections(null);
-                setRouteError(err?.code || 'NOT_FOUND');
-                console.warn('No se pudo trazar la ruta para esta operación (direcciones no válidas).');
             }
-        })();
+        );
 
         return () => { cancelled = true; };
     }, [isLoaded, originAddress, destinationAddress]);

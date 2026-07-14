@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X, Save, Plus, Loader2, ShieldCheck, KeyRound } from 'lucide-react';
 import api from '../../../lib/api';
+import Select from '../../../components/Select';
 import { toast } from 'sonner';
 
 export interface Usuario {
@@ -161,10 +162,12 @@ export default function UsuarioModal({ isOpen, onClose, onSuccess, initialData }
                             {isSuperadmin ? (
                                 <input className={inputCls} value="SUPERADMIN (plataforma)" disabled />
                             ) : (
-                                <select className={inputCls} value={form.rol_id} onChange={(e) => set('rol_id', e.target.value)}>
-                                    <option value="">— Selecciona un rol —</option>
-                                    {roles.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
-                                </select>
+                                <Select
+                                    value={form.rol_id}
+                                    onChange={(v) => set('rol_id', v)}
+                                    options={roles.map((r) => ({ value: r.id, label: r.nombre }))}
+                                    placeholder="— Selecciona un rol —"
+                                />
                             )}
                         </div>
                     </div>
@@ -204,12 +207,12 @@ export default function UsuarioModal({ isOpen, onClose, onSuccess, initialData }
                                 <KeyRound size={16} className="text-[#1a1a1c]" />
                                 <span className="text-sm">Trabajador vinculado {needsTrabajador && <span className="text-red-500">*</span>}</span>
                             </div>
-                            <select className={inputCls} value={form.trabajador_id} onChange={(e) => set('trabajador_id', e.target.value)}>
-                                <option value="">— Sin vincular —</option>
-                                {trabajadores.map((t) => (
-                                    <option key={t.id} value={t.id}>{t.nombre_completo}{t.id_trabajador ? ` (${t.id_trabajador})` : ''}</option>
-                                ))}
-                            </select>
+                            <Select
+                                value={form.trabajador_id}
+                                onChange={(v) => set('trabajador_id', v)}
+                                options={trabajadores.map((t) => ({ value: t.id, label: `${t.nombre_completo}${t.id_trabajador ? ` (${t.id_trabajador})` : ''}` }))}
+                                placeholder="— Sin vincular —"
+                            />
                             <p className="text-xs text-slate-400">
                                 {needsTrabajador
                                     ? 'Obligatorio: identifica de qué persona son los peajes, combustible y operaciones que verá.'

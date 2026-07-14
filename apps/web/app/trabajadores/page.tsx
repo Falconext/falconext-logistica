@@ -4,9 +4,10 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import api from '../../lib/api';
 import { useCurrency } from '../../lib/useCurrency';
 import { Trabajador } from '../../types';
-import { User, Eye, Trash2, Search, Plus, ChevronsUpDown, Phone, Mail, ArrowLeft, ArrowRight, Pencil, Loader2, AlertTriangle } from 'lucide-react';
+import { Eye, Trash2, Search, Plus, ChevronsUpDown, Phone, Mail, ArrowLeft, ArrowRight, Pencil, Loader2, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import TrabajadorModal from './TrabajadorModal';
+import Select from '../../components/Select';
 
 const PAGE_SIZE = 10;
 
@@ -25,6 +26,9 @@ export default function TrabajadoresPage() {
     const [toDelete, setToDelete] = useState<Trabajador | null>(null);
     const [deleting, setDeleting] = useState(false);
 
+    // trabajador_id → en línea (dispositivo con señal en los últimos 5 min)
+    const [onlineWorkers, setOnlineWorkers] = useState<Record<string, boolean>>({});
+
     const fetchData = useCallback(() => {
         setLoading(true);
         api.get('/trabajadores')
@@ -33,7 +37,29 @@ export default function TrabajadoresPage() {
             .finally(() => setLoading(false));
     }, []);
 
+    const fetchOnline = useCallback(() => {
+        api.get('/gps/devices')
+            .then(res => {
+                const map: Record<string, boolean> = {};
+                (res.data || []).forEach((d: any) => {
+                    if (!d.trabajador?.id) return;
+                    const p = d.positions?.[0];
+                    const online = p ? Date.now() - new Date(p.timestamp).getTime() < 5 * 60 * 1000 : false;
+                    // si el trabajador tiene varios dispositivos, basta con uno en línea
+                    map[d.trabajador.id] = map[d.trabajador.id] || online;
+                });
+                setOnlineWorkers(map);
+            })
+            .catch(err => console.error('Error fetching devices:', err));
+    }, []);
+
     useEffect(() => { fetchData(); }, [fetchData]);
+
+    useEffect(() => {
+        fetchOnline();
+        const t = setInterval(fetchOnline, 20000);
+        return () => clearInterval(t);
+    }, [fetchOnline]);
 
     const openCreate = () => { setEditing(null); setModalOpen(true); };
     const openEdit = (t: Trabajador) => { setEditing(t); setModalOpen(true); };
@@ -89,16 +115,12 @@ export default function TrabajadoresPage() {
                             className="w-48 pl-9 pr-3 py-2.5 rounded-xl bg-white border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900 placeholder:text-slate-400 transition"
                         />
                     </div>
-                    <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)}
-                        className="px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-sm text-slate-700 outline-none focus:border-slate-400 transition">
-                        <option value="">Todos los cargos</option>
-                        {roles.map(r => <option key={r} value={r}>{r}</option>)}
-                    </select>
-                    <select value={filterArea} onChange={(e) => setFilterArea(e.target.value)}
-                        className="px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-sm text-slate-700 outline-none focus:border-slate-400 transition">
-                        <option value="">Todas las áreas</option>
-                        {areas.map(a => <option key={a} value={a}>{a}</option>)}
-                    </select>
+                    <Select value={filterRole} onChange={(v) => setFilterRole(v)}
+                        options={roles.map(r => ({ value: r, label: r }))}
+                        placeholder="Todos los cargos" clearable className="w-44" />
+                    <Select value={filterArea} onChange={(v) => setFilterArea(v)}
+                        options={areas.map(a => ({ value: a, label: a }))}
+                        placeholder="Todas las áreas" clearable className="w-44" />
                     <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition">
                         <Plus size={16} /> Nuevo trabajador
                     </button>
@@ -130,8 +152,21 @@ export default function TrabajadoresPage() {
                                     <tr key={w.id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
                                         <td className="px-5 py-3.5">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden text-slate-400 shrink-0">
-                                                    {w.url_foto ? <img src={w.url_foto} alt="" className="w-full h-full object-cover" /> : <User size={16} />}
+                                                <div className="relative shrink-0">
+                                                    <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden text-slate-400">
+                                                        <img
+                                                            src={w.url_foto || '/default-avatar.svg'}
+                                                            alt={w.nombre_completo || ''}
+                                                            className="w-full h-full object-cover"
+                                                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/default-avatar.svg'; }}
+                                                        />
+                                                    </div>
+                                                    {onlineWorkers[w.id] && (
+                                                        <span
+                                                            title="En línea (GPS activo)"
+                                                            className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white"
+                                                        />
+                                                    )}
                                                 </div>
                                                 <span className="font-semibold text-slate-900">{w.nombre_completo}</span>
                                             </div>

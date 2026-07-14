@@ -3,10 +3,11 @@
 
 import { useEffect, useState } from "react";
 import api from "../../lib/api";
-import { Plus, Smartphone, Trash2, Copy, Map, X, Truck, Clock, Pencil, AlertTriangle } from "lucide-react";
+import { Plus, Smartphone, Trash2, Copy, Map, X, Truck, Clock, Pencil, AlertTriangle, User } from "lucide-react";
 import { toast } from "sonner";
 import clsx from "clsx";
 import { LiveMapReal } from "../../components/tracking/LiveMapReal";
+import Select from "../../components/Select";
 
 interface Device {
     id: string;
@@ -21,6 +22,13 @@ interface Device {
         placa: string;
         marca_modelo: string;
     };
+    trabajador_id: string | null;
+    trabajador?: {
+        id: string;
+        nombre_completo: string;
+        cargo?: string;
+        url_foto?: string | null;
+    } | null;
 }
 
 export default function DispositivosPage() {
@@ -37,11 +45,14 @@ export default function DispositivosPage() {
     const [newImei, setNewImei] = useState("");
     const [selectedVehiculo, setSelectedVehiculo] = useState("");
     const [vehiculos, setVehiculos] = useState<{ id: string, placa: string, marca_modelo: string }[]>([]);
+    const [selectedTrabajador, setSelectedTrabajador] = useState("");
+    const [trabajadores, setTrabajadores] = useState<{ id: string, nombre_completo: string, cargo: string }[]>([]);
     const [creating, setCreating] = useState(false);
 
     useEffect(() => {
         fetchDevices();
         fetchVehiculos();
+        fetchTrabajadores();
     }, []);
 
     const fetchVehiculos = async () => {
@@ -50,6 +61,15 @@ export default function DispositivosPage() {
             setVehiculos(res.data);
         } catch (error) {
             console.error("Error fetching vehicles:", error);
+        }
+    };
+
+    const fetchTrabajadores = async () => {
+        try {
+            const res = await api.get("/trabajadores");
+            setTrabajadores(res.data);
+        } catch (error) {
+            console.error("Error fetching workers:", error);
         }
     };
 
@@ -69,6 +89,7 @@ export default function DispositivosPage() {
         setNewName("");
         setNewImei("");
         setSelectedVehiculo("");
+        setSelectedTrabajador("");
     };
 
     const openCreate = () => {
@@ -82,6 +103,7 @@ export default function DispositivosPage() {
         setNewName(device.name);
         setNewImei(device.imei);
         setSelectedVehiculo(device.vehiculo_id || "");
+        setSelectedTrabajador(device.trabajador_id || "");
         setShowModal(true);
     };
 
@@ -101,6 +123,7 @@ export default function DispositivosPage() {
                 name: newName,
                 imei: newImei,
                 vehiculoId: selectedVehiculo || null,
+                trabajadorId: selectedTrabajador || null,
             };
             if (editingDevice) {
                 await api.patch(`/gps/devices/${editingDevice.id}`, payload);
@@ -109,6 +132,7 @@ export default function DispositivosPage() {
                 await api.post("/gps/devices", {
                     ...payload,
                     vehiculoId: selectedVehiculo || undefined,
+                    trabajadorId: selectedTrabajador || undefined,
                 });
                 toast.success("Dispositivo creado exitosamente");
             }
@@ -179,13 +203,20 @@ export default function DispositivosPage() {
                                     <div>
                                         <h3 className="font-bold text-slate-900 dark:text-white">{device.name}</h3>
                                         <p className="text-xs text-slate-500 font-mono mb-1">{device.imei}</p>
-                                        {device.vehiculo ? (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[10px] font-bold uppercase tracking-wide">
-                                                <Truck size={10} /> {device.vehiculo.placa}
-                                            </span>
-                                        ) : (
-                                            <span className="text-[10px] text-slate-400 italic">Sin vehículo asignado</span>
-                                        )}
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            {device.vehiculo ? (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[10px] font-bold uppercase tracking-wide">
+                                                    <Truck size={10} /> {device.vehiculo.placa}
+                                                </span>
+                                            ) : (
+                                                <span className="text-[10px] text-slate-400 italic">Sin vehículo</span>
+                                            )}
+                                            {device.trabajador && (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold uppercase tracking-wide">
+                                                    <User size={10} /> {device.trabajador.nombre_completo}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -252,7 +283,7 @@ export default function DispositivosPage() {
 
             {/* Map Modal */}
             {viewingDevice && (
-                <div className="fixed inset-0 z-50 top-[-30px] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                <div className="fixed inset-0 z-50 top-[-32px] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
                     <div className="bg-white dark:bg-slate-900 w-full max-w-5xl h-[80vh] rounded-2xl overflow-hidden flex flex-col shadow-2xl">
                         <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900">
                             <div>
@@ -275,6 +306,7 @@ export default function DispositivosPage() {
                                 apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}
                                 vehiclePlate={viewingDevice.vehiculo?.placa}
                                 deviceName={viewingDevice.name}
+                                workerName={viewingDevice.trabajador?.nombre_completo}
                             />
                         </div>
                     </div>
@@ -329,18 +361,25 @@ export default function DispositivosPage() {
                                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                                     Asignar Vehículo (Opcional)
                                 </label>
-                                <select
-                                    className="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all appearance-none"
+                                <Select
                                     value={selectedVehiculo}
-                                    onChange={(e) => setSelectedVehiculo(e.target.value)}
-                                >
-                                    <option value="">-- Sin asignar --</option>
-                                    {vehiculos.map(v => (
-                                        <option key={v.id} value={v.id}>
-                                            {v.placa} - {v.marca_modelo}
-                                        </option>
-                                    ))}
-                                </select>
+                                    onChange={(v) => setSelectedVehiculo(v)}
+                                    options={vehiculos.map(v => ({ value: v.id, label: `${v.placa} - ${v.marca_modelo}` }))}
+                                    placeholder="-- Sin asignar --"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                    Asignar Trabajador / Conductor (Opcional)
+                                </label>
+                                <Select
+                                    value={selectedTrabajador}
+                                    onChange={(v) => setSelectedTrabajador(v)}
+                                    options={trabajadores.map(t => ({ value: t.id, label: t.cargo ? `${t.nombre_completo} — ${t.cargo}` : t.nombre_completo }))}
+                                    placeholder="-- Sin asignar --"
+                                    clearable
+                                />
                             </div>
 
                             <div className="flex gap-3 pt-4">

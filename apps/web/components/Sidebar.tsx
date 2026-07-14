@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Truck, Map, Wrench, ShieldCheck, LogOut, Bell, CalendarDays, BarChart3, FileSpreadsheet, MessageSquare, PlayCircle, HelpCircle, Briefcase, ChevronsLeft, Receipt, Fuel, UserCog, KeyRound } from 'lucide-react';
+import { LayoutDashboard, Users, Truck, Map, Wrench, ShieldCheck, LogOut, Bell, CalendarDays, BarChart3, FileSpreadsheet, MessageSquare, PlayCircle, HelpCircle, Briefcase, ChevronsLeft, Receipt, Fuel, UserCog, KeyRound, Radio, Sun, Moon } from 'lucide-react';
 import clsx from 'clsx';
 import { useEffect, useState } from 'react';
+import { useTheme } from 'next-themes';
 import { useAuthStore } from '../lib/store';
 import { canAccessModule, isAdmin as isAdminUser } from '../lib/modules';
 
@@ -21,6 +22,7 @@ const primaryItems = [
 ];
 
 const trackingItems = [
+    { key: 'flota', name: 'Flota en Vivo', href: '/flota', icon: Radio },
     { key: 'alertas', name: 'Alertas', href: '/alertas', icon: Bell },
     { key: 'dispositivos', name: 'Dispositivos GPS', href: '/dispositivos', icon: ShieldCheck },
     { key: 'geocercas', name: 'Geocercas', href: '/geocercas', icon: Map },
@@ -30,6 +32,8 @@ export function Sidebar() {
     const pathname = usePathname();
     const [mounted, setMounted] = useState(false);
     const { user } = useAuthStore();
+    const { theme, setTheme } = useTheme();
+    const isDark = theme === 'dark';
 
     useEffect(() => setMounted(true), []);
 
@@ -113,6 +117,20 @@ export function Sidebar() {
                     </>
                 )}
             </nav>
+
+            {/* Toggle de tema (claro / oscuro) */}
+            {mounted && (
+                <div className="px-3 pb-1">
+                    <button
+                        onClick={() => setTheme(isDark ? 'light' : 'dark')}
+                        className="w-full flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm text-zinc-400 hover:bg-white/[0.06] hover:text-white transition-colors"
+                        title={isDark ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
+                    >
+                        {isDark ? <Sun size={18} /> : <Moon size={18} />}
+                        <span className="flex-1 text-left">{isDark ? 'Tema claro' : 'Tema oscuro'}</span>
+                    </button>
+                </div>
+            )}
 
             {/* User card */}
             <div className="p-3">

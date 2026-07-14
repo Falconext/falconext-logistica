@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { X, Save, Loader2 } from 'lucide-react';
 import api from '../../lib/api';
 import FileUpload from '../../components/FileUpload';
+import DatePicker from '../../components/DatePicker';
+import Select from '../../components/Select';
 import { useCurrency } from '../../lib/useCurrency';
 
 interface CombustibleModalProps {
@@ -80,7 +82,7 @@ export default function CombustibleModal({ isOpen, onClose, onSuccess, record }:
 
     if (!isOpen) return null;
 
-    const inputClass = 'w-full p-3 rounded-xl bg-slate-50 border border-slate-200 outline-none focus:border-slate-400 focus:ring-2 focus:ring-[#FFC933]/40 transition text-slate-900';
+    const inputClass = 'w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 outline-none focus:border-slate-400 focus:ring-2 focus:ring-[#FFC933]/40 transition text-sm text-slate-900';
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -102,25 +104,23 @@ export default function CombustibleModal({ isOpen, onClose, onSuccess, record }:
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-700">Placa (Targa)</label>
-                            <select className={inputClass} value={formData.targa}
-                                onChange={(e) => setFormData({ ...formData, targa: e.target.value })}>
-                                <option value="">Seleccionar vehículo</option>
-                                {vehicles.map(v => (
-                                    <option key={v.id} value={v.placa}>{v.placa}{v.marca_modelo ? ` - ${v.marca_modelo}` : ''}</option>
-                                ))}
-                            </select>
+                            <Select
+                                label="Placa (Targa)"
+                                placeholder="Seleccionar vehículo"
+                                value={formData.targa}
+                                onChange={(v) => setFormData({ ...formData, targa: v })}
+                                options={vehicles.map(v => ({ value: v.placa, label: `${v.placa}${v.marca_modelo ? ` - ${v.marca_modelo}` : ''}` }))}
+                            />
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-700">Conductor</label>
-                            <select className={inputClass} value={formData.trabajador_id}
-                                onChange={(e) => setFormData({ ...formData, trabajador_id: e.target.value })}>
-                                <option value="">Seleccionar conductor</option>
-                                {workers.map(w => (
-                                    <option key={w.id} value={w.id}>{w.nombre || w.nombre_completo || w.id}</option>
-                                ))}
-                            </select>
+                            <Select
+                                label="Conductor"
+                                placeholder="Seleccionar conductor"
+                                value={formData.trabajador_id}
+                                onChange={(v) => setFormData({ ...formData, trabajador_id: v })}
+                                options={workers.map(w => ({ value: String(w.id), label: w.nombre || w.nombre_completo || String(w.id) }))}
+                            />
                         </div>
 
                         <div className="space-y-2">
@@ -145,10 +145,9 @@ export default function CombustibleModal({ isOpen, onClose, onSuccess, record }:
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-700">Fecha</label>
-                            <input type="date" className={inputClass}
+                            <DatePicker label="Fecha"
                                 value={formData.fecha}
-                                onChange={(e) => setFormData({ ...formData, fecha: e.target.value })} />
+                                onChange={(v) => setFormData({ ...formData, fecha: v })} />
                         </div>
 
                         <div className="space-y-2">

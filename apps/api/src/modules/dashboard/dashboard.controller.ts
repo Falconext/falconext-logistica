@@ -26,4 +26,11 @@ export class DashboardController {
         const { from, to } = req.query;
         return this.dashboardService.getReportsStats(tenantId, from, to);
     }
+
+    @Get('costs-report')
+    getCostsReport(@Req() req: any) {
+        const tenantId = req.user.tenantId;
+        const { from, to } = req.query;
+        return this.dashboardService.getCostsReport(tenantId, from, to);
+    }
 }

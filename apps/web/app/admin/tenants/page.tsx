@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import api from '../../../lib/api';
 import { CURRENCIES, CurrencyCode, normalizeCurrency } from '../../../lib/currency';
+import Select from '../../../components/Select';
 import { Building, Users, Truck, Plus, ShieldCheck, X, Pencil, Trash2, Coins } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -208,14 +209,15 @@ export default function TenantsPage() {
 
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Plan de Suscripción</label>
-                                    <select
-                                        className={inputClass}
-                                        value={formData.plan} onChange={e => setFormData({ ...formData, plan: e.target.value })}
-                                    >
-                                        <option value="FREE">Plan Gratuito (Básico)</option>
-                                        <option value="PRO">Plan Pro (Avanzado)</option>
-                                        <option value="ENTERPRISE">Enterprise (Completo)</option>
-                                    </select>
+                                    <Select
+                                        value={formData.plan}
+                                        onChange={v => setFormData({ ...formData, plan: v })}
+                                        options={[
+                                            { value: 'FREE', label: 'Plan Gratuito (Básico)' },
+                                            { value: 'PRO', label: 'Plan Pro (Avanzado)' },
+                                            { value: 'ENTERPRISE', label: 'Enterprise (Completo)' },
+                                        ]}
+                                    />
                                 </div>
 
                                 <div className="space-y-2">
@@ -223,17 +225,14 @@ export default function TenantsPage() {
                                         <Coins size={14} className="text-blue-500" />
                                         Moneda (Divisa)
                                     </label>
-                                    <select
-                                        className={inputClass}
+                                    <Select
                                         value={formData.moneda}
-                                        onChange={e => setFormData({ ...formData, moneda: e.target.value as CurrencyCode })}
-                                    >
-                                        {(Object.keys(CURRENCIES) as CurrencyCode[]).map((code) => (
-                                            <option key={code} value={code}>
-                                                {CURRENCIES[code].symbol} — {CURRENCIES[code].label} ({code})
-                                            </option>
-                                        ))}
-                                    </select>
+                                        onChange={v => setFormData({ ...formData, moneda: v as CurrencyCode })}
+                                        options={(Object.keys(CURRENCIES) as CurrencyCode[]).map((code) => ({
+                                            value: code,
+                                            label: `${CURRENCIES[code].symbol} — ${CURRENCIES[code].label} (${code})`,
+                                        }))}
+                                    />
                                     <p className="text-xs text-slate-400">Divisa en la que la empresa verá todos sus montos.</p>
                                 </div>
                             </div>

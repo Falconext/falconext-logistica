@@ -85,7 +85,9 @@ module.exports = {
                 }
             },
             fontFamily: {
-                sans: ['var(--font-inter)', 'sans-serif'],
+                sans: ['var(--font-body)', 'system-ui', 'sans-serif'],
+                display: ['var(--font-display)', 'var(--font-body)', 'sans-serif'],
+                mono: ['var(--font-mono)', 'monospace'],
             },
             boxShadow: {
                 // light

@@ -11,6 +11,7 @@ interface FileUploadProps {
   label?: string;
   accept?: string;                  // p.ej. 'image/*' o 'image/*,application/pdf'
   variant?: 'avatar' | 'wide';      // avatar = miniatura circular; wide = zona de arrastre
+  placeholder?: string;             // imagen por defecto cuando no hay value (solo avatar)
 }
 
 /**
@@ -25,6 +26,7 @@ export default function FileUpload({
   label = 'Subir archivo',
   accept = 'image/*',
   variant = 'wide',
+  placeholder,
 }: FileUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -68,9 +70,19 @@ export default function FileUpload({
         >
           {uploading ? (
             <Loader2 className="animate-spin text-slate-400" size={22} />
-          ) : value ? (
+          ) : value || placeholder ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={value} alt="foto" className="w-full h-full object-cover" />
+            <img
+              src={value || placeholder}
+              alt="foto"
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                if (placeholder && e.currentTarget.dataset.fallback !== 'true') {
+                  e.currentTarget.dataset.fallback = 'true';
+                  e.currentTarget.src = placeholder;
+                }
+              }}
+            />
           ) : (
             <UploadCloud className="text-slate-400" size={22} />
           )}

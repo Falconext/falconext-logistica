@@ -43,7 +43,7 @@ export default function OperacionesPage() {
     const [counts, setCounts] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
-    const [devicesMap, setDevicesMap] = useState<Record<string, { id: string; name: string }>>({});
+    const [devicesMap, setDevicesMap] = useState<Record<string, { id: string; name: string; worker?: string }>>({});
     const [selected, setSelected] = useState<Programacion | null>(null);
 
     const [deleting, setDeleting] = useState<Programacion | null>(null);
@@ -105,7 +105,7 @@ export default function OperacionesPage() {
             const res = await api.get('/gps/devices');
             const map: any = {};
             res.data.forEach((d: any) => {
-                if (d.vehiculo?.placa) map[d.vehiculo.placa] = { id: d.id, name: d.name };
+                if (d.vehiculo?.placa) map[d.vehiculo.placa] = { id: d.id, name: d.name, worker: d.trabajador?.nombre_completo };
             });
             setDevicesMap(map);
         } catch (error) {
@@ -298,6 +298,7 @@ export default function OperacionesPage() {
                 <div className="absolute inset-0">
                     <MapView
                         deviceId={device?.id || ''}
+                        worker={device?.worker || ''}
                         origin={selected?.lugar_retiro || ''}
                         destination={selected?.lugar_entrega || ''}
                         plate={selected?.vehiculo_id || ''}
@@ -512,11 +513,11 @@ const RouteCard = memo(function RouteCard({ ruta, isSelected, onSelect }: {
 
 /* Memoized map — only re-renders when the selected route or map type actually changes,
    so typing in search, opening "Capas" or hovering the list won't touch the map. */
-const MapView = memo(function MapView({ deviceId, origin, destination, plate, mapType }: {
-    deviceId: string; origin: string; destination: string; plate: string; mapType: 'roadmap' | 'satellite';
+const MapView = memo(function MapView({ deviceId, worker, origin, destination, plate, mapType }: {
+    deviceId: string; worker?: string; origin: string; destination: string; plate: string; mapType: 'roadmap' | 'satellite';
 }) {
     if (deviceId) {
-        return <LiveMapReal deviceId={deviceId} apiKey={MAPS_KEY} vehiclePlate={plate} />;
+        return <LiveMapReal deviceId={deviceId} apiKey={MAPS_KEY} vehiclePlate={plate} workerName={worker} />;
     }
     if (origin && destination) {
         return <LiveMap originAddress={origin} destinationAddress={destination} apiKey={MAPS_KEY} mapType={mapType} preview />;

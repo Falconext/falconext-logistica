@@ -70,7 +70,9 @@ model Trabajador {
   
   tenant_id          String
   tenant             Tenant   @relation(fields: [tenant_id], references: [id])
-  
+
+  devices            Device[]
+
   @@map("trabajadores")
 }
 
@@ -283,6 +285,9 @@ model Device {
 
   vehiculo_id     String?  // Vehículo asignado actualmente
   vehiculo        Vehiculo? @relation(fields: [vehiculo_id], references: [id])
+
+  trabajador_id   String?  // Conductor/trabajador que porta este dispositivo
+  trabajador      Trabajador? @relation(fields: [trabajador_id], references: [id])
 
   tenant_id       String
   tenant          Tenant   @relation(fields: [tenant_id], references: [id])

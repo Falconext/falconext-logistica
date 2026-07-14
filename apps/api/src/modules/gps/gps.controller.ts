@@ -43,6 +43,12 @@ export class GpsController {
     }
 
     @UseGuards(JwtAuthGuard)
+    @Get('trabajador/:trabajadorId/ubicacion')
+    async getTrabajadorLocation(@Param('trabajadorId') trabajadorId: string, @Req() req) {
+        return this.gpsService.getTrabajadorLocation(req.user.tenantId, trabajadorId);
+    }
+
+    @UseGuards(JwtAuthGuard)
     @Patch('devices/:id')
     async updateDevice(@Param('id') id: string, @Body() body: any, @Req() req) {
         return this.gpsService.updateDevice(id, req.user.tenantId, body);

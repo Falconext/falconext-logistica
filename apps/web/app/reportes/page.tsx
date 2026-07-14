@@ -19,6 +19,7 @@ import { es } from 'date-fns/locale';
 import api from '../../lib/api'; // Correct path to API client
 import { toast } from 'sonner';
 import { useCurrency } from '../../lib/useCurrency';
+import CostosReport from './CostosReport';
 
 export default function ReportesPage() {
     const { format } = useCurrency();
@@ -184,6 +185,11 @@ export default function ReportesPage() {
                     showAnimation={true}
                 />
             </Card>
+
+            {/* Sección de Costos */}
+            <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
+                <CostosReport />
+            </div>
         </div>
     );
 }
