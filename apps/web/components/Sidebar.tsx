@@ -28,7 +28,7 @@ const trackingItems = [
     { key: 'geocercas', name: 'Geocercas', href: '/geocercas', icon: Map },
 ];
 
-export function Sidebar() {
+export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
     const pathname = usePathname();
     const [mounted, setMounted] = useState(false);
     const { user } = useAuthStore();
@@ -47,6 +47,7 @@ export function Sidebar() {
         return (
             <Link
                 href={href}
+                onClick={onNavigate}
                 className={clsx(
                     'flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm transition-colors',
                     isActive

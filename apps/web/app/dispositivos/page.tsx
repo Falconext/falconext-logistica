@@ -168,15 +168,15 @@ export default function DispositivosPage() {
     };
 
     return (
-        <div className="p-8 max-w-7xl mx-auto space-y-8">
-            <div className="flex justify-between items-center">
+        <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Dispositivos GPS</h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">Dispositivos GPS</h1>
                     <p className="text-slate-500 mt-2">Gestiona los dispositivos y obtén sus tokens de acceso.</p>
                 </div>
                 <button
                     onClick={openCreate}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-lg shadow-blue-500/20"
+                    className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-lg shadow-blue-500/20"
                 >
                     <Plus size={20} />
                     Nuevo Dispositivo
@@ -284,18 +284,18 @@ export default function DispositivosPage() {
             {/* Map Modal */}
             {viewingDevice && (
                 <div className="fixed inset-0 z-50 top-[-32px] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-                    <div className="bg-white dark:bg-slate-900 w-full max-w-5xl h-[80vh] rounded-2xl overflow-hidden flex flex-col shadow-2xl">
-                        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900">
-                            <div>
-                                <h2 className="font-bold text-lg dark:text-white flex items-center gap-2">
-                                    <Smartphone size={18} className="text-blue-500" />
-                                    Rastreo en Vivo: {viewingDevice.name}
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-5xl h-[85vh] sm:h-[80vh] rounded-2xl overflow-hidden flex flex-col shadow-2xl">
+                        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center gap-3 bg-white dark:bg-slate-900">
+                            <div className="min-w-0">
+                                <h2 className="font-bold text-base sm:text-lg dark:text-white flex items-center gap-2 truncate">
+                                    <Smartphone size={18} className="text-blue-500 shrink-0" />
+                                    <span className="truncate">Rastreo en Vivo: {viewingDevice.name}</span>
                                 </h2>
-                                <p className="text-xs text-slate-500">IMEI: {viewingDevice.imei}</p>
+                                <p className="text-xs text-slate-500 truncate">IMEI: {viewingDevice.imei}</p>
                             </div>
                             <button
                                 onClick={() => setViewingDevice(null)}
-                                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-500 transition-colors"
+                                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-500 transition-colors shrink-0"
                             >
                                 <X size={24} />
                             </button>
@@ -315,9 +315,9 @@ export default function DispositivosPage() {
 
             {/* Modal Crear Dispositivo */}
             {showModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <div className="bg-white dark:bg-[#0F172A] rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-800">
-                        <div className="p-6 border-b border-slate-200 dark:border-slate-800">
+                <div className="fixed inset-0 top-[-32px] z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white dark:bg-[#0F172A] rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-800">
+                        <div className="p-5 sm:p-6 border-b border-slate-200 dark:border-slate-800">
                             <h2 className="text-xl font-bold text-slate-900 dark:text-white">
                                 {editingDevice ? "Editar Dispositivo" : "Registrar Dispositivo"}
                             </h2>
@@ -328,7 +328,7 @@ export default function DispositivosPage() {
                             </p>
                         </div>
 
-                        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                                     Nombre del Dispositivo

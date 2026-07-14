@@ -19,6 +19,8 @@ import {
   Theme,
 } from '../../components/ui';
 import api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
+import { formatMoney } from '../../constants/currency';
 import type { Trabajador } from '../../types';
 
 const C = Theme.colors;
@@ -39,14 +41,15 @@ const empty: Partial<Trabajador> = {
 
 const isActivo = (estado?: string) => (estado || '').toLowerCase() === 'activo';
 
-const formatSueldo = (v?: string | number) => {
+const formatSueldo = (v?: string | number, moneda?: string | null) => {
   if (v === undefined || v === null || v === '') return '—';
   const n = parseFloat(String(v));
   if (isNaN(n)) return String(v);
-  return `€ ${n.toFixed(2)}`;
+  return formatMoney(n, moneda);
 };
 
 export default function TrabajadoresScreen() {
+  const { user } = useAuth();
   const [items, setItems] = useState<Trabajador[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -186,7 +189,7 @@ export default function TrabajadoresScreen() {
                 <Text style={styles.meta}>{t.telefono}</Text>
               </View>
             ) : null}
-            {t.sueldo_base ? <Text style={styles.meta}>· {formatSueldo(t.sueldo_base)}</Text> : null}
+            {t.sueldo_base ? <Text style={styles.meta}>· {formatSueldo(t.sueldo_base, user?.moneda)}</Text> : null}
           </View>
         </View>
       </TouchableOpacity>
@@ -247,7 +250,7 @@ export default function TrabajadoresScreen() {
             <InfoRow label="Cargo" value={detail.cargo} />
             <InfoRow label="Estado" value={detail.estado_laboral} />
             <InfoRow label="Área" value={detail.area_trabajo} />
-            <InfoRow label="Sueldo base" value={formatSueldo(detail.sueldo_base)} />
+            <InfoRow label="Sueldo base" value={formatSueldo(detail.sueldo_base, user?.moneda)} />
 
             <SectionTitle style={{ marginTop: S.lg }}>Contacto</SectionTitle>
             <InfoRow label="Teléfono" value={detail.telefono} />

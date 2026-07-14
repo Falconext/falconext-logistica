@@ -79,7 +79,7 @@ export default function GoogleSheetsPage() {
                     <div className="space-y-4">
                         <div>
                             <label className="text-sm font-medium text-slate-500">Spreadsheet ID</label>
-                            <div className="flex gap-2">
+                            <div className="flex flex-col sm:flex-row gap-2">
                                 <TextInput
                                     placeholder="docs.google.com/spreadsheets/d/ID_AQUI/edit"
                                     value={spreadsheetId}

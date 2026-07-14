@@ -11,15 +11,20 @@ import {
   Briefcase,
   LogOut,
   ChevronRight,
+  Receipt,
+  Fuel,
+  Radio,
   LucideIcon,
 } from 'lucide-react-native';
 import { Screen, AppHeader, Card, Theme } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
+import { canAccessModule, isAdmin as isAdminUser } from '../../constants/modules';
 
 const C = Theme.colors;
 const S = Theme.spacing;
 
 interface Item {
+  key: string;
   label: string;
   desc: string;
   href: string;
@@ -29,19 +34,22 @@ interface Item {
 }
 
 const items: Item[] = [
-  { label: 'Mantenimiento', desc: 'Servicios y reparaciones', href: '/(app)/mantenimiento', icon: Wrench, color: '#0EA5E9' },
-  { label: 'Calendario', desc: 'Vista de programación', href: '/(app)/calendario', icon: CalendarDays, color: '#8B5CF6' },
-  { label: 'Reportes', desc: 'Indicadores y KPIs', href: '/(app)/reportes', icon: BarChart3, color: '#F59E0B' },
-  { label: 'Alertas', desc: 'Vencimientos de documentos', href: '/(app)/alertas', icon: Bell, color: '#DC2626' },
-  { label: 'Dispositivos GPS', desc: 'Rastreadores de flota', href: '/(app)/dispositivos', icon: ShieldCheck, color: '#16A34A' },
-  { label: 'Geocercas', desc: 'Zonas y eventos', href: '/(app)/geocercas', icon: Map, color: '#0891B2' },
-  { label: 'Admin Empresas', desc: 'Tenants e integraciones', href: '/(app)/admin', icon: Briefcase, color: '#64748B', adminOnly: true },
+  { key: 'mantenimiento', label: 'Mantenimiento', desc: 'Servicios y reparaciones', href: '/(app)/mantenimiento', icon: Wrench, color: '#0EA5E9' },
+  { key: 'peajes', label: 'Peajes / Multas', desc: 'Peajes y multas de la flota', href: '/(app)/peajes', icon: Receipt, color: '#EA580C' },
+  { key: 'combustible', label: 'Combustible', desc: 'Cargas de combustible', href: '/(app)/combustible', icon: Fuel, color: '#0D9488' },
+  { key: 'calendario', label: 'Calendario', desc: 'Vista de programación', href: '/(app)/calendario', icon: CalendarDays, color: '#8B5CF6' },
+  { key: 'reportes', label: 'Reportes', desc: 'Indicadores y KPIs', href: '/(app)/reportes', icon: BarChart3, color: '#F59E0B' },
+  { key: 'flota', label: 'Flota en Vivo', desc: 'Choferes en el mapa', href: '/(app)/flota', icon: Radio, color: '#2563EB' },
+  { key: 'alertas', label: 'Alertas', desc: 'Vencimientos de documentos', href: '/(app)/alertas', icon: Bell, color: '#DC2626' },
+  { key: 'dispositivos', label: 'Dispositivos GPS', desc: 'Rastreadores de flota', href: '/(app)/dispositivos', icon: ShieldCheck, color: '#16A34A' },
+  { key: 'geocercas', label: 'Geocercas', desc: 'Zonas y eventos', href: '/(app)/geocercas', icon: Map, color: '#0891B2' },
+  { key: 'admin', label: 'Admin Empresas', desc: 'Tenants e integraciones', href: '/(app)/admin', icon: Briefcase, color: '#64748B', adminOnly: true },
 ];
 
 export default function MasScreen() {
   const router = useRouter();
   const { user, logout } = useAuth();
-  const isAdmin = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
+  const isAdmin = isAdminUser(user);
 
   const confirmLogout = () => {
     Alert.alert('Cerrar sesión', '¿Deseas salir de tu cuenta?', [
@@ -50,7 +58,8 @@ export default function MasScreen() {
     ]);
   };
 
-  const visible = items.filter((i) => !i.adminOnly || isAdmin);
+  // Solo módulos permitidos por el rol; admin además ve la sección de empresas.
+  const visible = items.filter((i) => (i.adminOnly ? isAdmin : canAccessModule(user, i.key)));
 
   return (
     <Screen scroll padded>
@@ -63,7 +72,7 @@ export default function MasScreen() {
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.name}>{user?.email?.split('@')[0] || 'Usuario'}</Text>
-          <Text style={styles.role}>{user?.role ? user.role.toLowerCase() : 'usuario'}</Text>
+          <Text style={styles.role}>{user?.rol_nombre || (user?.role ? user.role.toLowerCase() : 'usuario')}</Text>
         </View>
         <TouchableOpacity onPress={confirmLogout} style={styles.logoutBtn} hitSlop={8}>
           <LogOut size={18} color={C.danger} />

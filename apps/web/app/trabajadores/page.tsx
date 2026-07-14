@@ -100,28 +100,28 @@ export default function TrabajadoresPage() {
             {/* Header */}
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
                 <div className="flex items-center gap-3">
-                    <h1 className="text-2xl font-bold tracking-tight text-slate-900">Personal</h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Personal</h1>
                     <span className="min-w-[28px] h-6 px-2 flex items-center justify-center rounded-md bg-[#FFC933] text-[#1a1a1c] text-sm font-bold">
                         {trabajadores.length}
                     </span>
                 </div>
-                <div className="flex items-center gap-2.5 flex-wrap">
-                    <div className="relative">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 flex-wrap">
+                    <div className="relative w-full sm:w-auto">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                         <input
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                             placeholder="Buscar"
-                            className="w-48 pl-9 pr-3 py-2.5 rounded-xl bg-white border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900 placeholder:text-slate-400 transition"
+                            className="w-full sm:w-48 pl-9 pr-3 py-2.5 rounded-xl bg-white border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900 placeholder:text-slate-400 transition"
                         />
                     </div>
                     <Select value={filterRole} onChange={(v) => setFilterRole(v)}
                         options={roles.map(r => ({ value: r, label: r }))}
-                        placeholder="Todos los cargos" clearable className="w-44" />
+                        placeholder="Todos los cargos" clearable className="w-full sm:w-44" />
                     <Select value={filterArea} onChange={(v) => setFilterArea(v)}
                         options={areas.map(a => ({ value: a, label: a }))}
-                        placeholder="Todas las áreas" clearable className="w-44" />
-                    <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition">
+                        placeholder="Todas las áreas" clearable className="w-full sm:w-44" />
+                    <button onClick={openCreate} className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition w-full sm:w-auto">
                         <Plus size={16} /> Nuevo trabajador
                     </button>
                 </div>

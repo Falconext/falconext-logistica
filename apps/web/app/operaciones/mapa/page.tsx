@@ -46,8 +46,8 @@ export default function MapaPage() {
     return (
         <div className="h-[calc(100vh-100px)] flex flex-col space-y-4">
             {/* Header / Selector */}
-            <div className="bg-white dark:bg-[#0f172a] p-4 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row gap-4 justify-between items-center shadow-sm">
-                <h1 className="text-xl font-bold text-slate-800 dark:text-white">Mapa en Vivo (GPS Real)</h1>
+            <div className="bg-white dark:bg-[#0f172a] p-4 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row gap-3 md:gap-4 justify-between md:items-center shadow-sm">
+                <h1 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-white">Mapa en Vivo (GPS Real)</h1>
 
                 <div className="flex items-center gap-2 w-full md:w-auto">
                     <Search className="text-slate-400" size={18} />

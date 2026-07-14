@@ -117,10 +117,10 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 top-[-30px] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white rounded-2xl w-full max-w-2xl border border-slate-200 shadow-2xl max-h-[90vh] flex flex-col">
                 {/* Header */}
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                <div className="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-center">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-[#FFC933] text-[#1a1a1c] flex items-center justify-center">
                             <Truck size={20} />
@@ -139,14 +139,14 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto">
+                <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6 overflow-y-auto">
                     {/* Datos generales */}
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 text-slate-800 font-bold border-b border-slate-100 pb-2">
                             <Truck size={16} className="text-slate-400" />
                             <span>Datos generales</span>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-1.5">
                                 <label className={labelCls}>Placa *</label>
                                 <input
@@ -232,7 +232,7 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                             <FileText size={16} className="text-slate-400" />
                             <span>Documentación</span>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-1.5">
                                 <label className={labelCls}>Tarjeta de circulación</label>
                                 <input
@@ -264,7 +264,7 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                                     onChange={(e) => set('revision_tecnica', e.target.value)}
                                 />
                             </div>
-                            <div className="space-y-1.5 md:col-span-2">
+                            <div className="space-y-1.5 sm:col-span-2">
                                 <label className={labelCls}>Permisos especiales</label>
                                 <input
                                     className={inputCls}

@@ -78,15 +78,15 @@ export default function RolesPage() {
                     <div className="w-10 h-10 rounded-xl bg-[#1a1a1c] flex items-center justify-center text-[#FFC933] shrink-0">
                         <ShieldCheck size={20} />
                     </div>
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Gestión de roles</h1>
+                    <div className="min-w-0">
+                        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Gestión de roles</h1>
                         <p className="text-sm text-slate-500">Define perfiles de acceso y los módulos que cada uno puede ver.</p>
                     </div>
                     <span className="min-w-[28px] h-6 px-2 flex items-center justify-center rounded-md bg-[#FFC933] text-[#1a1a1c] text-sm font-bold">
                         {roles.length}
                     </span>
                 </div>
-                <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition self-start">
+                <button onClick={openCreate} className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition w-full sm:w-auto lg:self-start">
                     <Plus size={16} /> Nuevo rol
                 </button>
             </div>

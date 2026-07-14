@@ -99,15 +99,15 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
             <div className="bg-white rounded-2xl w-full max-w-2xl border border-slate-200 shadow-2xl max-h-[90vh] overflow-y-auto">
-                <div className="p-6 border-b border-slate-200 flex justify-between items-center sticky top-0 bg-white/90 backdrop-blur-md z-10">
-                    <h2 className="text-xl font-bold text-slate-900">{isEdit ? 'Editar Peaje / Multa' : 'Registrar Peaje / Multa'}</h2>
+                <div className="p-4 sm:p-6 border-b border-slate-200 flex justify-between items-center sticky top-0 bg-white/90 backdrop-blur-md z-10">
+                    <h2 className="text-lg sm:text-xl font-bold text-slate-900">{isEdit ? 'Editar Peaje / Multa' : 'Registrar Peaje / Multa'}</h2>
                     <button onClick={onClose} className="text-slate-500 hover:text-slate-700 transition-colors">
                         <X size={24} />
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-slate-700">ID Multa</label>
                             <input type="text" placeholder="Id de la multa" className={inputClass}
@@ -202,14 +202,14 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
                                 onChange={(e) => setFormData({ ...formData, recibo_pago: e.target.value })} />
                         </div>
 
-                        <div className="col-span-1 md:col-span-2 space-y-2">
+                        <div className="col-span-1 sm:col-span-2 space-y-2">
                             <label className="text-sm font-medium text-slate-700">Nota autista</label>
                             <input type="text" placeholder="Nota del conductor" className={inputClass}
                                 value={formData.nota_autista}
                                 onChange={(e) => setFormData({ ...formData, nota_autista: e.target.value })} />
                         </div>
 
-                        <div className="col-span-1 md:col-span-2 space-y-2">
+                        <div className="col-span-1 sm:col-span-2 space-y-2">
                             <label className="text-sm font-medium text-slate-700">Archivo (PDF / Imagen)</label>
                             <FileUpload
                                 variant="wide"

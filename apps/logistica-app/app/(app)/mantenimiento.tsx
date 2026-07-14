@@ -18,6 +18,8 @@ import {
   Theme,
 } from '../../components/ui';
 import api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
+import { formatMoney } from '../../constants/currency';
 import type { Mantenimiento, Vehiculo } from '../../types';
 
 const C = Theme.colors;
@@ -44,11 +46,6 @@ function tipoVariant(tipo?: string): 'success' | 'warning' | 'danger' | 'neutral
     default:
       return 'neutral';
   }
-}
-
-function formatMoney(v?: number) {
-  const n = Number(v || 0);
-  return `€${n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function formatDate(v?: string) {
@@ -83,6 +80,7 @@ const emptyForm: FormState = {
 };
 
 export default function MantenimientoScreen() {
+  const { user } = useAuth();
   const [items, setItems] = useState<MantenimientoItem[]>([]);
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -236,7 +234,7 @@ export default function MantenimientoScreen() {
           ) : null}
         </View>
       </View>
-      <Text style={styles.cost}>{formatMoney(m.costo)}</Text>
+      <Text style={styles.cost}>{formatMoney(m.costo, user?.moneda)}</Text>
     </TouchableOpacity>
   );
 
@@ -247,7 +245,7 @@ export default function MantenimientoScreen() {
       <View style={styles.body}>
         <View style={styles.statsRow}>
           <StatCard label="Registros" value={stats.total} icon={ClipboardList} color={C.primary} />
-          <StatCard label="Costo total" value={formatMoney(stats.costoTotal)} icon={Coins} color={C.success} />
+          <StatCard label="Costo total" value={formatMoney(stats.costoTotal, user?.moneda)} icon={Coins} color={C.success} />
           <StatCard label="Emergencias" value={stats.emergencias} icon={ShieldAlert} color={C.danger} />
         </View>
 
@@ -319,7 +317,7 @@ export default function MantenimientoScreen() {
             <InfoRow label="Modelo" value={detail.vehiculo?.marca_modelo} />
             <InfoRow label="Tipo" value={detail.tipo} />
             <InfoRow label="Fecha" value={formatDate(detail.fecha)} />
-            <InfoRow label="Costo" value={formatMoney(detail.costo)} />
+            <InfoRow label="Costo" value={formatMoney(detail.costo, user?.moneda)} />
             <InfoRow label="Taller" value={detail.taller} />
             <InfoRow
               label="Kilometraje"
@@ -410,7 +408,7 @@ export default function MantenimientoScreen() {
           multiline
         />
         <FormField
-          label="Costo (€)"
+          label={`Costo (${formatMoney(0, user?.moneda).split(' ')[0]})`}
           value={form.costo}
           onChangeText={(t) => setForm({ ...form, costo: t })}
           placeholder="0.00"

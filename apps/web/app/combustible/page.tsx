@@ -86,12 +86,12 @@ export default function CombustiblePage() {
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-slate-900">Combustible</h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Combustible</h1>
                     <p className="text-sm text-slate-400 mt-0.5">Total filtrado: <span className="font-semibold text-slate-700 tabular-nums">{format(sum)}</span></p>
                 </div>
                 <button
                     onClick={openCreate}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition"
+                    className="flex items-center justify-center gap-2 w-full md:w-auto px-4 py-2.5 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition"
                 >
                     <Plus size={16} /> Registrar
                 </button>
@@ -112,12 +112,12 @@ export default function CombustiblePage() {
 
             {/* Tabs */}
             {areas.length > 1 && (
-                <div className="flex items-center gap-1.5 mb-5 bg-white border border-slate-200 rounded-xl p-1 w-fit flex-wrap">
+                <div className="flex items-center gap-1.5 mb-5 bg-white border border-slate-200 rounded-xl p-1 max-w-full sm:w-fit flex-wrap">
                     {areas.map((t) => (
                         <button
                             key={t}
                             onClick={() => setArea(t)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${area === t ? 'bg-[#FFC933] text-[#1a1a1c]' : 'text-slate-500 hover:text-slate-900'}`}
+                            className={`flex items-center gap-2 shrink-0 whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition ${area === t ? 'bg-[#FFC933] text-[#1a1a1c]' : 'text-slate-500 hover:text-slate-900'}`}
                         >
                             {t}
                         </button>
@@ -137,7 +137,7 @@ export default function CombustiblePage() {
                     {pageRows.map((item) => (
                         <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4 hover:border-slate-300 transition">
                             {/* Top */}
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                                 <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
                                     <Fuel size={18} />
                                 </div>

@@ -132,18 +132,18 @@ export default function UsuarioModal({ isOpen, onClose, onSuccess, initialData }
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white rounded-2xl w-full max-w-2xl border border-slate-200 shadow-2xl max-h-[92vh] flex flex-col">
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                    <div>
+                <div className="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-center gap-3">
+                    <div className="min-w-0">
                         <h2 className="text-xl font-bold text-slate-900">{isEdit ? 'Editar usuario' : 'Nuevo usuario'}</h2>
                         <p className="text-sm text-slate-500">{isEdit ? 'Actualiza los datos y el rol del usuario.' : 'Crea un usuario y asígnale un rol.'}</p>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition"><X size={22} /></button>
+                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition shrink-0"><X size={22} /></button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto">
+                <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6 overflow-y-auto">
                     {error && <div className="px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">{error}</div>}
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                             <label className={labelCls}>Nombre</label>
                             <input className={inputCls} value={form.nombre} onChange={(e) => set('nombre', e.target.value)} placeholder="Ej: Ana López" />
@@ -222,7 +222,7 @@ export default function UsuarioModal({ isOpen, onClose, onSuccess, initialData }
                     )}
                 </form>
 
-                <div className="p-6 border-t border-slate-100 flex justify-end gap-3">
+                <div className="p-4 sm:p-6 border-t border-slate-100 flex justify-end gap-3">
                     <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition">Cancelar</button>
                     <button type="button" onClick={handleSubmit} disabled={submitting}
                         className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition disabled:opacity-60">

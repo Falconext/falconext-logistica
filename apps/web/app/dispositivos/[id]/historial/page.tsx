@@ -40,11 +40,11 @@ export default function HistoryPage() {
                     >
                         <ArrowLeft size={20} className="text-slate-600 dark:text-slate-300" />
                     </button>
-                    <div>
-                        <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <div className="min-w-0">
+                        <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                             Historial de Ruta
                         </h1>
-                        <p className="text-sm text-slate-500">
+                        <p className="text-sm text-slate-500 truncate">
                             {device ? `${device.name} ${device.vehiculo ? `(${device.vehiculo.placa})` : ''}` : 'Cargando dispositivo...'}
                         </p>
                     </div>
@@ -52,7 +52,7 @@ export default function HistoryPage() {
             </div>
 
             {/* Map Container */}
-            <div className="flex-1 p-4 overflow-hidden">
+            <div className="flex-1 p-2 sm:p-4 overflow-hidden">
                 <HistoryMap
                     deviceId={deviceId}
                     apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}

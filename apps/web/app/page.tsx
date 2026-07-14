@@ -72,8 +72,8 @@ export default function Home() {
     return (
         <div className="max-w-[1400px] mx-auto animate-in fade-in duration-500">
             {/* Welcome */}
-            <div className="mb-7">
-                <h1 className="text-3xl font-bold tracking-tight text-slate-900 capitalize">Bienvenido, {name}</h1>
+            <div className="mb-6 sm:mb-7">
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 capitalize">Bienvenido, {name}</h1>
                 <p className="text-slate-500 mt-1">La plataforma para gestionar y rastrear tu operación logística.</p>
             </div>
 
@@ -83,7 +83,7 @@ export default function Home() {
                     {/* Costos del mes */}
                     <Card icon={<DollarSign size={17} />} title="Costos del mes" href="/reportes" actionLabel="Ver reportes">
                         <div className="flex items-baseline gap-3 flex-wrap">
-                            <span className="text-4xl font-bold text-slate-900 tabular-nums">{format(stats?.costs?.total ?? 0)}</span>
+                            <span className="text-3xl sm:text-4xl font-bold text-slate-900 tabular-nums">{format(stats?.costs?.total ?? 0)}</span>
                             {stats?.costs?.changePct != null && (
                                 (() => {
                                     const pct = stats.costs.changePct as number;

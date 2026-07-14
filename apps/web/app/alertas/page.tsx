@@ -114,8 +114,8 @@ export default function AlertasPage() {
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
-                        <Bell className="text-amber-500" />
+                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
+                        <Bell className="text-amber-500 shrink-0" />
                         Centro de Alertas
                     </h1>
                     <p className="text-slate-500 dark:text-slate-400 mt-1">
@@ -126,7 +126,7 @@ export default function AlertasPage() {
 
             {/* Summary Cards */}
             {summary && (
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                     <div
                         onClick={() => setFilter('all')}
                         className={clsx(
@@ -214,7 +214,7 @@ export default function AlertasPage() {
 
             {/* Alerts List */}
             <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-                <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <h2 className="font-bold text-slate-900 dark:text-white">
                         Documentos por Vencer ({filteredAlerts.length})
                     </h2>
@@ -250,18 +250,18 @@ export default function AlertasPage() {
                                         config.bg
                                     )}
                                 >
-                                    <div className="flex items-center gap-4">
-                                        <div className={clsx("h-10 w-10 rounded-xl flex items-center justify-center text-xl", config.bg, config.border, "border")}>
+                                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                                        <div className={clsx("h-10 w-10 rounded-xl flex items-center justify-center text-xl shrink-0", config.bg, config.border, "border")}>
                                             {getDocumentIcon(alert.documentType)}
                                         </div>
-                                        <div>
-                                            <div className="flex items-center gap-2">
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
                                                 <span className="font-bold text-slate-900 dark:text-white">{alert.trabajadorNombre}</span>
                                                 <span className={clsx("px-2 py-0.5 rounded-full text-xs font-bold", config.badge, "text-white")}>
                                                     {alert.daysRemaining} días
                                                 </span>
                                             </div>
-                                            <div className="flex items-center gap-2 text-sm text-slate-500 mt-0.5">
+                                            <div className="flex items-center gap-2 flex-wrap text-sm text-slate-500 mt-0.5">
                                                 {alert.entityType && alert.entityType !== 'TRABAJADOR' && (
                                                     <>
                                                         <span className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
@@ -277,7 +277,7 @@ export default function AlertasPage() {
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-4 shrink-0">
                                         <div className="text-right hidden md:block">
                                             <p className="text-xs text-slate-500 uppercase font-bold">Vence</p>
                                             <p className={clsx("font-mono font-bold", config.text)}>

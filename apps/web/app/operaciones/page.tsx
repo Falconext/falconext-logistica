@@ -206,9 +206,9 @@ export default function OperacionesPage() {
     const device = selected ? devicesMap[selected.vehiculo_id || ''] : null;
 
     return (
-        <div className="h-[calc(100vh-4rem)] flex gap-4">
+        <div className="flex flex-col lg:flex-row gap-4 lg:h-[calc(100vh-4rem)]">
             {/* ================= LEFT: LIST ================= */}
-            <div className="w-full max-w-[400px] shrink-0 flex flex-col rounded-2xl border border-slate-200 bg-white overflow-hidden">
+            <div className="w-full lg:max-w-[400px] lg:shrink-0 flex flex-col rounded-2xl border border-slate-200 bg-white overflow-hidden max-h-[70vh] lg:max-h-none">
                 {/* Header */}
                 <div className="p-4 pb-3">
                     <div className="flex items-center justify-between mb-3">
@@ -293,7 +293,7 @@ export default function OperacionesPage() {
             </div>
 
             {/* ================= RIGHT: MAP ================= */}
-            <div className="flex-1 relative rounded-2xl border border-slate-200 overflow-hidden bg-slate-100">
+            <div className="flex-1 relative rounded-2xl border border-slate-200 overflow-hidden bg-slate-100 min-h-[60vh] lg:min-h-0">
                 {/* Map (memoized — no re-render on search/hover/layers) */}
                 <div className="absolute inset-0">
                     <MapView

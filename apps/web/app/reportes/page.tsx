@@ -69,13 +69,13 @@ export default function ReportesPage() {
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2">
                 <div>
-                    <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-400 bg-clip-text text-transparent">
+                    <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-400 bg-clip-text text-transparent">
                         Dashboard General
                     </h1>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 w-full md:w-auto">
                     <DateRangePicker
-                        className="max-w-md mx-auto"
+                        className="w-full md:max-w-md"
                         value={dateRange}
                         onValueChange={setDateRange}
                         locale={es}

@@ -220,7 +220,7 @@ export default function VehiculoDetailPage() {
                         </div>
                     )}
                     <div>
-                        <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
+                        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
                             {vehiculo.placa}
                         </h1>
                         <p className="text-slate-500 dark:text-slate-400">
@@ -247,7 +247,7 @@ export default function VehiculoDetailPage() {
             </div>
 
             {/* Quick Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="p-4 rounded-xl bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
                     <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
@@ -303,11 +303,11 @@ export default function VehiculoDetailPage() {
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800">
+            <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
                 <button
                     onClick={() => setActiveTab('historial')}
                     className={clsx(
-                        "px-4 py-3 text-sm font-medium border-b-2 transition",
+                        "px-4 py-3 text-sm font-medium border-b-2 transition whitespace-nowrap",
                         activeTab === 'historial'
                             ? "border-purple-500 text-purple-600 dark:text-purple-400"
                             : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
@@ -318,7 +318,7 @@ export default function VehiculoDetailPage() {
                 <button
                     onClick={() => setActiveTab('info')}
                     className={clsx(
-                        "px-4 py-3 text-sm font-medium border-b-2 transition",
+                        "px-4 py-3 text-sm font-medium border-b-2 transition whitespace-nowrap",
                         activeTab === 'info'
                             ? "border-purple-500 text-purple-600 dark:text-purple-400"
                             : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
@@ -329,7 +329,7 @@ export default function VehiculoDetailPage() {
                 <button
                     onClick={() => setActiveTab('documentos')}
                     className={clsx(
-                        "px-4 py-3 text-sm font-medium border-b-2 transition",
+                        "px-4 py-3 text-sm font-medium border-b-2 transition whitespace-nowrap",
                         activeTab === 'documentos'
                             ? "border-purple-500 text-purple-600 dark:text-purple-400"
                             : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
@@ -432,11 +432,11 @@ export default function VehiculoDetailPage() {
 
                             {/* Pagination */}
                             {totalPages > 1 && (
-                                <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/30">
+                                <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 dark:bg-slate-900/30">
                                     <p className="text-sm text-slate-500">
                                         Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, mantenimientos.length)} de {mantenimientos.length} registros
                                     </p>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center flex-wrap gap-2">
                                         <button
                                             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                             disabled={currentPage === 1}
@@ -666,7 +666,7 @@ export default function VehiculoDetailPage() {
 
             {/* Edit Cost Modal */}
             {editingMant && (
-                <div className="fixed inset-0 z-50 top-[-30px] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-md overflow-hidden">
                         <div className="flex justify-between items-center p-4 border-b border-slate-100 dark:border-slate-800">
                             <h3 className="font-bold text-lg text-slate-900 dark:text-white flex items-center gap-2">

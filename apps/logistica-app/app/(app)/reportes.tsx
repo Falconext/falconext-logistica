@@ -24,6 +24,8 @@ import {
   Theme,
 } from '../../components/ui';
 import api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
+import { formatMoney } from '../../constants/currency';
 
 const C = Theme.colors;
 const S = Theme.spacing;
@@ -105,8 +107,6 @@ const EMPTY_KPIS: ReportKpis = {
   active_clients: 0,
 };
 
-const money = (n: number) => `S/ ${new Intl.NumberFormat('es-PE').format(Math.round(n || 0))}`;
-
 const shortDate = (iso: string) => {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
@@ -114,6 +114,7 @@ const shortDate = (iso: string) => {
 };
 
 export default function ReportesScreen() {
+  const { user } = useAuth();
   const [period, setPeriod] = useState<PeriodKey>('thisMonth');
   const [kpis, setKpis] = useState<ReportKpis>(EMPTY_KPIS);
   const [evolution, setEvolution] = useState<EvolutionPoint[]>([]);
@@ -238,7 +239,7 @@ export default function ReportesScreen() {
               <View style={[styles.hlIcon, { backgroundColor: C.primarySoft }]}>
                 <TrendingUp size={20} color={C.primary} />
               </View>
-              <Text style={styles.hlValue}>{money(kpis.income)}</Text>
+              <Text style={styles.hlValue}>{formatMoney(kpis.income, user?.moneda)}</Text>
               <Text style={styles.hlLabel}>Ingresos estimados</Text>
             </Card>
             <Card style={styles.highlightCard}>

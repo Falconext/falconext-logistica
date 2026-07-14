@@ -113,25 +113,25 @@ export default function VehiculosPage() {
             {/* Header */}
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
                 <div className="flex items-center gap-3">
-                    <h1 className="text-2xl font-bold tracking-tight text-slate-900">Vehículos</h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Vehículos</h1>
                     <span className="min-w-[28px] h-6 px-2 flex items-center justify-center rounded-md bg-[#FFC933] text-[#1a1a1c] text-sm font-bold">
                         {vehiculos.length}
                     </span>
                 </div>
-                <div className="flex items-center gap-2.5">
-                    <div className="relative">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 flex-wrap">
+                    <div className="relative w-full sm:w-auto">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                         <input
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                             placeholder="Buscar"
-                            className="w-56 pl-9 pr-3 py-2.5 rounded-xl bg-white border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900 placeholder:text-slate-400 transition"
+                            className="w-full sm:w-56 pl-9 pr-3 py-2.5 rounded-xl bg-white border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900 placeholder:text-slate-400 transition"
                         />
                     </div>
-                    <div className="relative">
+                    <div className="relative w-full sm:w-auto">
                         <button
                             onClick={() => setShowFilters(v => !v)}
-                            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white border text-sm transition ${showFilters || activeFilterCount > 0 ? 'border-slate-400 text-slate-900' : 'border-slate-200 hover:border-slate-300 text-slate-700'}`}
+                            className={`w-full sm:w-auto flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-white border text-sm transition ${showFilters || activeFilterCount > 0 ? 'border-slate-400 text-slate-900' : 'border-slate-200 hover:border-slate-300 text-slate-700'}`}
                         >
                             <SlidersHorizontal size={16} /> Filtros
                             {activeFilterCount > 0 && (
@@ -199,13 +199,13 @@ export default function VehiculosPage() {
                     </div>
                     <button
                         onClick={exportToExcel}
-                        className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 hover:border-slate-300 text-sm text-slate-700 transition"
+                        className="w-full sm:w-auto flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 hover:border-slate-300 text-sm text-slate-700 transition"
                     >
                         <Download size={16} /> Exportar
                     </button>
                     <button
                         onClick={() => setModalOpen(true)}
-                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition"
+                        className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition"
                     >
                         <Plus size={16} /> Nuevo vehículo
                     </button>

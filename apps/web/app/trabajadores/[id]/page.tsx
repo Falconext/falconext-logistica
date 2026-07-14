@@ -175,7 +175,7 @@ export default function TrabajadorDetailsPage() {
                     <ArrowLeft size={20} />
                 </Link>
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">{worker.nombre_completo}</h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">{worker.nombre_completo}</h1>
                     <p className="text-slate-500 dark:text-slate-400">{worker.cargo} • {worker.nacionalidad} • <span className="font-mono text-blue-600 dark:text-blue-400">{worker.id_trabajador}</span></p>
                 </div>
                 <div className="ml-auto">
@@ -188,9 +188,9 @@ export default function TrabajadorDetailsPage() {
                 </div>
             </div>
 
-            <div className="flex gap-6 h-[calc(100vh-180px)]">
+            <div className="flex flex-col lg:flex-row gap-6 lg:h-[calc(100vh-180px)]">
                 {/* Left Sidebar: Profile + Months */}
-                <div className="w-72 flex-shrink-0 flex flex-col gap-4 overflow-y-auto">
+                <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-4 lg:overflow-y-auto">
                     {/* Worker Card */}
                     <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
                         <div className="flex items-center gap-3 mb-4">
@@ -372,7 +372,7 @@ export default function TrabajadorDetailsPage() {
                     </div>
 
                     {/* Table Content */}
-                    <div className="flex-1 overflow-y-auto">
+                    <div className="flex-1 overflow-auto">
                         {/* Rutas Table */}
                         {activeTab === 'rutas' && (
                             <table className="w-full text-left text-sm text-slate-600 dark:text-slate-400">

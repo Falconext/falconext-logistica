@@ -5,8 +5,18 @@
 export interface User {
   id: string;
   email: string;
+  nombre?: string;
   role: string; // SUPERADMIN | ADMIN | USER
   tenant?: string;
+  tenant_id?: string;
+  moneda?: string; // PEN | USD | EUR
+  es_admin?: boolean;
+  modulos?: string[];
+  rol_id?: string | null;
+  rol_nombre?: string | null;
+  trabajador_id?: string | null;
+  trabajador_codigo?: string | null;
+  solo_propios?: boolean;
 }
 
 export interface Trabajador {

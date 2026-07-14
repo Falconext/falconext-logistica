@@ -127,7 +127,7 @@ export default function RolModal({ isOpen, onClose, onSuccess, initialData }: Ro
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white rounded-2xl w-full max-w-2xl border border-slate-200 shadow-2xl max-h-[92vh] flex flex-col">
                 {/* Header */}
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                <div className="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-center gap-3">
                     <div>
                         <h2 className="text-xl font-bold text-slate-900">
                             {isEdit ? 'Editar rol' : 'Nuevo rol'}
@@ -136,12 +136,12 @@ export default function RolModal({ isOpen, onClose, onSuccess, initialData }: Ro
                             {isEdit ? 'Actualiza el nombre, el tipo y los módulos del rol.' : 'Define un rol y qué módulos podrán ver sus usuarios.'}
                         </p>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition">
+                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition shrink-0">
                         <X size={22} />
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto">
+                <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6 overflow-y-auto">
                     {error && (
                         <div className="px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
                             {error}
@@ -149,7 +149,7 @@ export default function RolModal({ isOpen, onClose, onSuccess, initialData }: Ro
                     )}
 
                     {/* Datos del rol */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                             <label className={labelCls}>Nombre *</label>
                             <input className={inputCls} value={form.nombre}
@@ -231,7 +231,7 @@ export default function RolModal({ isOpen, onClose, onSuccess, initialData }: Ro
                 </form>
 
                 {/* Footer */}
-                <div className="p-6 border-t border-slate-100 flex justify-end gap-3">
+                <div className="p-4 sm:p-6 border-t border-slate-100 flex justify-end gap-3">
                     <button type="button" onClick={onClose}
                         className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition">
                         Cancelar

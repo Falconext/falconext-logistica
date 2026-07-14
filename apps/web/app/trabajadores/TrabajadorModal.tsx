@@ -171,7 +171,7 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white rounded-2xl w-full max-w-2xl border border-slate-200 shadow-2xl max-h-[92vh] flex flex-col">
                 {/* Header */}
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                <div className="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-center">
                     <div>
                         <h2 className="text-xl font-bold text-slate-900">
                             {isEdit ? 'Editar trabajador' : 'Nuevo trabajador'}
@@ -185,7 +185,7 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-7 overflow-y-auto">
+                <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-7 overflow-y-auto">
                     {error && (
                         <div className="px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
                             {error}
@@ -208,8 +208,8 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                             <User size={18} className="text-[#1a1a1c]" />
                             <span>Datos personales</span>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-1.5 md:col-span-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-1.5 sm:col-span-2">
                                 <label className={labelCls}>Nombre completo *</label>
                                 <input className={inputCls} value={form.nombre_completo}
                                     onChange={(e) => set('nombre_completo', e.target.value)} placeholder="Ej: Juan Pérez" />
@@ -247,7 +247,7 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                             <Phone size={18} className="text-[#1a1a1c]" />
                             <span>Contacto</span>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-1.5">
                                 <label className={labelCls}>Teléfono</label>
                                 <input className={inputCls} value={form.telefono}
@@ -267,7 +267,7 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                             <CreditCard size={18} className="text-[#1a1a1c]" />
                             <span>Documentación</span>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-1.5">
                                 <label className={labelCls}>Licencia de conducir</label>
                                 <input className={inputCls} value={form.licencia_conducir}
@@ -341,7 +341,7 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                 </form>
 
                 {/* Footer */}
-                <div className="p-6 border-t border-slate-100 flex justify-end gap-3">
+                <div className="p-4 sm:p-6 border-t border-slate-100 flex justify-end gap-3">
                     <button type="button" onClick={onClose}
                         className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition">
                         Cancelar

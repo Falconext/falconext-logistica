@@ -123,7 +123,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData 
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white dark:bg-[#0f172a] rounded-2xl w-full max-w-2xl border border-slate-200 dark:border-slate-800 shadow-2xl max-h-[90vh] overflow-y-auto flex flex-col">
                 {/* Modal Header */}
-                <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center sticky top-0 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md z-10">
+                <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center sticky top-0 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md z-10">
                     <div>
                         <h2 className="text-xl font-bold text-slate-900 dark:text-white">Nueva Ruta</h2>
                         <p className="text-sm text-slate-500 dark:text-slate-400">Programar viaje y asignar recursos</p>
@@ -133,7 +133,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData 
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-8 flex-1 overflow-y-auto">
+                <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6 sm:space-y-8 flex-1 overflow-y-auto">
 
                     {/* 1. Resources & Client */}
                     <div className="space-y-4">
@@ -179,7 +179,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData 
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* ORIGIN (RETIRO) */}
-                            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 relative overflow-hidden group hover:border-emerald-500/30 transition-colors">
+                            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 relative overflow-hidden group hover:border-emerald-500/30 transition-colors">
                                 <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
                                 <h4 className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold mb-4">
                                     <div className="bg-emerald-100 dark:bg-emerald-900/30 p-1.5 rounded-lg"><MapPin size={16} /></div>
@@ -221,7 +221,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData 
                             </div>
 
                             {/* DESTINATION (ENTREGA) */}
-                            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 relative overflow-hidden group hover:border-red-500/30 transition-colors">
+                            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 relative overflow-hidden group hover:border-red-500/30 transition-colors">
                                 <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
                                 <h4 className="flex items-center gap-2 text-red-600 dark:text-red-400 font-bold mb-4">
                                     <div className="bg-red-100 dark:bg-red-900/30 p-1.5 rounded-lg"><MapPin size={16} /></div>

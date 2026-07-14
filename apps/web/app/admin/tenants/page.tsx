@@ -133,17 +133,17 @@ export default function TenantsPage() {
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
-                        <ShieldCheck className="text-blue-600" />
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+                <div className="min-w-0">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
+                        <ShieldCheck className="text-blue-600 shrink-0" />
                         Gestión de Empresas
                     </h1>
                     <p className="text-slate-500 mt-1">Superadmin Dashboard</p>
                 </div>
                 <button
                     onClick={openCreate}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition shadow-lg shadow-blue-500/20"
+                    className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition shadow-lg shadow-blue-500/20 w-full sm:w-auto"
                 >
                     <Plus size={18} />
                     Nueva Empresa
@@ -154,7 +154,7 @@ export default function TenantsPage() {
             {showForm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
-                        <div className="flex justify-between items-center p-6 border-b border-slate-100 dark:border-slate-800">
+                        <div className="flex justify-between items-center gap-3 p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800">
                             <h3 className="font-bold text-xl text-slate-900 dark:text-white">
                                 {editing ? 'Editar Empresa' : 'Registrar Nueva Empresa'}
                             </h3>
@@ -163,8 +163,8 @@ export default function TenantsPage() {
                             </button>
                         </div>
 
-                        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Nombre Empresa</label>
                                     <input
@@ -325,7 +325,7 @@ export default function TenantsPage() {
                                     </p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-6 text-sm text-slate-500">
+                            <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-sm text-slate-500">
                                 <div className="flex flex-col items-center gap-1">
                                     <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Moneda</span>
                                     <div className="flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-300">

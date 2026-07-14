@@ -132,28 +132,28 @@ export default function GeocercasPage() {
         }
     };
 
-    if (!isLoaded) return <div className="p-8">Cargando mapa...</div>;
+    if (!isLoaded) return <div className="p-4 sm:p-8">Cargando mapa...</div>;
 
     return (
-        <div className="h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
+        <div className="flex flex-col h-[calc(100vh-6rem)] lg:h-[calc(100vh-4rem)] bg-slate-50 dark:bg-slate-950 rounded-2xl overflow-hidden">
             {/* Header */}
-            <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-6 flex justify-between items-center">
+            <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 sm:p-6 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Geocercas</h1>
                     <p className="text-slate-500 dark:text-slate-400 text-sm">Define zonas de control y alertas</p>
                 </div>
                 <button
                     onClick={openCreate}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-lg shadow-blue-500/20"
+                    className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors shadow-lg shadow-blue-500/20"
                 >
                     <Plus size={20} />
                     Nueva Geocerca
                 </button>
             </div>
 
-            <div className="flex-1 p-6 flex gap-6 overflow-hidden">
+            <div className="flex-1 p-4 sm:p-6 flex flex-col lg:flex-row gap-4 lg:gap-6 overflow-hidden">
                 {/* Geofence List Sidebar */}
-                <div className="w-1/3 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-y-auto p-4 flex flex-col gap-3">
+                <div className="w-full lg:w-1/3 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-y-auto p-4 flex flex-col gap-3 max-h-[35vh] lg:max-h-none shrink-0">
                     {loading ? (
                         <p className="text-slate-500 text-center py-10">Cargando...</p>
                     ) : geofences.length === 0 ? (
@@ -190,7 +190,7 @@ export default function GeocercasPage() {
                 </div>
 
                 {/* Map Visualization */}
-                <div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-2 overflow-hidden relative">
+                <div className="flex-1 min-h-[45vh] lg:min-h-0 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-2 overflow-hidden relative">
                     <GoogleMap
                         mapContainerStyle={containerStyle}
                         center={defaultCenter}
@@ -222,7 +222,7 @@ export default function GeocercasPage() {
             {/* Create Geofence Modal */}
             {showModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-4xl h-[80vh] flex flex-col shadow-2xl overflow-hidden relative">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-4xl h-[85vh] sm:h-[80vh] flex flex-col shadow-2xl overflow-hidden relative">
                         {/* Close Button */}
                         <button
                             onClick={() => setShowModal(false)}
@@ -231,9 +231,9 @@ export default function GeocercasPage() {
                             <X size={20} className="text-slate-600 dark:text-slate-300" />
                         </button>
 
-                        <div className="flex h-full">
+                        <div className="flex flex-col md:flex-row h-full">
                             {/* Editor Panel */}
-                            <div className="w-1/3 p-6 border-r border-slate-200 dark:border-slate-800 flex flex-col overflow-y-auto">
+                            <div className="w-full md:w-1/3 p-6 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800 flex flex-col overflow-y-auto max-h-[50vh] md:max-h-none shrink-0">
                                 <h2 className="text-xl font-bold mb-6 text-slate-900 dark:text-white">{editingId ? 'Editar Geocerca' : 'Nueva Geocerca'}</h2>
 
                                 <div className="space-y-4 flex-1">
@@ -290,7 +290,7 @@ export default function GeocercasPage() {
                             </div>
 
                             {/* Map Editor */}
-                            <div className="flex-1 relative">
+                            <div className="flex-1 relative min-h-[35vh] md:min-h-0">
                                 <GoogleMap
                                     mapContainerStyle={{ width: '100%', height: '100%' }}
                                     center={editorCenter}

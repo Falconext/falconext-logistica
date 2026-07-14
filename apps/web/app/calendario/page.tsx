@@ -106,8 +106,8 @@ export default function CalendarioPage() {
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
-                        <Calendar className="text-blue-500" />
+                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
+                        <Calendar className="text-blue-500 shrink-0" />
                         Calendario de Operaciones
                     </h1>
                     <p className="text-slate-500 dark:text-slate-400 mt-1">
@@ -122,27 +122,27 @@ export default function CalendarioPage() {
             {/* Calendar Container */}
             <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
                 {/* Calendar Header */}
-                <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
-                    <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-2 p-3 sm:p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
+                    <div className="flex items-center gap-1 sm:gap-2 min-w-0">
                         <button
                             onClick={goToPreviousMonth}
-                            className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition text-slate-600 dark:text-slate-400"
+                            className="shrink-0 p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition text-slate-600 dark:text-slate-400"
                         >
                             <ChevronLeft size={20} />
                         </button>
-                        <h2 className="text-xl font-bold text-slate-900 dark:text-white min-w-[200px] text-center">
+                        <h2 className="text-base sm:text-xl font-bold text-slate-900 dark:text-white min-w-[110px] sm:min-w-[200px] text-center truncate">
                             {monthNames[month]} {year}
                         </h2>
                         <button
                             onClick={goToNextMonth}
-                            className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition text-slate-600 dark:text-slate-400"
+                            className="shrink-0 p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition text-slate-600 dark:text-slate-400"
                         >
                             <ChevronRight size={20} />
                         </button>
                     </div>
                     <button
                         onClick={goToToday}
-                        className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition"
+                        className="shrink-0 px-3 sm:px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition"
                     >
                         Hoy
                     </button>
@@ -151,7 +151,7 @@ export default function CalendarioPage() {
                 {/* Day Names Header */}
                 <div className="grid grid-cols-7 border-b border-slate-100 dark:border-slate-800">
                     {dayNames.map(day => (
-                        <div key={day} className="p-3 text-center text-xs font-bold uppercase text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/30">
+                        <div key={day} className="p-1.5 sm:p-3 text-center text-[10px] sm:text-xs font-bold uppercase text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/30">
                             {day}
                         </div>
                     ))}
@@ -169,7 +169,7 @@ export default function CalendarioPage() {
                                 key={idx}
                                 onClick={() => day && handleDayClick(day)}
                                 className={clsx(
-                                    "min-h-[100px] p-2 border-b border-r border-slate-100 dark:border-slate-800 transition-colors",
+                                    "min-w-0 min-h-[72px] sm:min-h-[100px] p-1 sm:p-2 border-b border-r border-slate-100 dark:border-slate-800 transition-colors",
                                     day ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50" : "bg-slate-50/50 dark:bg-slate-900/20",
                                     isSelected && "bg-blue-50 dark:bg-blue-900/20 ring-2 ring-inset ring-blue-500",
                                     isCurrentDay && !isSelected && "bg-blue-50/50 dark:bg-blue-900/10"
@@ -178,7 +178,7 @@ export default function CalendarioPage() {
                                 {day && (
                                     <>
                                         <div className={clsx(
-                                            "inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium mb-1",
+                                            "inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full text-xs sm:text-sm font-medium mb-1",
                                             isCurrentDay
                                                 ? "bg-blue-600 text-white"
                                                 : "text-slate-700 dark:text-slate-300"
@@ -191,13 +191,13 @@ export default function CalendarioPage() {
                                                     getRutasForDay(day).slice(0, 2).map((ruta, i) => (
                                                         <div
                                                             key={i}
-                                                            className="text-xs px-2 py-1 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 truncate"
+                                                            className="text-[11px] sm:text-xs px-1.5 sm:px-2 py-1 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 truncate"
                                                         >
                                                             <span className="font-medium">{ruta.trabajador_id?.substring(0, 6) || 'Sin asignar'}</span>
                                                         </div>
                                                     ))
                                                 ) : (
-                                                    <div className="text-xs px-2 py-1 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold text-center">
+                                                    <div className="text-[11px] sm:text-xs px-1.5 sm:px-2 py-1 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold text-center truncate">
                                                         {dayRutasCount} rutas
                                                     </div>
                                                 )}
@@ -213,7 +213,7 @@ export default function CalendarioPage() {
 
             {/* Day Detail Modal */}
             {selectedDay && (
-                <div className="fixed inset-0 top-[-30px] z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-lg overflow-hidden">
                         <div className="flex justify-between items-center p-4 border-b border-slate-100 dark:border-slate-800">
                             <div>

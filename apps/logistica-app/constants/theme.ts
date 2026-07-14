@@ -7,12 +7,12 @@
 
 import { Platform } from 'react-native';
 
-// ---- Paleta de marca ----------------------------------------------------
+// ---- Paleta de marca (misma que la web: acción oscura + acento amarillo) ----
 const brand = {
-  primary: '#2563EB', // azul acción (coincide con la web)
-  primaryDark: '#1D4ED8',
-  primarySoft: '#EFF6FF',
-  accent: '#F59E0B', // dorado, para resaltar / premium
+  primary: '#1a1a1c', // acción principal (botones oscuros, como la web)
+  primaryDark: '#000000',
+  primarySoft: '#F1F5F9', // fondo suave neutro
+  accent: '#FFC933', // acento amarillo de marca (activos, resaltados)
   accentSoft: '#FEF3C7',
 };
 
