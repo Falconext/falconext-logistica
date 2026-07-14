@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import api from '../../lib/api';
 import { Fuel, Plus, Search, Calendar, ArrowLeft, ArrowRight, Pencil, Trash2, Paperclip, Loader2 } from 'lucide-react';
 import CombustibleModal from './CombustibleModal';
@@ -9,8 +9,12 @@ import { useCurrency } from '../../lib/useCurrency';
 export default function CombustiblePage() {
     const { format } = useCurrency();
     const [items, setItems] = useState<any[]>([]);
+    const [total, setTotal] = useState(0);
+    const [sum, setSum] = useState(0);
+    const [areas, setAreas] = useState<string[]>(['Todos']);
     const [loading, setLoading] = useState(true);
     const [query, setQuery] = useState('');
+    const [debouncedQuery, setDebouncedQuery] = useState('');
     const [area, setArea] = useState<string>('Todos');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editing, setEditing] = useState<any | null>(null);
@@ -23,13 +27,46 @@ export default function CombustiblePage() {
     const openEdit = (item: any) => { setEditing(item); setIsModalOpen(true); };
     const closeModal = () => { setIsModalOpen(false); setEditing(null); };
 
+    // Debounce the search box so it hits the API at most every 250ms.
+    useEffect(() => {
+        const t = setTimeout(() => setDebouncedQuery(query.trim()), 250);
+        return () => clearTimeout(t);
+    }, [query]);
+
+    // Only the current page is fetched; the total sum + area list are aggregated server-side.
+    const fetchItems = useCallback(() => {
+        setLoading(true);
+        api.get('/combustible', {
+            params: {
+                q: debouncedQuery || undefined,
+                area: area !== 'Todos' ? area : undefined,
+                skip: (page - 1) * pageSize,
+                take: pageSize,
+            },
+        })
+            .then(res => {
+                setItems(res.data.items ?? []);
+                setTotal(res.data.total ?? 0);
+                setSum(res.data.sum ?? 0);
+                setAreas(['Todos', ...(res.data.areas ?? [])]);
+            })
+            .catch(err => console.error(err))
+            .finally(() => setLoading(false));
+    }, [debouncedQuery, area, page, pageSize]);
+
+    useEffect(() => { fetchItems(); }, [fetchItems]);
+
+    // Back to page 1 whenever a filter changes.
+    useEffect(() => { setPage(1); }, [debouncedQuery, area, pageSize]);
+
     const confirmDelete = async () => {
         if (!deleting) return;
         setDeleteLoading(true);
         try {
             await api.delete(`/combustible/${deleting.id}`);
             setDeleting(null);
-            fetchItems();
+            if (items.length === 1 && page > 1) setPage(p => p - 1);
+            else fetchItems();
         } catch (err) {
             console.error(err);
             alert('Error al eliminar el registro');
@@ -38,36 +75,10 @@ export default function CombustiblePage() {
         }
     };
 
-    const fetchItems = () => {
-        setLoading(true);
-        api.get('/combustible')
-            .then(res => setItems(res.data))
-            .catch(err => console.error(err))
-            .finally(() => setLoading(false));
-    };
-
-    useEffect(() => { fetchItems(); }, []);
-
-    const areas = useMemo(() => {
-        const set = new Set<string>();
-        items.forEach(m => { if (m.area) set.add(m.area); });
-        return ['Todos', ...Array.from(set)];
-    }, [items]);
-
-    const filtered = useMemo(() => items.filter(m => {
-        if (area !== 'Todos' && m.area !== area) return false;
-        if (query && !(m.targa?.toLowerCase().includes(query.toLowerCase()) || m.id_registro?.toLowerCase().includes(query.toLowerCase()) || m.metodo?.toLowerCase().includes(query.toLowerCase()))) return false;
-        return true;
-    }), [items, area, query]);
-
-    useEffect(() => setPage(1), [query, area, pageSize]);
-
-    const total = useMemo(() => filtered.reduce((acc, m) => acc + (m.monto || 0), 0), [filtered]);
-
-    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const currentPage = Math.min(page, totalPages);
     const startIndex = (currentPage - 1) * pageSize;
-    const pageRows = filtered.slice(startIndex, startIndex + pageSize);
+    const pageRows = items;
 
     return (
         <div className="max-w-[1100px] mx-auto animate-in fade-in duration-500">
@@ -75,7 +86,7 @@ export default function CombustiblePage() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight text-slate-900">Combustible</h1>
-                    <p className="text-sm text-slate-400 mt-0.5">Total filtrado: <span className="font-semibold text-slate-700 tabular-nums">{format(total)}</span></p>
+                    <p className="text-sm text-slate-400 mt-0.5">Total filtrado: <span className="font-semibold text-slate-700 tabular-nums">{format(sum)}</span></p>
                 </div>
                 <button
                     onClick={openCreate}
@@ -116,7 +127,7 @@ export default function CombustiblePage() {
             {/* Cards */}
             {loading ? (
                 <div className="text-center py-16 text-sm text-slate-400">Cargando registros...</div>
-            ) : filtered.length === 0 ? (
+            ) : items.length === 0 ? (
                 <div className="text-center py-16 text-sm text-slate-400 bg-white border border-slate-200 rounded-2xl">
                     No se encontraron registros de combustible.
                 </div>
@@ -178,7 +189,7 @@ export default function CombustiblePage() {
             )}
 
             {/* Pagination */}
-            {!loading && filtered.length > 0 && (
+            {!loading && total > 0 && (
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-5">
                     <div className="flex items-center gap-2 text-sm text-slate-500">
                         <span>Mostrar</span>
@@ -191,7 +202,7 @@ export default function CombustiblePage() {
                         <span>por página</span>
                     </div>
                     <div className="flex items-center gap-3 text-sm text-slate-500">
-                        <span className="tabular-nums">{startIndex + 1}–{Math.min(startIndex + pageSize, filtered.length)} de {filtered.length}</span>
+                        <span className="tabular-nums">{startIndex + 1}–{Math.min(startIndex + pageSize, total)} de {total}</span>
                         <div className="flex items-center gap-1.5">
                             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
                                 className="w-9 h-9 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-slate-600 transition">

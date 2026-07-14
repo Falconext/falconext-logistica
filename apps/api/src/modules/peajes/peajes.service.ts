@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 
 @Injectable()
@@ -28,11 +29,44 @@ export class PeajesService {
         });
     }
 
-    findAll(tenantId: string) {
-        return this.prisma.peaje.findMany({
-            where: { tenant_id: tenantId },
-            orderBy: { fecha: 'desc' }
+    async findAll(
+        tenantId: string,
+        opts: { q?: string; estado?: string; skip?: number; take?: number } = {},
+    ) {
+        const { q, estado, skip = 0, take = 10 } = opts;
+
+        // Base scope = tenant + optional search. Estado is applied only to the list
+        // (not to the counts) so the tabs keep showing the full per-estado tally.
+        const baseWhere: Prisma.PeajeWhereInput = { tenant_id: tenantId };
+        if (q) {
+            baseWhere.OR = [
+                { targa: { contains: q } },
+                { id_multa: { contains: q } },
+                { comentarios: { contains: q } },
+            ];
+        }
+        const itemsWhere: Prisma.PeajeWhereInput = { ...baseWhere };
+        if (estado && estado !== 'Todos') itemsWhere.estado = estado;
+
+        const [items, total] = await this.prisma.$transaction([
+            this.prisma.peaje.findMany({ where: itemsWhere, orderBy: { fecha: 'desc' }, skip, take }),
+            this.prisma.peaje.count({ where: itemsWhere }),
+        ]);
+
+        // groupBy cast to any: its `having` mapped type trips a known TS2615.
+        const grouped: Array<{ estado: string | null; _count: { _all: number } }> =
+            await (this.prisma.peaje.groupBy as any)({
+                by: ['estado'],
+                where: baseWhere,
+                _count: { _all: true },
+            });
+        const counts: Record<string, number> = { Todos: 0, PENDIENTE: 0, PAGADO: 0, ANULADO: 0 };
+        grouped.forEach((g) => {
+            counts.Todos += g._count._all;
+            if (g.estado && counts[g.estado] !== undefined) counts[g.estado] = g._count._all;
         });
+
+        return { items, total, counts };
     }
 
     update(id: string, data: any) {

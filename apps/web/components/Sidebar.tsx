@@ -2,27 +2,28 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Truck, Map, Wrench, ShieldCheck, LogOut, Bell, CalendarDays, BarChart3, FileSpreadsheet, MessageSquare, PlayCircle, HelpCircle, Briefcase, ChevronsLeft, Receipt, Fuel } from 'lucide-react';
+import { LayoutDashboard, Users, Truck, Map, Wrench, ShieldCheck, LogOut, Bell, CalendarDays, BarChart3, FileSpreadsheet, MessageSquare, PlayCircle, HelpCircle, Briefcase, ChevronsLeft, Receipt, Fuel, UserCog } from 'lucide-react';
 import clsx from 'clsx';
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '../lib/store';
+import { canAccessModule, isAdminRole } from '../lib/modules';
 
 const primaryItems = [
-    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { name: 'Operaciones', href: '/operaciones', icon: Map },
-    { name: 'Trabajadores', href: '/trabajadores', icon: Users },
-    { name: 'Vehículos', href: '/vehiculos', icon: Truck },
-    { name: 'Mantenimiento', href: '/mantenimiento', icon: Wrench },
-    { name: 'Peajes/Multas', href: '/peajes', icon: Receipt },
-    { name: 'Combustible', href: '/combustible', icon: Fuel },
-    { name: 'Calendario', href: '/calendario', icon: CalendarDays },
-    { name: 'Reportes', href: '/reportes', icon: BarChart3 },
+    { key: 'dashboard', name: 'Dashboard', href: '/', icon: LayoutDashboard },
+    { key: 'operaciones', name: 'Operaciones', href: '/operaciones', icon: Map },
+    { key: 'trabajadores', name: 'Trabajadores', href: '/trabajadores', icon: Users },
+    { key: 'vehiculos', name: 'Vehículos', href: '/vehiculos', icon: Truck },
+    { key: 'mantenimiento', name: 'Mantenimiento', href: '/mantenimiento', icon: Wrench },
+    { key: 'peajes', name: 'Peajes/Multas', href: '/peajes', icon: Receipt },
+    { key: 'combustible', name: 'Combustible', href: '/combustible', icon: Fuel },
+    { key: 'calendario', name: 'Calendario', href: '/calendario', icon: CalendarDays },
+    { key: 'reportes', name: 'Reportes', href: '/reportes', icon: BarChart3 },
 ];
 
 const trackingItems = [
-    { name: 'Alertas', href: '/alertas', icon: Bell },
-    { name: 'Dispositivos GPS', href: '/dispositivos', icon: ShieldCheck },
-    { name: 'Geocercas', href: '/geocercas', icon: Map },
+    { key: 'alertas', name: 'Alertas', href: '/alertas', icon: Bell },
+    { key: 'dispositivos', name: 'Dispositivos GPS', href: '/dispositivos', icon: ShieldCheck },
+    { key: 'geocercas', name: 'Geocercas', href: '/geocercas', icon: Map },
 ];
 
 export function Sidebar() {
@@ -33,6 +34,9 @@ export function Sidebar() {
     useEffect(() => setMounted(true), []);
 
     const isAdmin = user?.role === 'SUPERADMIN';
+    const isManager = isAdminRole(user?.role); // SUPERADMIN o ADMIN
+    const visiblePrimary = primaryItems.filter((i) => canAccessModule(user, i.key));
+    const visibleTracking = trackingItems.filter((i) => canAccessModule(user, i.key));
 
     const NavLink = ({ href, name, Icon, badge }: { href: string; name: string; Icon: any; badge?: number }) => {
         const isActive = pathname === href;
@@ -78,38 +82,35 @@ export function Sidebar() {
 
             {/* Nav */}
             <nav className="flex-1 overflow-y-auto px-3 pb-3">
-                <div className="space-y-1">
-                    {primaryItems.map((item) => (
-                        <NavLink key={item.href} href={item.href} name={item.name} Icon={item.icon} />
-                    ))}
-                </div>
+                {visiblePrimary.length > 0 && (
+                    <div className="space-y-1">
+                        {visiblePrimary.map((item) => (
+                            <NavLink key={item.href} href={item.href} name={item.name} Icon={item.icon} />
+                        ))}
+                    </div>
+                )}
 
-                <SectionDivider />
+                {visibleTracking.length > 0 && (
+                    <>
+                        <SectionDivider />
+                        <div className="space-y-1">
+                            {visibleTracking.map((item) => (
+                                <NavLink key={item.href} href={item.href} name={item.name} Icon={item.icon} />
+                            ))}
+                        </div>
+                    </>
+                )}
 
-                <div className="space-y-1">
-                    {trackingItems.map((item) => (
-                        <NavLink key={item.href} href={item.href} name={item.name} Icon={item.icon} />
-                    ))}
-                </div>
-
-                <SectionDivider />
-
-                <div className="space-y-1">
-                    {(isAdmin || user?.role === 'ADMIN') && (
-                        <>
+                {isManager && (
+                    <>
+                        <SectionDivider />
+                        <div className="space-y-1">
+                            <NavLink href="/admin/usuarios" name="Usuarios" Icon={UserCog} />
                             {isAdmin && <NavLink href="/admin/tenants" name="Admin Empresas" Icon={Briefcase} />}
                             <NavLink href="/admin/sheets" name="Integración Sheets" Icon={FileSpreadsheet} />
-                        </>
-                    )}
-                    <NavLink href="/reportes" name="Reportes" Icon={BarChart3} />
-                </div>
-
-                <SectionDivider />
-
-                <div className="space-y-1">
-                    <NavLink href="/tutoriales" name="Tutoriales" Icon={PlayCircle} />
-                    <NavLink href="/ayuda" name="Centro de ayuda" Icon={HelpCircle} />
-                </div>
+                        </div>
+                    </>
+                )}
             </nav>
 
             {/* User card */}

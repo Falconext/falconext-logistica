@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import api from '../../lib/api';
 import { Receipt, Plus, Search, Calendar, ArrowLeft, ArrowRight, Pencil, Trash2, Paperclip, Loader2 } from 'lucide-react';
 import PeajeModal from './PeajeModal';
@@ -17,8 +17,11 @@ const ESTADO_BADGE: Record<string, string> = {
 export default function PeajesPage() {
     const { format } = useCurrency();
     const [items, setItems] = useState<any[]>([]);
+    const [total, setTotal] = useState(0);
+    const [counts, setCounts] = useState<Record<string, number>>({ Todos: 0, PENDIENTE: 0, PAGADO: 0, ANULADO: 0 });
     const [loading, setLoading] = useState(true);
     const [query, setQuery] = useState('');
+    const [debouncedQuery, setDebouncedQuery] = useState('');
     const [estado, setEstado] = useState<string>('Todos');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editing, setEditing] = useState<any | null>(null);
@@ -31,13 +34,46 @@ export default function PeajesPage() {
     const openEdit = (item: any) => { setEditing(item); setIsModalOpen(true); };
     const closeModal = () => { setIsModalOpen(false); setEditing(null); };
 
+    // Debounce the search box so it hits the API at most every 250ms.
+    useEffect(() => {
+        const t = setTimeout(() => setDebouncedQuery(query.trim()), 250);
+        return () => clearTimeout(t);
+    }, [query]);
+
+    // Only the current page is fetched from the server; counts come pre-aggregated.
+    const fetchItems = useCallback(() => {
+        setLoading(true);
+        api.get('/peajes', {
+            params: {
+                q: debouncedQuery || undefined,
+                estado: estado !== 'Todos' ? estado : undefined,
+                skip: (page - 1) * pageSize,
+                take: pageSize,
+            },
+        })
+            .then(res => {
+                setItems(res.data.items ?? []);
+                setTotal(res.data.total ?? 0);
+                setCounts(res.data.counts ?? { Todos: 0, PENDIENTE: 0, PAGADO: 0, ANULADO: 0 });
+            })
+            .catch(err => console.error(err))
+            .finally(() => setLoading(false));
+    }, [debouncedQuery, estado, page, pageSize]);
+
+    useEffect(() => { fetchItems(); }, [fetchItems]);
+
+    // Back to page 1 whenever a filter changes.
+    useEffect(() => { setPage(1); }, [debouncedQuery, estado, pageSize]);
+
     const confirmDelete = async () => {
         if (!deleting) return;
         setDeleteLoading(true);
         try {
             await api.delete(`/peajes/${deleting.id}`);
             setDeleting(null);
-            fetchItems();
+            // If we just removed the last row on a page past the first, step back.
+            if (items.length === 1 && page > 1) setPage(p => p - 1);
+            else fetchItems();
         } catch (err) {
             console.error(err);
             alert('Error al eliminar el registro');
@@ -46,35 +82,10 @@ export default function PeajesPage() {
         }
     };
 
-    const fetchItems = () => {
-        setLoading(true);
-        api.get('/peajes')
-            .then(res => setItems(res.data))
-            .catch(err => console.error(err))
-            .finally(() => setLoading(false));
-    };
-
-    useEffect(() => { fetchItems(); }, []);
-
-    const filtered = useMemo(() => items.filter(m => {
-        if (estado !== 'Todos' && m.estado !== estado) return false;
-        if (query && !(m.targa?.toLowerCase().includes(query.toLowerCase()) || m.id_multa?.toLowerCase().includes(query.toLowerCase()) || m.comentarios?.toLowerCase().includes(query.toLowerCase()))) return false;
-        return true;
-    }), [items, estado, query]);
-
-    useEffect(() => setPage(1), [query, estado, pageSize]);
-
-    const counts = useMemo(() => ({
-        Todos: items.length,
-        PENDIENTE: items.filter(m => m.estado === 'PENDIENTE').length,
-        PAGADO: items.filter(m => m.estado === 'PAGADO').length,
-        ANULADO: items.filter(m => m.estado === 'ANULADO').length,
-    }), [items]);
-
-    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const currentPage = Math.min(page, totalPages);
     const startIndex = (currentPage - 1) * pageSize;
-    const pageRows = filtered.slice(startIndex, startIndex + pageSize);
+    const pageRows = items;
 
     return (
         <div className="max-w-[1100px] mx-auto animate-in fade-in duration-500">
@@ -121,7 +132,7 @@ export default function PeajesPage() {
             {/* Cards */}
             {loading ? (
                 <div className="text-center py-16 text-sm text-slate-400">Cargando registros...</div>
-            ) : filtered.length === 0 ? (
+            ) : items.length === 0 ? (
                 <div className="text-center py-16 text-sm text-slate-400 bg-white border border-slate-200 rounded-2xl">
                     No se encontraron peajes ni multas.
                 </div>
@@ -184,7 +195,7 @@ export default function PeajesPage() {
             )}
 
             {/* Pagination */}
-            {!loading && filtered.length > 0 && (
+            {!loading && total > 0 && (
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-5">
                     <div className="flex items-center gap-2 text-sm text-slate-500">
                         <span>Mostrar</span>
@@ -197,7 +208,7 @@ export default function PeajesPage() {
                         <span>por página</span>
                     </div>
                     <div className="flex items-center gap-3 text-sm text-slate-500">
-                        <span className="tabular-nums">{startIndex + 1}–{Math.min(startIndex + pageSize, filtered.length)} de {filtered.length}</span>
+                        <span className="tabular-nums">{startIndex + 1}–{Math.min(startIndex + pageSize, total)} de {total}</span>
                         <div className="flex items-center gap-1.5">
                             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
                                 className="w-9 h-9 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-slate-600 transition">

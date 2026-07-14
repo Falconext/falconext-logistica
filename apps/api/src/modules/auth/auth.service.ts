@@ -42,10 +42,12 @@ export class AuthService {
             user: {
                 id: user.id,
                 email: user.email,
+                nombre: user.nombre,
                 role: user.role,
                 tenant: user.tenant.name,
                 tenant_id: user.tenant.id,
-                moneda: user.tenant.moneda // PEN | USD | EUR
+                moneda: user.tenant.moneda, // PEN | USD | EUR
+                modulos: user.modulos // claves de módulos permitidos (ADMIN ven todos)
             }
         };
     }

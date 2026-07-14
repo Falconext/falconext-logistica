@@ -226,8 +226,11 @@ model User {
   id        String @id @default(uuid())
   email     String @unique
   password  String
-  role      String @default("VIEWER") // ADMIN, MANAGER, VIEWER
-  
+  role      String @default("VIEWER") // SUPERADMIN, ADMIN, USER (VIEWER legacy)
+  nombre    String? // nombre visible del usuario
+  activo    Boolean @default(true)
+  modulos   String[] @default([]) // claves de módulos permitidos (los ADMIN ven todos)
+
   tenant_id String
   tenant    Tenant @relation(fields: [tenant_id], references: [id])
 

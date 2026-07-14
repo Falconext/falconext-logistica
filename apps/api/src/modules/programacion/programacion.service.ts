@@ -1,18 +1,82 @@
 
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 
 @Injectable()
 export class ProgramacionService {
     constructor(private prisma: PrismaService) { }
 
-    async findAll() {
-        return this.prisma.programacion.findMany({
-            orderBy: {
-                fecha: 'desc',
-            },
-            take: 5000 // Increased to support full dataset for frontend grouping
-        });
+    // Only the columns the operaciones list/map actually render — keeps the
+    // payload small (drops nota + audit timestamps + tenant_id).
+    private static readonly LIST_SELECT = {
+        id: true,
+        fecha: true,
+        id_programacion: true,
+        vehiculo_id: true,
+        trabajador_id: true,
+        cliente: true,
+        lugar_retiro: true,
+        fecha_retiro: true,
+        lugar_entrega: true,
+        fecha_entrega: true,
+        hora_retiro: true,
+        estado: true,
+        ingreso_estimado: true,
+    };
+
+    async findAll(
+        tenantId: string,
+        opts: { from?: string; to?: string; q?: string; estados?: string[]; skip?: number; take?: number } = {},
+    ) {
+        const { from, to, q, estados, skip = 0, take = 60 } = opts;
+
+        // Base scope: always the caller's tenant, plus optional date window + search.
+        const baseWhere: Prisma.ProgramacionWhereInput = { tenant_id: tenantId };
+        if (from || to) {
+            baseWhere.fecha = {};
+            if (from) (baseWhere.fecha as Prisma.DateTimeFilter).gte = new Date(from);
+            if (to) (baseWhere.fecha as Prisma.DateTimeFilter).lte = new Date(to);
+        }
+        if (q) {
+            baseWhere.OR = [
+                { cliente: { contains: q } },
+                { vehiculo_id: { contains: q } },
+                { lugar_entrega: { contains: q } },
+                { id_programacion: { contains: q } },
+            ];
+        }
+
+        // The list also narrows by the visible estados; counts/total do NOT so the
+        // "Capas" panel can show the full per-estado tally within the current scope.
+        const itemsWhere: Prisma.ProgramacionWhereInput = { ...baseWhere };
+        if (estados && estados.length) itemsWhere.estado = { in: estados };
+
+        const [items, total] = await this.prisma.$transaction([
+            this.prisma.programacion.findMany({
+                where: itemsWhere,
+                orderBy: { fecha: 'desc' },
+                skip,
+                take,
+                select: ProgramacionService.LIST_SELECT,
+            }),
+            this.prisma.programacion.count({ where: itemsWhere }),
+        ]);
+
+        // Per-estado tally for the "Capas" panel. `groupBy` is cast to any because
+        // its `having` mapped type trips a known TS2615 (circular reference) with
+        // this TS version — the query itself is valid.
+        const grouped: Array<{ estado: string; _count: { _all: number } }> =
+            await (this.prisma.programacion.groupBy as any)({
+                by: ['estado'],
+                where: baseWhere,
+                _count: { _all: true },
+            });
+
+        const counts: Record<string, number> = {};
+        grouped.forEach((g) => { counts[g.estado] = g._count._all; });
+
+        return { items, total, counts };
     }
 
     async findOne(id: string) {
@@ -46,16 +110,17 @@ export class ProgramacionService {
         });
     }
 
-    async create(data: any) {
-        // Find default tenant if needed, or assume tenant_id is passed or injected
-        // For now, hardcode or fetch a default tenant for the user/seed
-        // Ideally ID comes from auth context. Using first tenant for simplicity as before.
-        const tenant = await this.prisma.tenant.findFirst();
+    async create(data: any, tenantId?: string) {
+        // Scope the new record to the caller's tenant (from the JWT). Fall back to
+        // the first tenant only if no auth context is available (legacy callers).
+        const resolvedTenant = tenantId
+            || data.tenant_id
+            || (await this.prisma.tenant.findFirst())?.id;
 
         return this.prisma.programacion.create({
             data: {
                 ...data,
-                tenant_id: data.tenant_id || tenant?.id
+                tenant_id: resolvedTenant
             }
         });
     }

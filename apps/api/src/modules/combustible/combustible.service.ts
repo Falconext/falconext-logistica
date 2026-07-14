@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 
 @Injectable()
@@ -22,11 +23,37 @@ export class CombustibleService {
         });
     }
 
-    findAll(tenantId: string) {
-        return this.prisma.combustible.findMany({
-            where: { tenant_id: tenantId },
-            orderBy: { fecha: 'desc' }
-        });
+    async findAll(
+        tenantId: string,
+        opts: { q?: string; area?: string; skip?: number; take?: number } = {},
+    ) {
+        const { q, area, skip = 0, take = 10 } = opts;
+
+        const where: Prisma.CombustibleWhereInput = { tenant_id: tenantId };
+        if (q) {
+            where.OR = [
+                { targa: { contains: q } },
+                { id_registro: { contains: q } },
+                { metodo: { contains: q } },
+            ];
+        }
+        if (area && area !== 'Todos') where.area = area;
+
+        const [items, total, agg] = await this.prisma.$transaction([
+            this.prisma.combustible.findMany({ where, orderBy: { fecha: 'desc' }, skip, take }),
+            this.prisma.combustible.count({ where }),
+            this.prisma.combustible.aggregate({ where, _sum: { monto: true } }),
+        ]);
+
+        // Distinct areas for the tenant (ignoring current filter) so the dropdown is stable.
+        const areaGroups: Array<{ area: string | null }> =
+            await (this.prisma.combustible.groupBy as any)({
+                by: ['area'],
+                where: { tenant_id: tenantId },
+            });
+        const areas = areaGroups.map((g) => g.area).filter(Boolean) as string[];
+
+        return { items, total, sum: agg._sum.monto ?? 0, areas };
     }
 
     update(id: string, data: any) {

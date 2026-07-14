@@ -5,6 +5,7 @@ import { Users, Truck, ArrowUpRight, AlertTriangle, Map, Wrench, Bell, Package, 
 import { useEffect, useState } from "react";
 import api from "../lib/api";
 import { useAuthStore } from "../lib/store";
+import { canAccessModule, moduleForPath } from "../lib/modules";
 
 interface DashboardStats {
     workers: { active: number; total: number; percentage: number };
@@ -39,6 +40,15 @@ export default function Home() {
     const warningCount = alerts.filter(a => a.status === 'POR_VENCER').length;
     const name = user?.email ? user.email.split('@')[0] : 'Usuario';
 
+    // Solo enlazar a módulos que el usuario tenga permitidos (los admins ven todo).
+    const canGo = (href: string) => canAccessModule(user, moduleForPath(href) || '');
+    const accesos = [
+        { href: '/trabajadores', icon: <Users size={16} />, label: 'Personal' },
+        { href: '/vehiculos', icon: <Truck size={16} />, label: 'Flota' },
+        { href: '/mantenimiento', icon: <Wrench size={16} />, label: 'Mantenimiento' },
+        { href: '/alertas', icon: <Bell size={16} />, label: 'Alertas' },
+    ].filter(a => canGo(a.href));
+
     if (loading) {
         return (
             <div className="flex h-[60vh] items-center justify-center">
@@ -59,7 +69,7 @@ export default function Home() {
                 {/* Left column */}
                 <div className="space-y-5">
                     {/* Operaciones (funds-like) */}
-                    <Card icon={<DollarSign size={17} />} title="Operaciones del mes" href="/operaciones" actionLabel="Ver detalles">
+                    <Card icon={<DollarSign size={17} />} title="Operaciones del mes" href={canGo('/operaciones') ? '/operaciones' : undefined} actionLabel="Ver detalles">
                         <div className="space-y-2.5">
                             <Row label="Entregas completadas" value={`${stats?.deliveries?.completed ?? 0}`} />
                             <Row label="Entregas pendientes" value={`${stats?.deliveries?.pending ?? 0}`} />
@@ -71,7 +81,7 @@ export default function Home() {
                     </Card>
 
                     {/* Personal & Flota */}
-                    <Card icon={<Users size={17} />} title="Personal y flota" href="/trabajadores" actionLabel="Ver detalles">
+                    <Card icon={<Users size={17} />} title="Personal y flota" href={canGo('/trabajadores') ? '/trabajadores' : undefined} actionLabel="Ver detalles">
                         <div className="grid grid-cols-2 gap-4">
                             <MiniStat icon={<Users size={15} />} label="Personal activo" value={`${stats?.workers.active ?? 0}`} sub={`de ${stats?.workers.total ?? 0}`} pct={stats?.workers.percentage} />
                             <MiniStat icon={<Truck size={15} />} label="Flota operativa" value={`${stats?.vehicles.active ?? 0}`} sub={`de ${stats?.vehicles.total ?? 0}`} pct={stats?.vehicles.percentage} />
@@ -80,15 +90,15 @@ export default function Home() {
 
                     {/* Mantenimiento + rutas quick row */}
                     <div className="grid grid-cols-2 gap-5">
-                        <QuickCard icon={<Wrench size={16} />} label="Mant. este mes" value={stats?.maintenance.thisMonth ?? 0} href="/mantenimiento" />
-                        <QuickCard icon={<Map size={16} />} label="Rutas hoy" value={stats?.routes.today ?? 0} href="/operaciones" />
+                        <QuickCard icon={<Wrench size={16} />} label="Mant. este mes" value={stats?.maintenance.thisMonth ?? 0} href={canGo('/mantenimiento') ? '/mantenimiento' : undefined} />
+                        <QuickCard icon={<Map size={16} />} label="Rutas hoy" value={stats?.routes.today ?? 0} href={canGo('/operaciones') ? '/operaciones' : undefined} />
                     </div>
                 </div>
 
                 {/* Right column */}
                 <div className="space-y-5">
                     {/* Alerts */}
-                    <Card icon={<Bell size={17} />} title="Próximos vencimientos" href="/alertas" actionLabel="Ver todos" badge={expiredCount > 0 ? `${expiredCount} vencidos` : undefined}>
+                    <Card icon={<Bell size={17} />} title="Próximos vencimientos" href={canGo('/alertas') ? '/alertas' : undefined} actionLabel="Ver todos" badge={expiredCount > 0 ? `${expiredCount} vencidos` : undefined}>
                         {alerts.length === 0 ? (
                             <div className="text-center py-8">
                                 <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-emerald-50 mb-3">
@@ -118,15 +128,16 @@ export default function Home() {
                         )}
                     </Card>
 
-                    {/* Quick access */}
-                    <Card icon={<Activity size={17} />} title="Accesos rápidos">
-                        <div className="grid grid-cols-2 gap-2.5">
-                            <AccessLink href="/trabajadores" icon={<Users size={16} />} label="Personal" />
-                            <AccessLink href="/vehiculos" icon={<Truck size={16} />} label="Flota" />
-                            <AccessLink href="/mantenimiento" icon={<Wrench size={16} />} label="Mantenimiento" />
-                            <AccessLink href="/alertas" icon={<Bell size={16} />} label="Alertas" />
-                        </div>
-                    </Card>
+                    {/* Quick access — solo módulos permitidos */}
+                    {accesos.length > 0 && (
+                        <Card icon={<Activity size={17} />} title="Accesos rápidos">
+                            <div className="grid grid-cols-2 gap-2.5">
+                                {accesos.map((a) => (
+                                    <AccessLink key={a.href} href={a.href} icon={a.icon} label={a.label} />
+                                ))}
+                            </div>
+                        </Card>
+                    )}
                 </div>
             </div>
         </div>
@@ -185,15 +196,22 @@ function MiniStat({ icon, label, value, sub, pct }: { icon: React.ReactNode; lab
     );
 }
 
-function QuickCard({ icon, label, value, href }: { icon: React.ReactNode; label: string; value: number; href: string }) {
-    return (
-        <Link href={href} className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] hover:border-slate-300 transition group">
+function QuickCard({ icon, label, value, href }: { icon: React.ReactNode; label: string; value: number; href?: string }) {
+    const inner = (
+        <>
             <div className="flex items-center justify-between">
                 <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center">{icon}</div>
-                <ArrowUpRight size={16} className="text-slate-300 group-hover:text-slate-500 transition" />
+                {href && <ArrowUpRight size={16} className="text-slate-300 group-hover:text-slate-500 transition" />}
             </div>
             <div className="mt-3 text-2xl font-bold text-slate-900 tabular-nums">{value}</div>
             <div className="text-xs text-slate-500">{label}</div>
+        </>
+    );
+    const cls = "rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]";
+    if (!href) return <div className={cls}>{inner}</div>;
+    return (
+        <Link href={href} className={`${cls} hover:border-slate-300 transition group`}>
+            {inner}
         </Link>
     );
 }

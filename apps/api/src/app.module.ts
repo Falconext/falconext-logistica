@@ -14,6 +14,7 @@ import { FilesModule } from './modules/files/files.module';
 import { DocumentosModule } from './modules/documentos/documentos.module';
 import { PeajesModule } from './modules/peajes/peajes.module';
 import { CombustibleModule } from './modules/combustible/combustible.module';
+import { UsuariosModule } from './modules/usuarios/usuarios.module';
 
 @Module({
     imports: [
@@ -32,6 +33,7 @@ import { CombustibleModule } from './modules/combustible/combustible.module';
         CombustibleModule,
         AlertsModule, // Kept existing modules
         SheetsModule,
+        UsuariosModule,
     ],
     controllers: [],
     providers: [],

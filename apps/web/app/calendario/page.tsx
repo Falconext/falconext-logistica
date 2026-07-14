@@ -14,11 +14,18 @@ export default function CalendarioPage() {
     const [selectedDay, setSelectedDay] = useState<Date | null>(null);
     const [dayRutas, setDayRutas] = useState<Programacion[]>([]);
 
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+
     useEffect(() => {
         async function fetchData() {
+            setLoading(true);
             try {
-                const res = await api.get('/programacion');
-                setRutas(res.data);
+                // Only fetch the visible month instead of the whole dataset.
+                const from = new Date(year, month, 1).toISOString();
+                const to = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
+                const res = await api.get('/programacion', { params: { from, to, take: 1000 } });
+                setRutas(res.data.items ?? []);
             } catch (error) {
                 console.error('Error fetching operations:', error);
             } finally {
@@ -26,10 +33,7 @@ export default function CalendarioPage() {
             }
         }
         fetchData();
-    }, []);
-
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
+    }, [year, month]);
 
     const firstDayOfMonth = new Date(year, month, 1);
     const lastDayOfMonth = new Date(year, month + 1, 0);

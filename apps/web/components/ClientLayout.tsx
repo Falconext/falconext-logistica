@@ -4,11 +4,12 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '../lib/store';
+import { MODULES, moduleForPath, canAccessModule, isAdminRole } from '../lib/modules';
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
-    const { checkAuth, isAuthenticated, token } = useAuthStore();
+    const { checkAuth, isAuthenticated, token, user } = useAuthStore();
     const [checked, setChecked] = useState(false);
 
     useEffect(() => {
@@ -21,6 +22,23 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
             router.push('/login');
         }
     }, [checked, isAuthenticated, pathname, router]);
+
+    // Guard por módulo: redirige si el usuario abre algo sin permiso.
+    useEffect(() => {
+        if (!checked || !isAuthenticated || pathname === '/login') return;
+        const firstAllowed = MODULES.find((m) => canAccessModule(user, m.key))?.href;
+
+        // Rutas de administración: solo ADMIN/SUPERADMIN.
+        if (pathname.startsWith('/admin')) {
+            if (!isAdminRole(user?.role) && firstAllowed) router.replace(firstAllowed);
+            return;
+        }
+
+        const modKey = moduleForPath(pathname);
+        if (modKey && !canAccessModule(user, modKey) && firstAllowed) {
+            router.replace(firstAllowed);
+        }
+    }, [checked, isAuthenticated, pathname, user, router]);
 
     const isLoginPage = pathname === '/login';
 

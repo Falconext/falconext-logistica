@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, memo, useCallback } from 'react';
+import { useEffect, useState, memo, useCallback, useRef } from 'react';
 import api from '../../lib/api';
 import { Programacion } from '../../types';
 import { LiveMap } from '../../components/tracking/LiveMap';
@@ -28,10 +28,21 @@ const ALL_ESTADOS = Object.keys(ESTADO_META);
 
 const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '—';
 
+const PAGE_SIZE = 60;
+const WINDOW_OPTIONS: { label: string; days: number | null }[] = [
+    { label: '60 días', days: 60 },
+    { label: '6 meses', days: 180 },
+    { label: '1 año', days: 365 },
+    { label: 'Todo', days: null },
+];
+
 export default function OperacionesPage() {
     const { format } = useCurrency();
     const [rutas, setRutas] = useState<Programacion[]>([]);
+    const [total, setTotal] = useState(0);
+    const [counts, setCounts] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [devicesMap, setDevicesMap] = useState<Record<string, { id: string; name: string }>>({});
     const [selected, setSelected] = useState<Programacion | null>(null);
 
@@ -39,6 +50,8 @@ export default function OperacionesPage() {
     const [isDeleting, setIsDeleting] = useState(false);
 
     const [searchQuery, setSearchQuery] = useState('');
+    const [debouncedQuery, setDebouncedQuery] = useState('');
+    const [windowDays, setWindowDays] = useState<number | null>(60);
     const [mapType, setMapType] = useState<'roadmap' | 'satellite'>('roadmap');
     const [showLayers, setShowLayers] = useState(false);
     const [visibleEstados, setVisibleEstados] = useState<Set<string>>(new Set(ALL_ESTADOS));
@@ -46,16 +59,46 @@ export default function OperacionesPage() {
     const [isNewRouteModalOpen, setIsNewRouteModalOpen] = useState(false);
     const [editingRuta, setEditingRuta] = useState<Programacion | null>(null);
 
-    const fetchData = async () => {
-        try {
-            const res = await api.get('/programacion');
-            setRutas(res.data);
-        } catch (error) {
-            console.error(error);
-        } finally {
-            setLoading(false);
+    const listRef = useRef<HTMLDivElement | null>(null);
+
+    // Debounce the search box so filtering hits the API at most every 250ms.
+    useEffect(() => {
+        const t = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 250);
+        return () => clearTimeout(t);
+    }, [searchQuery]);
+
+    // Build the query params for the current filters (date window, search, estados).
+    const buildParams = useCallback((skip: number) => {
+        const params: any = { skip, take: PAGE_SIZE };
+        if (windowDays != null) {
+            const from = new Date();
+            from.setDate(from.getDate() - windowDays);
+            params.from = from.toISOString();
         }
-    };
+        if (debouncedQuery) params.q = debouncedQuery;
+        // Only send estados when a strict subset is selected; "all" means no filter.
+        if (visibleEstados.size > 0 && visibleEstados.size < ALL_ESTADOS.length) {
+            params.estados = Array.from(visibleEstados).join(',');
+        }
+        return params;
+    }, [windowDays, debouncedQuery, visibleEstados]);
+
+    // (Re)load the first page whenever any filter changes.
+    useEffect(() => {
+        let cancelled = false;
+        setLoading(true);
+        api.get('/programacion', { params: buildParams(0) })
+            .then(res => {
+                if (cancelled) return;
+                setRutas(res.data.items ?? []);
+                setTotal(res.data.total ?? 0);
+                setCounts(res.data.counts ?? {});
+                if (listRef.current) listRef.current.scrollTop = 0;
+            })
+            .catch(err => console.error(err))
+            .finally(() => { if (!cancelled) setLoading(false); });
+        return () => { cancelled = true; };
+    }, [buildParams]);
 
     const fetchDevices = async () => {
         try {
@@ -70,32 +113,30 @@ export default function OperacionesPage() {
         }
     };
 
-    useEffect(() => { fetchData(); fetchDevices(); }, []);
+    useEffect(() => { fetchDevices(); }, []);
 
-    const filtered = useMemo(() => {
-        let data = rutas.filter(r => visibleEstados.has(r.estado || 'PENDIENTE'));
-        if (searchQuery) {
-            const q = searchQuery.toLowerCase();
-            data = data.filter(r =>
-                (r.cliente?.toLowerCase() || '').includes(q) ||
-                (r.vehiculo_id?.toLowerCase() || '').includes(q) ||
-                (r.lugar_entrega?.toLowerCase() || '').includes(q) ||
-                (r.id_programacion?.toLowerCase() || '').includes(q)
-            );
-        }
-        return data.sort((a, b) => new Date(b.fecha_entrega || b.fecha).getTime() - new Date(a.fecha_entrega || a.fecha).getTime());
-    }, [rutas, visibleEstados, searchQuery]);
+    // Append the next page when the user scrolls near the bottom (infinite scroll).
+    const loadMore = useCallback(() => {
+        if (loadingMore || loading || rutas.length >= total) return;
+        setLoadingMore(true);
+        api.get('/programacion', { params: buildParams(rutas.length) })
+            .then(res => {
+                setRutas(prev => [...prev, ...(res.data.items ?? [])]);
+                setTotal(res.data.total ?? 0);
+            })
+            .catch(err => console.error(err))
+            .finally(() => setLoadingMore(false));
+    }, [buildParams, rutas.length, total, loadingMore, loading]);
+
+    const onListScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+        const el = e.currentTarget;
+        if (el.scrollHeight - el.scrollTop - el.clientHeight < 300) loadMore();
+    }, [loadMore]);
 
     // Auto-select first route
     useEffect(() => {
-        if (!selected && filtered.length > 0) setSelected(filtered[0]);
-    }, [filtered, selected]);
-
-    const counts = useMemo(() => {
-        const c: Record<string, number> = {};
-        ALL_ESTADOS.forEach(e => { c[e] = rutas.filter(r => (r.estado || 'PENDIENTE') === e).length; });
-        return c;
-    }, [rutas]);
+        if (!selected && rutas.length > 0) setSelected(rutas[0]);
+    }, [rutas, selected]);
 
     const toggleEstado = (e: string) => {
         setVisibleEstados(prev => {
@@ -114,9 +155,11 @@ export default function OperacionesPage() {
         try {
             await api.delete(`/programacion/${deleting.id}`);
             toast.success('Operación eliminada');
+            // Drop it locally and adjust the total instead of a full refetch.
+            setRutas(prev => prev.filter(r => r.id !== deleting.id));
+            setTotal(t => Math.max(0, t - 1));
             if (selected?.id === deleting.id) setSelected(null);
             setDeleting(null);
-            fetchData();
         } catch (error) {
             console.error(error);
             toast.error('Error al eliminar la operación');
@@ -125,19 +168,39 @@ export default function OperacionesPage() {
         }
     };
 
-    const exportToExcel = () => {
-        if (filtered.length === 0) return toast.error("No hay datos");
-        import('xlsx').then(xlsx => {
-            const ws = xlsx.utils.json_to_sheet(filtered.map(r => ({
+    const reloadFirstPage = useCallback(() => {
+        setLoading(true);
+        api.get('/programacion', { params: buildParams(0) })
+            .then(res => {
+                setRutas(res.data.items ?? []);
+                setTotal(res.data.total ?? 0);
+                setCounts(res.data.counts ?? {});
+            })
+            .catch(err => console.error(err))
+            .finally(() => setLoading(false));
+    }, [buildParams]);
+
+    const exportToExcel = async () => {
+        try {
+            // Pull the full current filter (capped at 1000) for a complete export.
+            const params = { ...buildParams(0), take: 1000 };
+            const res = await api.get('/programacion', { params });
+            const data: Programacion[] = res.data.items ?? [];
+            if (data.length === 0) return toast.error('No hay datos');
+            const xlsx = await import('xlsx');
+            const ws = xlsx.utils.json_to_sheet(data.map(r => ({
                 ID: r.id_programacion, Fecha: new Date(r.fecha).toLocaleDateString(), Cliente: r.cliente,
                 Vehículo: r.vehiculo_id, Conductor: r.trabajador_id, Estado: r.estado,
                 Origen: r.lugar_retiro, Destino: r.lugar_entrega
             })));
             const wb = xlsx.utils.book_new();
-            xlsx.utils.book_append_sheet(wb, ws, "Operaciones");
-            xlsx.writeFile(wb, `Reporte_Operaciones.xlsx`);
-            toast.success("Excel generado");
-        });
+            xlsx.utils.book_append_sheet(wb, ws, 'Operaciones');
+            xlsx.writeFile(wb, 'Reporte_Operaciones.xlsx');
+            toast.success('Excel generado');
+        } catch (error) {
+            console.error(error);
+            toast.error('Error al exportar');
+        }
     };
 
     const device = selected ? devicesMap[selected.vehiculo_id || ''] : null;
@@ -152,7 +215,7 @@ export default function OperacionesPage() {
                         <div className="flex items-center gap-2.5">
                             <h1 className="text-xl font-bold text-slate-900">Operaciones</h1>
                             <span className="min-w-[26px] h-6 px-2 flex items-center justify-center rounded-md bg-[#FFC933] text-[#1a1a1c] text-sm font-bold">
-                                {rutas.length}
+                                {total}
                             </span>
                         </div>
                         <button onClick={exportToExcel} title="Exportar" className="w-9 h-9 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 transition">
@@ -168,22 +231,54 @@ export default function OperacionesPage() {
                             className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900 placeholder:text-slate-400 transition"
                         />
                     </div>
+                    {/* Periodo — limita cuántos datos se traen del servidor */}
+                    <div className="mt-2 flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg p-1">
+                        {WINDOW_OPTIONS.map(opt => (
+                            <button
+                                key={opt.label}
+                                onClick={() => setWindowDays(opt.days)}
+                                className={clsx(
+                                    "flex-1 px-2 py-1 rounded-md text-xs font-medium transition",
+                                    windowDays === opt.days ? "bg-[#1a1a1c] text-white" : "text-slate-500 hover:text-slate-900"
+                                )}
+                            >
+                                {opt.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 {/* List */}
-                <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-2.5">
+                <div ref={listRef} onScroll={onListScroll} className="flex-1 overflow-y-auto px-3 pb-3 space-y-2.5">
                     {loading ? (
                         <div className="text-center py-16 text-sm text-slate-400">Cargando operaciones...</div>
-                    ) : filtered.length === 0 ? (
+                    ) : rutas.length === 0 ? (
                         <div className="text-center py-16 text-sm text-slate-400">Sin operaciones para mostrar.</div>
-                    ) : filtered.map((ruta) => (
-                        <RouteCard
-                            key={ruta.id}
-                            ruta={ruta}
-                            isSelected={selected?.id === ruta.id}
-                            onSelect={handleSelect}
-                        />
-                    ))}
+                    ) : (
+                        <>
+                            {rutas.map((ruta) => (
+                                <RouteCard
+                                    key={ruta.id}
+                                    ruta={ruta}
+                                    isSelected={selected?.id === ruta.id}
+                                    onSelect={handleSelect}
+                                />
+                            ))}
+                            {loadingMore && (
+                                <div className="flex items-center justify-center py-4 text-slate-400">
+                                    <Loader2 size={16} className="animate-spin" />
+                                </div>
+                            )}
+                            {rutas.length < total && !loadingMore && (
+                                <button
+                                    onClick={loadMore}
+                                    className="w-full py-2.5 text-xs font-medium text-slate-500 hover:text-slate-900 transition"
+                                >
+                                    Cargar más ({total - rutas.length} restantes)
+                                </button>
+                            )}
+                        </>
+                    )}
                 </div>
 
                 {/* Footer add */}
@@ -324,7 +419,7 @@ export default function OperacionesPage() {
             <NewRouteModal
                 isOpen={isNewRouteModalOpen}
                 onClose={() => setIsNewRouteModalOpen(false)}
-                onSuccess={fetchData}
+                onSuccess={reloadFirstPage}
                 initialData={editingRuta}
             />
 

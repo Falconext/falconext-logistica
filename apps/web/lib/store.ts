@@ -4,10 +4,12 @@ import Cookies from 'js-cookie';
 interface User {
     id: string;
     email: string;
+    nombre?: string;
     role: string;
     tenant: string;
     tenant_id?: string;
     moneda?: string; // PEN | USD | EUR (moneda base de la empresa)
+    modulos?: string[]; // claves de módulos permitidos (ADMIN ven todos)
 }
 
 interface AuthState {

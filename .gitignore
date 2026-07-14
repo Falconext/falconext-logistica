@@ -23,3 +23,6 @@ apps/logistica-app/.expo
 
 .DS_Store
 *.log
+
+# Cache de build TS
+*.tsbuildinfo

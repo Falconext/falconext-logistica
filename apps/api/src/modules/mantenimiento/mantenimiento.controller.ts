@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Req, Query } from '@nestjs/common';
 import { MantenimientoService } from './mantenimiento.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -13,8 +13,13 @@ export class MantenimientoController {
     }
 
     @Get()
-    findAll(@Req() req) {
-        return this.mantenimientoService.findAll(req.user.tenantId);
+    findAll(@Req() req, @Query() query: any) {
+        return this.mantenimientoService.findAll(req.user.tenantId, {
+            q: query.q,
+            tipo: query.tipo,
+            skip: query.skip ? parseInt(query.skip, 10) || 0 : 0,
+            take: query.take ? Math.min(parseInt(query.take, 10) || 10, 100) : 10,
+        });
     }
 
     @Get('vehiculo/:id')
