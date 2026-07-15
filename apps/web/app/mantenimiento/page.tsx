@@ -228,8 +228,8 @@ export default function MaintenancePage() {
 
             {/* Delete confirmation */}
             {deleting && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl w-full max-w-md border border-slate-200 shadow-2xl p-6">
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md border border-slate-200 shadow-2xl p-6 max-h-[92vh] animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="flex items-center gap-3 mb-2">
                             <div className="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
                                 <Trash2 size={18} />

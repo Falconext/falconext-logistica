@@ -130,8 +130,8 @@ export default function UsuarioModal({ isOpen, onClose, onSuccess, initialData }
     const labelCls = 'text-xs font-semibold text-slate-500 uppercase tracking-wide';
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl w-full max-w-2xl border border-slate-200 shadow-2xl max-h-[92vh] flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-2xl border border-slate-200 shadow-2xl max-h-[92vh] flex flex-col animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                 <div className="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-center gap-3">
                     <div className="min-w-0">
                         <h2 className="text-xl font-bold text-slate-900">{isEdit ? 'Editar usuario' : 'Nuevo usuario'}</h2>

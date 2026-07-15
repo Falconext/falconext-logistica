@@ -85,8 +85,8 @@ export default function CombustibleModal({ isOpen, onClose, onSuccess, record }:
     const inputClass = 'w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 outline-none focus:border-slate-400 focus:ring-2 focus:ring-[#FFC933]/40 transition text-sm text-slate-900';
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl w-full max-w-2xl border border-slate-200 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-2xl border border-slate-200 shadow-2xl max-h-[92vh] overflow-y-auto animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                 <div className="p-4 sm:p-6 border-b border-slate-200 flex justify-between items-center sticky top-0 bg-white/90 backdrop-blur-md z-10">
                     <h2 className="text-lg sm:text-xl font-bold text-slate-900">{isEdit ? 'Editar Combustible' : 'Registrar Combustible'}</h2>
                     <button onClick={onClose} className="text-slate-500 hover:text-slate-700 transition-colors">

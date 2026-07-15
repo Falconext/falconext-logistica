@@ -1,10 +1,9 @@
 'use client';
 
-import { FleetLiveMap } from '../../components/tracking/FleetLiveMap';
+import { MapboxFleetMap } from '../../components/tracking/MapboxFleetMap';
 import { Radio } from 'lucide-react';
 
 export default function FlotaPage() {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyDJ-Y0SukxfjbACOUjPY7CoV6qnaQkKSZg';
   return (
     <div className="h-[calc(100vh-100px)] flex flex-col gap-4">
       <div className="flex items-center gap-3">
@@ -17,7 +16,7 @@ export default function FlotaPage() {
         </div>
       </div>
       <div className="flex-1 rounded-2xl border border-slate-200 overflow-hidden shadow-sm relative">
-        <FleetLiveMap apiKey={apiKey} />
+        <MapboxFleetMap />
       </div>
     </div>
   );

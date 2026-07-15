@@ -146,8 +146,10 @@ export function FleetLiveMap({ apiKey }: { apiKey: string }) {
         ))}
       </GoogleMap>
 
-      {/* Panel lateral de choferes */}
-      <div className="absolute top-4 left-4 bottom-4 w-72 z-10 flex flex-col bg-white/95 backdrop-blur rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+      {/* Panel de choferes: hoja inferior en móvil, panel lateral izquierdo en desktop */}
+      <div className="absolute z-10 flex flex-col bg-white/95 backdrop-blur shadow-xl border border-slate-200 overflow-hidden
+                      inset-x-2 bottom-2 max-h-[48%] rounded-2xl
+                      sm:inset-x-auto sm:top-4 sm:left-4 sm:bottom-4 sm:w-72 sm:max-h-none">
         <div className="p-4 border-b border-slate-100">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-slate-900">Flota en vivo</h3>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import api from '../../lib/api';
-import { Receipt, Plus, Search, Calendar, ArrowLeft, ArrowRight, Pencil, Trash2, Paperclip, Loader2 } from 'lucide-react';
+import { Receipt, Plus, Search, ArrowLeft, ArrowRight, Pencil, Trash2, Paperclip, Loader2 } from 'lucide-react';
 import PeajeModal from './PeajeModal';
 import Select from '../../components/Select';
 import { useCurrency } from '../../lib/useCurrency';
@@ -130,70 +130,85 @@ export default function PeajesPage() {
                 ))}
             </div>
 
-            {/* Cards */}
-            {loading ? (
-                <div className="text-center py-16 text-sm text-slate-400">Cargando registros...</div>
-            ) : items.length === 0 ? (
-                <div className="text-center py-16 text-sm text-slate-400 bg-white border border-slate-200 rounded-2xl">
-                    No se encontraron peajes ni multas.
-                </div>
-            ) : (
-                <div className="space-y-3">
-                    {pageRows.map((item) => (
-                        <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4 hover:border-slate-300 transition">
-                            {/* Top */}
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                                <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
-                                    <Receipt size={18} />
-                                </div>
-                                <span className="font-semibold text-slate-900">{item.targa || 'N/A'}</span>
-                                {item.estado && (
-                                    <span className={`px-2.5 py-0.5 rounded-md text-xs font-medium border ${ESTADO_BADGE[item.estado] || ESTADO_BADGE.PENDIENTE}`}>
-                                        {item.estado}
-                                    </span>
-                                )}
-                                <div className="ml-auto flex items-center gap-3">
-                                    <div className="text-lg font-bold text-slate-900 tabular-nums">{format(item.monto || 0)}</div>
-                                    <div className="flex items-center gap-1">
-                                        <button
-                                            onClick={() => openEdit(item)}
-                                            title="Editar"
-                                            className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 hover:text-slate-900 transition"
-                                        >
-                                            <Pencil size={15} />
-                                        </button>
-                                        <button
-                                            onClick={() => setDeleting(item)}
-                                            title="Eliminar"
-                                            className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-red-50 hover:border-red-200 flex items-center justify-center text-slate-500 hover:text-red-600 transition"
-                                        >
-                                            <Trash2 size={15} />
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Meta */}
-                            <div className="mt-3 pl-[52px] flex flex-wrap items-center justify-between gap-2">
-                                <div className="min-w-0">
-                                    {item.comentarios && <p className="text-sm text-slate-700 truncate">{item.comentarios}</p>}
-                                    <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
-                                        {item.fecha && <span className="flex items-center gap-1"><Calendar size={12} /> {new Date(item.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}</span>}
-                                        {item.hora && <span>{item.hora}</span>}
-                                        {item.id_multa && <span>Multa: {item.id_multa}</span>}
-                                        {item.tipo && <span>{item.tipo}</span>}
-                                        {item.archivo && (
-                                            <a href={item.archivo} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-blue-600 hover:text-blue-700">
-                                                <Paperclip size={12} /> Archivo
+            {/* Tabla */}
+            <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead>
+                            <tr className="border-b border-slate-100 text-slate-400">
+                                <th className="px-5 py-3.5 font-medium whitespace-nowrap">Vehículo</th>
+                                <th className="px-5 py-3.5 font-medium whitespace-nowrap">Estado</th>
+                                <th className="px-5 py-3.5 font-medium whitespace-nowrap">Comentario</th>
+                                <th className="px-5 py-3.5 font-medium whitespace-nowrap">Fecha</th>
+                                <th className="px-5 py-3.5 font-medium whitespace-nowrap">Hora</th>
+                                <th className="px-5 py-3.5 font-medium whitespace-nowrap">Multa</th>
+                                <th className="px-5 py-3.5 font-medium whitespace-nowrap">Tipo</th>
+                                <th className="px-5 py-3.5 font-medium whitespace-nowrap text-right">Monto</th>
+                                <th className="px-5 py-3.5 font-medium whitespace-nowrap">Archivo</th>
+                                <th className="px-5 py-3.5 font-medium text-right whitespace-nowrap">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {loading ? (
+                                <tr><td colSpan={10} className="text-center py-16 text-slate-400">Cargando registros...</td></tr>
+                            ) : items.length === 0 ? (
+                                <tr><td colSpan={10} className="text-center py-16 text-slate-400">No se encontraron peajes ni multas.</td></tr>
+                            ) : pageRows.map((item) => (
+                                <tr key={item.id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
+                                    <td className="px-5 py-3.5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+                                                <Receipt size={16} />
+                                            </div>
+                                            <span className="font-semibold text-slate-900 whitespace-nowrap">{item.targa || 'N/A'}</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-5 py-3.5">
+                                        {item.estado ? (
+                                            <span className={`px-2.5 py-0.5 rounded-md text-xs font-medium border whitespace-nowrap ${ESTADO_BADGE[item.estado] || ESTADO_BADGE.PENDIENTE}`}>
+                                                {item.estado}
+                                            </span>
+                                        ) : <span className="text-slate-300">—</span>}
+                                    </td>
+                                    <td className="px-5 py-3.5 text-slate-600 max-w-[220px] truncate">{item.comentarios || '—'}</td>
+                                    <td className="px-5 py-3.5 text-slate-600 whitespace-nowrap">
+                                        {item.fecha ? new Date(item.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                                    </td>
+                                    <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">{item.hora || '—'}</td>
+                                    <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">{item.id_multa || '—'}</td>
+                                    <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">{item.tipo || '—'}</td>
+                                    <td className="px-5 py-3.5 text-right font-bold text-slate-900 tabular-nums whitespace-nowrap">{format(item.monto || 0)}</td>
+                                    <td className="px-5 py-3.5">
+                                        {item.archivo ? (
+                                            <a href={item.archivo} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 whitespace-nowrap">
+                                                <Paperclip size={13} /> Ver
                                             </a>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
+                                        ) : <span className="text-slate-300">—</span>}
+                                    </td>
+                                    <td className="px-5 py-3.5">
+                                        <div className="flex items-center justify-end gap-1.5">
+                                            <button
+                                                onClick={() => openEdit(item)}
+                                                title="Editar"
+                                                className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 hover:text-slate-900 transition"
+                                            >
+                                                <Pencil size={15} />
+                                            </button>
+                                            <button
+                                                onClick={() => setDeleting(item)}
+                                                title="Eliminar"
+                                                className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-red-50 hover:border-red-200 flex items-center justify-center text-slate-500 hover:text-red-600 transition"
+                                            >
+                                                <Trash2 size={15} />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
-            )}
+            </div>
 
             {/* Pagination */}
             {!loading && total > 0 && (
@@ -228,8 +243,8 @@ export default function PeajesPage() {
 
             {/* Delete confirmation */}
             {deleting && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl w-full max-w-md border border-slate-200 shadow-2xl p-6">
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md border border-slate-200 shadow-2xl p-6 max-h-[92vh] animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="flex items-center gap-3 mb-2">
                             <div className="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
                                 <Trash2 size={18} />

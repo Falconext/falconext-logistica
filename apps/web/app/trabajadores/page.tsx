@@ -225,8 +225,8 @@ export default function TrabajadoresPage() {
 
             {/* Confirmación de eliminación */}
             {toDelete && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl w-full max-w-sm border border-slate-200 shadow-2xl p-6">
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-sm border border-slate-200 shadow-2xl p-6 max-h-[92vh] overflow-y-auto animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="flex items-start gap-3">
                             <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center text-red-500 shrink-0">
                                 <AlertTriangle size={20} />

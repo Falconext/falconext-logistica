@@ -262,6 +262,9 @@ importers:
       '@types/js-cookie':
         specifier: ^3.0.6
         version: 3.0.6
+      '@types/mapbox-gl':
+        specifier: ^3.5.0
+        version: 3.5.0
       axios:
         specifier: ^1.6.0
         version: 1.13.2
@@ -283,6 +286,9 @@ importers:
       lucide-react:
         specifier: ^0.300.0
         version: 0.300.0(react@19.2.3)
+      mapbox-gl:
+        specifier: ^3.26.0
+        version: 3.26.0
       next:
         specifier: 16.1.0
         version: 16.1.0(@babel/core@7.28.5)(react-dom@19.2.3)(react@19.2.3)
@@ -4266,6 +4272,13 @@ packages:
     dependencies:
       '@types/node': 20.19.27
     dev: true
+
+  /@types/mapbox-gl@3.5.0:
+    resolution: {integrity: sha512-3wVAUTC6q1UKatLP9YxFBnGJWi3neJUF9OKeyRdUf/BsYjZAP35xmZkL4zogVJbO3vdExuSVYCAkzUXjpjdhOg==}
+    deprecated: This is a stub types definition. mapbox-gl provides its own type definitions, so you do not need this installed.
+    dependencies:
+      mapbox-gl: 3.26.0
+    dev: false
 
   /@types/ms@2.1.0:
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
@@ -8912,6 +8925,10 @@ packages:
     resolution: {integrity: sha512-JmqCvUhmt43madlpFzG4BQzG2Z3m6tvQDNKdClZnO3VbIudJYmxsT0FNJMeiB2+JTSlTQTSbU8QdesVmwJcmLg==}
     dependencies:
       tmpl: 1.0.5
+    dev: false
+
+  /mapbox-gl@3.26.0:
+    resolution: {integrity: sha512-N+Y8VmvpD6xDeP0hAbegPZeEMY5TtnLcV0gEUBZ/KHq3s/yUKQm0PVG9JEkId0QFMMe5/W+FEjoyV4NI3B/N7A==}
     dev: false
 
   /marked@15.0.12:

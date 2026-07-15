@@ -283,8 +283,8 @@ export default function DispositivosPage() {
 
             {/* Map Modal */}
             {viewingDevice && (
-                <div className="fixed inset-0 z-50 top-[-32px] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-                    <div className="bg-white dark:bg-slate-900 w-full max-w-5xl h-[85vh] sm:h-[80vh] rounded-2xl overflow-hidden flex flex-col shadow-2xl">
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-5xl h-[88vh] sm:h-[80vh] rounded-t-2xl sm:rounded-2xl overflow-hidden flex flex-col shadow-2xl animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center gap-3 bg-white dark:bg-slate-900">
                             <div className="min-w-0">
                                 <h2 className="font-bold text-base sm:text-lg dark:text-white flex items-center gap-2 truncate">
@@ -315,8 +315,8 @@ export default function DispositivosPage() {
 
             {/* Modal Crear Dispositivo */}
             {showModal && (
-                <div className="fixed inset-0 top-[-32px] z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <div className="bg-white dark:bg-[#0F172A] rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-800">
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-[#0F172A] rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-md max-h-[92vh] overflow-y-auto border border-slate-200 dark:border-slate-800 animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="p-5 sm:p-6 border-b border-slate-200 dark:border-slate-800">
                             <h2 className="text-xl font-bold text-slate-900 dark:text-white">
                                 {editingDevice ? "Editar Dispositivo" : "Registrar Dispositivo"}
@@ -407,8 +407,8 @@ export default function DispositivosPage() {
 
             {/* Modal Confirmar Eliminación */}
             {deletingDevice && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <div className="bg-white dark:bg-[#0F172A] rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-200 dark:border-slate-800">
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-[#0F172A] rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-sm max-h-[92vh] overflow-hidden border border-slate-200 dark:border-slate-800 animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="p-6">
                             <div className="flex items-center gap-3 mb-4">
                                 <div className="w-11 h-11 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-600 dark:text-red-400 shrink-0">

@@ -120,8 +120,8 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData 
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white dark:bg-[#0f172a] rounded-2xl w-full max-w-2xl border border-slate-200 dark:border-slate-800 shadow-2xl max-h-[90vh] overflow-y-auto flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-[#0f172a] rounded-t-2xl sm:rounded-2xl w-full max-w-2xl border border-slate-200 dark:border-slate-800 shadow-2xl max-h-[92vh] overflow-y-auto flex flex-col animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                 {/* Modal Header */}
                 <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center sticky top-0 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md z-10">
                     <div>

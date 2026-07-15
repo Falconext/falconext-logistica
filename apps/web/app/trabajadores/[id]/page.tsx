@@ -537,8 +537,8 @@ export default function TrabajadorDetailsPage() {
 
             {/* Modal mapa en vivo */}
             {showLocationMap && location?.device && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-                    <div className="bg-white dark:bg-slate-900 w-full max-w-5xl h-[80vh] rounded-2xl overflow-hidden flex flex-col shadow-2xl">
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-5xl h-[88vh] sm:h-[80vh] rounded-t-2xl sm:rounded-2xl overflow-hidden flex flex-col shadow-2xl animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
                             <div>
                                 <h2 className="font-bold text-lg dark:text-white flex items-center gap-2">
