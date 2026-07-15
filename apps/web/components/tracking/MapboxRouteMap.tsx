@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { MapPin, Clock, Navigation } from 'lucide-react';
+import { STANDARD_STYLE, applyFadedTheme } from './mapTheme';
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
 if (TOKEN) mapboxgl.accessToken = TOKEN;
@@ -40,19 +41,26 @@ export function MapboxRouteMap({ originAddress, destinationAddress, mapType = 'r
   const [dist, setDist] = useState('');
   const [err, setErr] = useState(false);
 
-  const style = mapType === 'satellite' ? 'mapbox://styles/mapbox/satellite-streets-v12' : 'mapbox://styles/mapbox/dark-v11';
+  const isSat = mapType === 'satellite';
+  const style = isSat ? 'mapbox://styles/mapbox/satellite-streets-v12' : STANDARD_STYLE;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current || !TOKEN) return;
     const map = new mapboxgl.Map({ container: containerRef.current, style, center: [12.4964, 41.9028], zoom: 9, attributionControl: false });
     map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right');
-    map.on('load', () => setReady(true));
+    map.on('load', () => { setReady(true); if (!isSat) applyFadedTheme(map, 'day'); });
     mapRef.current = map;
     return () => { map.remove(); mapRef.current = null; };
   }, []);
 
-  // Cambiar de estilo (mapa/satélite) sin recrear el mapa.
-  useEffect(() => { if (ready) mapRef.current?.setStyle(style); }, [style]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Cambiar de estilo (mapa/satélite) sin recrear el mapa; re-aplica el tema Faded en "mapa".
+  useEffect(() => {
+    if (!ready) return;
+    const map = mapRef.current;
+    if (!map) return;
+    map.setStyle(style);
+    if (!isSat) map.once('style.load', () => applyFadedTheme(map, 'day'));
+  }, [style]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const map = mapRef.current;

@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import { STANDARD_STYLE, applyFadedTheme, MapThemeToggle, MapPreset } from './mapTheme';
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
 if (TOKEN) mapboxgl.accessToken = TOKEN;
@@ -26,15 +27,18 @@ export function GeofencesMap({ geofences }: { geofences: GF[] }) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<mapboxgl.Map | null>(null);
     const [ready, setReady] = useState(false);
+    const [preset, setPreset] = useState<MapPreset>('day');
 
     useEffect(() => {
         if (!containerRef.current || mapRef.current || !TOKEN) return;
-        const map = new mapboxgl.Map({ container: containerRef.current, style: 'mapbox://styles/mapbox/dark-v11', center: [-77.0428, -12.0464], zoom: 11, attributionControl: false });
-        map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right');
+        const map = new mapboxgl.Map({ container: containerRef.current, style: STANDARD_STYLE, center: [-77.0428, -12.0464], zoom: 11, attributionControl: false });
+        map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-left');
         map.on('load', () => setReady(true));
         mapRef.current = map;
         return () => { map.remove(); mapRef.current = null; };
     }, []);
+
+    useEffect(() => { if (ready && mapRef.current) applyFadedTheme(mapRef.current, preset); }, [preset, ready]);
 
     useEffect(() => {
         const map = mapRef.current;
@@ -59,7 +63,12 @@ export function GeofencesMap({ geofences }: { geofences: GF[] }) {
     }, [geofences, ready]);
 
     if (!TOKEN) return <div className="h-full flex items-center justify-center text-slate-400">Configura NEXT_PUBLIC_MAPBOX_TOKEN.</div>;
-    return <div ref={containerRef} className="h-full w-full rounded-xl overflow-hidden" />;
+    return (
+        <div className="relative h-full w-full rounded-xl overflow-hidden">
+            <div ref={containerRef} className="h-full w-full" />
+            <MapThemeToggle preset={preset} onChange={setPreset} className="absolute top-3 right-3" />
+        </div>
+    );
 }
 
 /** Editor: centro arrastrable + círculo que sigue al radio. Click en el mapa reubica el centro. */
@@ -68,19 +77,22 @@ export function GeofenceEditorMap({ center, radius, onCenterChange }: { center: 
     const mapRef = useRef<mapboxgl.Map | null>(null);
     const markerRef = useRef<mapboxgl.Marker | null>(null);
     const [ready, setReady] = useState(false);
+    const [preset, setPreset] = useState<MapPreset>('day');
     const onChangeRef = useRef(onCenterChange);
     onChangeRef.current = onCenterChange;
 
     useEffect(() => {
         if (!containerRef.current || mapRef.current || !TOKEN) return;
-        const map = new mapboxgl.Map({ container: containerRef.current, style: 'mapbox://styles/mapbox/dark-v11', center: [center.lng, center.lat], zoom: 13, attributionControl: false });
-        map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right');
+        const map = new mapboxgl.Map({ container: containerRef.current, style: STANDARD_STYLE, center: [center.lng, center.lat], zoom: 13, attributionControl: false });
+        map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-left');
         map.on('load', () => setReady(true));
         map.on('click', (e) => onChangeRef.current(e.lngLat.lat, e.lngLat.lng));
         mapRef.current = map;
         return () => { map.remove(); mapRef.current = null; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    useEffect(() => { if (ready && mapRef.current) applyFadedTheme(mapRef.current, preset); }, [preset, ready]);
 
     // Marcador arrastrable en el centro.
     useEffect(() => {
@@ -117,5 +129,10 @@ export function GeofenceEditorMap({ center, radius, onCenterChange }: { center: 
     }, [center.lat, center.lng, radius, ready]);
 
     if (!TOKEN) return <div className="h-full flex items-center justify-center text-slate-400">Configura NEXT_PUBLIC_MAPBOX_TOKEN.</div>;
-    return <div ref={containerRef} className="h-full w-full" />;
+    return (
+        <div className="relative h-full w-full">
+            <div ref={containerRef} className="h-full w-full" />
+            <MapThemeToggle preset={preset} onChange={setPreset} className="absolute top-3 right-3" />
+        </div>
+    );
 }

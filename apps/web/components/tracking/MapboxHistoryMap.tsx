@@ -6,6 +6,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { Play, Pause, FastForward, Calendar as CalendarIcon, RotateCcw } from 'lucide-react';
 import api from '../../lib/api';
 import { toast } from 'sonner';
+import { STANDARD_STYLE, applyFadedTheme, MapThemeToggle, MapPreset } from './mapTheme';
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
 if (TOKEN) mapboxgl.accessToken = TOKEN;
@@ -39,22 +40,28 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
     const [playbackSpeed, setPlaybackSpeed] = useState(1);
+    const [preset, setPreset] = useState<MapPreset>('day');
 
     // Inicializar el mapa.
     useEffect(() => {
         if (!containerRef.current || mapRef.current || !TOKEN) return;
         const map = new mapboxgl.Map({
             container: containerRef.current,
-            style: 'mapbox://styles/mapbox/dark-v11',
+            style: STANDARD_STYLE,
             center: [-77.0428, -12.0464],
             zoom: 11,
             attributionControl: false,
         });
-        map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right');
+        map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-left');
         map.on('load', () => setReady(true));
         mapRef.current = map;
         return () => { map.remove(); mapRef.current = null; };
     }, []);
+
+    // Tema Faded + preset Día/Noche (las capas de la ruta persisten al cambiar solo la luz).
+    useEffect(() => {
+        if (ready && mapRef.current) applyFadedTheme(mapRef.current, preset);
+    }, [preset, ready]);
 
     // Cargar historial cuando cambia fecha o dispositivo.
     useEffect(() => {
@@ -186,6 +193,8 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
             {/* Mapa */}
             <div className="flex-1 relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm">
                 <div ref={containerRef} className="h-full w-full" />
+
+                <MapThemeToggle preset={preset} onChange={setPreset} className="absolute top-3 right-3" />
 
                 {/* Controles de reproducción */}
                 <div className="absolute bottom-6 left-6 right-6 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-6 py-4 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-10">
