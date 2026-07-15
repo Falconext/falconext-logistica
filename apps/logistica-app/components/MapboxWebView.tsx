@@ -66,6 +66,10 @@ mapboxgl.accessToken=CFG.token;
 var styleMap={dark:'mapbox://styles/mapbox/dark-v11',satellite:'mapbox://styles/mapbox/satellite-streets-v12',streets:'mapbox://styles/mapbox/standard'};
 var map=new mapboxgl.Map({container:'map',style:styleMap[CFG.mapStyle]||styleMap.streets,center:CFG.center||[-77.04,-12.04],zoom:CFG.zoom||11,attributionControl:false});
 map.addControl(new mapboxgl.NavigationControl({showCompass:false}),'top-right');
+// Dentro de un modal/scrollview el contenedor puede iniciar en 0x0 (mapa en blanco);
+// re-dimensionamos el mapa cuando el contenedor cambia de tamaño.
+try{if(window.ResizeObserver){new ResizeObserver(function(){try{map.resize();}catch(e){}}).observe(document.getElementById('map'));}}catch(e){}
+setTimeout(function(){try{map.resize();}catch(e){}},350);
 window.__markers=[];
 window.__focus=function(lng,lat){try{if(!map)return;map.flyTo({center:[lng,lat],zoom:15,duration:900,essential:true});var best=null,bd=1e9;window.__markers.forEach(function(o){var dd=Math.abs(o.lng-lng)+Math.abs(o.lat-lat);if(dd<bd){bd=dd;best=o;}});if(best&&best.mk.getPopup&&best.mk.getPopup()&&!best.mk.getPopup().isOpen())best.mk.togglePopup();}catch(e){}};
 var isStandard=(CFG.mapStyle||'streets')==='streets';
@@ -114,6 +118,15 @@ export default function MapboxWebView(props: MapboxWebViewProps) {
     webRef.current?.injectJavaScript(`window.__setPreset && window.__setPreset('${p}'); true;`);
   };
 
+  // En iOS, el WebView dentro de un Modal a veces no pinta si se monta durante la
+  // animación de apertura. Lo montamos un instante después para que el WKWebView
+  // se cree con el modal ya presentado.
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setReady(true), 450);
+    return () => clearTimeout(t);
+  }, []);
+
   // Volar al punto enfocado (tocar una tarjeta) sin recargar el mapa.
   const focus = props.focus;
   useEffect(() => {
@@ -156,6 +169,9 @@ export default function MapboxWebView(props: MapboxWebViewProps) {
       const msg = JSON.parse(e.nativeEvent.data);
       if (msg.type === 'center' && onCenterChange) onCenterChange(msg.lng, msg.lat);
       if (msg.type === 'route' && onRouteInfo) onRouteInfo({ eta: msg.eta, dist: msg.dist });
+      if (msg.type === 'error') console.warn('[MapboxWebView] JS error en el mapa:', msg.message);
+      if (msg.type === 'routeError') console.warn('[MapboxWebView] no se pudo geocodificar la ruta');
+      if (msg.type === 'log') console.warn('[MapboxWebView] ', msg.message);
     } catch {}
   };
 
@@ -163,18 +179,24 @@ export default function MapboxWebView(props: MapboxWebViewProps) {
   const loadBg = initialPreset === 'night' ? '#0f1522' : '#e8eef5';
   return (
     <View style={[styles.container, { backgroundColor: loadBg }, style]}>
-      <WebView
-        ref={webRef}
-        originWhitelist={['*']}
-        source={{ html }}
-        onMessage={onMessage}
-        style={styles.web}
-        scrollEnabled={false}
-        javaScriptEnabled
-        domStorageEnabled
-        androidLayerType="hardware"
-        setBuiltInZoomControls={false}
-      />
+      {ready && (
+        <WebView
+          ref={webRef}
+          originWhitelist={['*']}
+          source={{ html }}
+          onMessage={onMessage}
+          style={[styles.web, { opacity: 0.99 }]}
+          scrollEnabled={false}
+          javaScriptEnabled
+          domStorageEnabled
+          androidLayerType="hardware"
+          setBuiltInZoomControls={false}
+          onError={(e: any) => console.warn('[MapboxWebView] onError:', e?.nativeEvent?.description)}
+          onHttpError={(e: any) => console.warn('[MapboxWebView] onHttpError:', e?.nativeEvent?.statusCode, e?.nativeEvent?.url)}
+          onContentProcessDidTerminate={() => console.warn('[MapboxWebView] contentProcess terminado')}
+          injectedJavaScriptBeforeContentLoaded={`window.onerror=function(m,s,l){window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({type:'error',message:m+' @'+l}));};true;`}
+        />
+      )}
       {themeToggle && (
         <View style={[styles.toggle, { backgroundColor: C.surface, borderColor: C.border }]}>
           {(['day', 'night'] as Preset[]).map((p) => {

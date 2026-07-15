@@ -365,11 +365,10 @@ export default function OperacionesScreen() {
         {detail && (
           <View>
             {!!(detail.lugar_retiro && detail.lugar_entrega) && (
-              <View style={styles.mapBox}>
-                <MapboxWebView
-                  route={{ originAddress: detail.lugar_retiro, destinationAddress: detail.lugar_entrega }}
-                />
-              </View>
+              <MapboxWebView
+                style={styles.mapBox}
+                route={{ originAddress: detail.lugar_retiro, destinationAddress: detail.lugar_entrega }}
+              />
             )}
             <View style={{ marginBottom: S.md }}>
               <Badge label={estadoMeta(detail.estado).label} variant={estadoMeta(detail.estado).variant} />
