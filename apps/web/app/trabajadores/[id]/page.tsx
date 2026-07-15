@@ -2,12 +2,15 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import api from '../../../lib/api';
-import { Truck, FileText, Phone, Mail, MapPin, ArrowLeft, Fuel, Receipt, ChevronLeft, ChevronRight, Calendar, Navigation, X, Radio } from 'lucide-react';
+import { Truck, FileText, Phone, Mail, MapPin, ArrowLeft, Fuel, Receipt, ChevronLeft, ChevronRight, Calendar, Navigation, X, Radio, KeyRound } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import clsx from 'clsx';
 import { useCurrency } from '../../../lib/useCurrency';
 import { MapboxLiveMap as LiveMapReal } from '../../../components/tracking/MapboxLiveMap';
+import UsuarioModal, { Usuario } from '../../admin/usuarios/UsuarioModal';
+import { useAuthStore } from '../../../lib/store';
+import { isAdmin } from '../../../lib/modules';
 
 interface WorkerLocation {
     device: { id: string; name: string; last_activity: string | null; vehiculo_placa: string | null } | null;
@@ -45,6 +48,25 @@ export default function TrabajadorDetailsPage() {
     const [selectedMonth, setSelectedMonth] = useState<string>('all');
     const [location, setLocation] = useState<WorkerLocation | null>(null);
     const [showLocationMap, setShowLocationMap] = useState(false);
+
+    // Acceso a la app: usuario (login) vinculado a este trabajador
+    const { user: authUser } = useAuthStore();
+    const admin = isAdmin(authUser);
+    const [linkedUser, setLinkedUser] = useState<Usuario | null>(null);
+    const [showAccessModal, setShowAccessModal] = useState(false);
+    const [accessPreset, setAccessPreset] = useState<Usuario | null>(null);
+
+    const loadLinkedUser = async () => {
+        if (!admin || !id) return;
+        try {
+            const res = await api.get('/usuarios');
+            const found = (Array.isArray(res.data) ? res.data : []).find((u: any) => u.trabajador_id === id) || null;
+            setLinkedUser(found);
+        } catch {
+            setLinkedUser(null);
+        }
+    };
+    useEffect(() => { loadLinkedUser(); }, [id, admin]);
 
     useEffect(() => {
         if (!id) return;
@@ -219,6 +241,41 @@ export default function TrabajadorDetailsPage() {
                             </div>
                         </div>
                     </div>
+
+                    {/* Acceso a la app */}
+                    {admin && (
+                        <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+                            <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                                <KeyRound size={14} className="text-amber-500" /> Acceso a la app
+                            </h3>
+                            {linkedUser ? (
+                                <div className="text-xs space-y-2">
+                                    <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300 font-medium">
+                                        <Mail size={12} className="text-slate-400" /> {linkedUser.email}
+                                    </div>
+                                    <div className="text-slate-500">
+                                        Rol: {linkedUser.rol?.nombre || ((linkedUser.role || '').toUpperCase() === 'SUPERADMIN' ? 'Super Admin' : '—')}
+                                    </div>
+                                    <button
+                                        onClick={() => { setAccessPreset(linkedUser); setShowAccessModal(true); }}
+                                        className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-medium transition"
+                                    >
+                                        <KeyRound size={14} /> Gestionar acceso
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="text-xs space-y-2">
+                                    <p className="text-slate-500">Este trabajador no tiene cuenta para iniciar sesión.</p>
+                                    <button
+                                        onClick={() => { setAccessPreset({ nombre: worker.nombre_completo, trabajador_id: id } as unknown as Usuario); setShowAccessModal(true); }}
+                                        className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:hover:bg-amber-900/40 text-amber-700 dark:text-amber-400 text-sm font-medium transition"
+                                    >
+                                        <KeyRound size={14} /> Dar acceso a la app
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Ubicación en vivo */}
                     <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
@@ -569,6 +626,14 @@ export default function TrabajadorDetailsPage() {
                     </div>
                 </div>
             )}
+
+            {/* Modal: dar / gestionar acceso a la app (usuario vinculado) */}
+            <UsuarioModal
+                isOpen={showAccessModal}
+                onClose={() => setShowAccessModal(false)}
+                onSuccess={() => { setShowAccessModal(false); loadLinkedUser(); }}
+                initialData={accessPreset}
+            />
         </div>
     );
 }
