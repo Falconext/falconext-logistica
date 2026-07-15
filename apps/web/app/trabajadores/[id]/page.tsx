@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import clsx from 'clsx';
 import { useCurrency } from '../../../lib/useCurrency';
-import { LiveMapReal } from '../../../components/tracking/LiveMapReal';
+import { MapboxLiveMap as LiveMapReal } from '../../../components/tracking/MapboxLiveMap';
 
 interface WorkerLocation {
     device: { id: string; name: string; last_activity: string | null; vehiculo_placa: string | null } | null;

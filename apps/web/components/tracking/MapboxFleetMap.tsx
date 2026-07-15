@@ -5,6 +5,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Truck, Search, Circle } from 'lucide-react';
 import api from '../../lib/api';
+import { STANDARD_STYLE, applyFadedTheme, MapThemeToggle, MapPreset } from './mapTheme';
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
 if (TOKEN) mapboxgl.accessToken = TOKEN;
@@ -33,6 +34,7 @@ export function MapboxFleetMap() {
   const [query, setQuery] = useState('');
   const [now, setNow] = useState(() => Date.now());
   const [ready, setReady] = useState(false);
+  const [preset, setPreset] = useState<MapPreset>('day');
 
   const located = useMemo(
     () =>
@@ -64,16 +66,22 @@ export function MapboxFleetMap() {
     if (!containerRef.current || mapRef.current || !TOKEN) return;
     const map = new mapboxgl.Map({
       container: containerRef.current,
-      style: 'mapbox://styles/mapbox/dark-v11',
+      style: MAP_STYLES.streets,
       center: [-77.0428, -12.0464],
       zoom: 5,
       attributionControl: false,
     });
-    map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right');
+    map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right');
     map.on('load', () => setReady(true));
     mapRef.current = map;
     return () => { map.remove(); mapRef.current = null; };
   }, []);
+
+  // Cambiar el estilo del mapa cuando el usuario alterna el tema (los marcadores persisten).
+  useEffect(() => {
+    if (!styleInit.current) { styleInit.current = true; return; }
+    mapRef.current?.setStyle(MAP_STYLES[mapStyle]);
+  }, [mapStyle]);
 
   // Datos: cargar + refrescar cada 12s.
   useEffect(() => {
@@ -139,6 +147,22 @@ export function MapboxFleetMap() {
   return (
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
+
+      {/* Toggle de tema del mapa */}
+      <div className="absolute top-3 right-3 z-10 flex items-center bg-white/95 dark:bg-[#0f1522]/95 backdrop-blur rounded-xl shadow-md border border-slate-200 dark:border-[#202a40] p-1">
+        <button
+          onClick={() => setMapStyle('streets')}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${mapStyle === 'streets' ? 'bg-[#FFC933] text-[#1a1a1c]' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'}`}
+        >
+          Mapa
+        </button>
+        <button
+          onClick={() => setMapStyle('dark')}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${mapStyle === 'dark' ? 'bg-[#FFC933] text-[#1a1a1c]' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'}`}
+        >
+          Oscuro
+        </button>
+      </div>
 
       {/* Panel: hoja inferior en móvil, panel lateral izquierdo en desktop */}
       <div className="absolute z-10 flex flex-col bg-white/95 dark:bg-[#0f1522]/95 backdrop-blur rounded-2xl shadow-xl border border-slate-200 dark:border-[#202a40] overflow-hidden

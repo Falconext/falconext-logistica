@@ -1,14 +1,11 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { GoogleMap, useJsApiLoader, Circle, DrawingManager, Marker } from '@react-google-maps/api';
+import { GeofencesMap, GeofenceEditorMap } from '../../components/tracking/MapboxGeofences';
 import { Plus, Trash, MapPin, X, Save, AlertCircle, Pencil } from 'lucide-react';
 import api from '../../lib/api';
 import { toast } from 'sonner';
 
-const libraries: ("maps" | "places" | "drawing" | "geometry")[] = ["maps", "places", "drawing", "geometry"];
-
-const containerStyle = { width: '100%', height: '100%', borderRadius: '12px' };
 const defaultCenter = { lat: -12.0464, lng: -77.0428 }; // Lima
 
 // Interfaces
@@ -22,12 +19,6 @@ interface Geofence {
 }
 
 export default function GeocercasPage() {
-    const { isLoaded } = useJsApiLoader({
-        id: 'google-map-script',
-        googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
-        libraries: libraries
-    });
-
     const [geofences, setGeofences] = useState<Geofence[]>([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
@@ -44,8 +35,6 @@ export default function GeocercasPage() {
     // Delete confirmation state
     const [deleteTarget, setDeleteTarget] = useState<Geofence | null>(null);
     const [deleting, setDeleting] = useState(false);
-
-    const mapRef = useRef<google.maps.Map | null>(null);
 
     useEffect(() => {
         fetchGeofences();
@@ -132,8 +121,6 @@ export default function GeocercasPage() {
         }
     };
 
-    if (!isLoaded) return <div className="p-4 sm:p-8">Cargando mapa...</div>;
-
     return (
         <div className="flex flex-col h-[calc(100vh-6rem)] lg:h-[calc(100vh-4rem)] bg-slate-50 dark:bg-slate-950 rounded-2xl overflow-hidden">
             {/* Header */}
@@ -191,31 +178,7 @@ export default function GeocercasPage() {
 
                 {/* Map Visualization */}
                 <div className="flex-1 min-h-[45vh] lg:min-h-0 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-2 overflow-hidden relative">
-                    <GoogleMap
-                        mapContainerStyle={containerStyle}
-                        center={defaultCenter}
-                        zoom={12}
-                        options={{
-                            disableDefaultUI: false,
-                            mapId: 'DEMO_MAP_ID' // Required for advanced markers if used
-                        }}
-                    >
-                        {/* Render Active Geofences */}
-                        {geofences.map(gf => (
-                            <Circle
-                                key={gf.id}
-                                center={{ lat: gf.latitude, lng: gf.longitude }}
-                                radius={gf.radius}
-                                options={{
-                                    fillColor: '#3B82F6',
-                                    fillOpacity: 0.2,
-                                    strokeColor: '#2563EB',
-                                    strokeWeight: 2,
-                                    clickable: true
-                                }}
-                            />
-                        ))}
-                    </GoogleMap>
+                    <GeofencesMap geofences={geofences} />
                 </div>
             </div>
 
@@ -291,33 +254,11 @@ export default function GeocercasPage() {
 
                             {/* Map Editor */}
                             <div className="flex-1 relative min-h-[35vh] md:min-h-0">
-                                <GoogleMap
-                                    mapContainerStyle={{ width: '100%', height: '100%' }}
-                                    center={editorCenter}
-                                    zoom={13}
-                                    options={{ disableDefaultUI: false, streetViewControl: false }}
-                                >
-                                    {/* Editable Circle */}
-                                    <Circle
-                                        center={newCenter}
-                                        radius={newRadius}
-                                        draggable={true}
-                                        editable={true} // Allow radius dragging too if desired, but slider is safer for UI
-                                        onDragEnd={(e) => {
-                                            if (e.latLng) setNewCenter({ lat: e.latLng.lat(), lng: e.latLng.lng() });
-                                        }}
-                                        onRadiusChanged={() => {
-                                            // Optional: Sync back to slider if editable=true
-                                        }}
-                                        options={{
-                                            fillColor: '#3B82F6',
-                                            fillOpacity: 0.3,
-                                            strokeColor: '#2563EB',
-                                            strokeWeight: 2,
-                                        }}
-                                    />
-                                    <Marker position={newCenter} />
-                                </GoogleMap>
+                                <GeofenceEditorMap
+                                    center={newCenter}
+                                    radius={newRadius}
+                                    onCenterChange={(lat, lng) => setNewCenter({ lat, lng })}
+                                />
                             </div>
                         </div>
                     </div>

@@ -6,7 +6,7 @@ import api from "../../lib/api";
 import { Plus, Smartphone, Trash2, Copy, Map, X, Truck, Clock, Pencil, AlertTriangle, User } from "lucide-react";
 import { toast } from "sonner";
 import clsx from "clsx";
-import { LiveMapReal } from "../../components/tracking/LiveMapReal";
+import { MapboxLiveMap as LiveMapReal } from "../../components/tracking/MapboxLiveMap";
 import Select from "../../components/Select";
 
 interface Device {

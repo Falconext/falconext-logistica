@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { HistoryMap } from '../../../../components/tracking/HistoryMap';
+import { MapboxHistoryMap as HistoryMap } from '../../../../components/tracking/MapboxHistoryMap';
 import { ArrowLeft } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import api from '../../../../lib/api';

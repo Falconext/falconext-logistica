@@ -4,7 +4,7 @@ import { useEffect, useState, memo, useCallback, useRef } from 'react';
 import api from '../../lib/api';
 import { Programacion } from '../../types';
 import { MapboxRouteMap } from '../../components/tracking/MapboxRouteMap';
-import { LiveMapReal } from '../../components/tracking/LiveMapReal';
+import { MapboxLiveMap as LiveMapReal } from '../../components/tracking/MapboxLiveMap';
 import NewRouteModal from './NewRouteModal';
 import {
     Truck, Search, Plus, Package, Layers, FileSpreadsheet, MapPin, User, Navigation, X, Check, Trash2, AlertTriangle, Loader2

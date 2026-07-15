@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { LiveMapReal } from '../../../components/tracking/LiveMapReal';
+import { MapboxLiveMap as LiveMapReal } from '../../../components/tracking/MapboxLiveMap';
 import api from '../../../lib/api';
 import Select from '../../../components/Select';
 import { Search } from 'lucide-react';
