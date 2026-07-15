@@ -3,6 +3,26 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 import { CreateTrabajadorDto } from './dto/create-trabajador.dto';
 
+// Campos DateTime del modelo Trabajador que el cliente puede enviar.
+const DATE_FIELDS = [
+    'fecha_nacimiento', 'fecha_vencimiento_pasaporte', 'fecha_vencimiento_identidad',
+    'fecha_vencimiento_residencia', 'fecha_vencimiento_licencia', 'fecha_vencimiento_traduccion',
+    'fecha_vencimiento_fiscal', 'fecha_vencimiento_contrato',
+];
+
+// Los clientes (app/web) envían fechas como 'YYYY-MM-DD' (DatePicker) o '' (vacío).
+// Prisma exige DateTime real: convierte los strings de fecha a Date y '' / inválido a null.
+function coerceDates(data: any): any {
+    const out = { ...data };
+    for (const f of DATE_FIELDS) {
+        if (f in out) {
+            const v = out[f];
+            out[f] = (v === '' || v == null) ? null : (isNaN(new Date(v).getTime()) ? null : new Date(v));
+        }
+    }
+    return out;
+}
+
 @Injectable()
 export class TrabajadoresService {
     constructor(private prisma: PrismaService) { }
@@ -10,11 +30,8 @@ export class TrabajadoresService {
     async create(data: CreateTrabajadorDto, tenantId: string) {
         return this.prisma.trabajador.create({
             data: {
-                ...data,
+                ...coerceDates(data),
                 tenant_id: tenantId,
-                fecha_nacimiento: data.fecha_nacimiento ? new Date(data.fecha_nacimiento) : null,
-                fecha_vencimiento_pasaporte: data.fecha_vencimiento_pasaporte ? new Date(data.fecha_vencimiento_pasaporte) : null,
-                // Helper to convert strings to dates would be ideal here for all date fields
             },
         });
     }
@@ -34,7 +51,7 @@ export class TrabajadoresService {
     async update(id: string, data: any) {
         return this.prisma.trabajador.update({
             where: { id },
-            data,
+            data: coerceDates(data),
         });
     }
 
