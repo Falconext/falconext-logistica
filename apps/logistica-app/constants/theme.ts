@@ -30,29 +30,53 @@ const status = {
   neutralSoft: '#F1F5F9',
 };
 
+// Paleta CLARA (por defecto).
+const lightColors = {
+  ...brand,
+  ...status,
+  background: '#F6F8FB',
+  surface: '#FFFFFF',
+  surfaceAlt: '#F8FAFC',
+  border: '#E5E9F0',
+  borderStrong: '#CBD5E1',
+  text: '#0F172A',
+  textMuted: '#64748B',
+  textFaint: '#94A3B8',
+  textOnPrimary: '#FFFFFF',
+  dark: '#111827',
+  darkSurface: '#1F2937',
+  overlay: 'rgba(15,23,42,0.45)',
+};
+
+// Paleta OSCURA (misma referencia visual que el tema oscuro de la web).
+const darkColors = {
+  ...lightColors,
+  primary: '#FFC933', // en oscuro, la acción resalta en amarillo
+  textOnPrimary: '#1a1a1c',
+  primarySoft: '#1a2438',
+  accentSoft: '#2a2410',
+  successSoft: '#0f2a1c',
+  warningSoft: '#2a220f',
+  dangerSoft: '#2a1416',
+  infoSoft: '#0f2033',
+  neutralSoft: '#141d2e',
+  background: '#080b14',
+  surface: '#0f1522',
+  surfaceAlt: '#141d2e',
+  border: '#202a40',
+  borderStrong: '#2a3550',
+  text: '#e7ecf6',
+  textMuted: '#7c89a6',
+  textFaint: '#66728f',
+  dark: '#e7ecf6',
+  darkSurface: '#141d2e',
+  overlay: 'rgba(0,0,0,0.6)',
+};
+
 export const Theme = {
-  colors: {
-    ...brand,
-    ...status,
-
-    // Superficies (tema claro, look SaaS empresarial)
-    background: '#F6F8FB',
-    surface: '#FFFFFF',
-    surfaceAlt: '#F8FAFC',
-    border: '#E5E9F0',
-    borderStrong: '#CBD5E1',
-
-    // Texto
-    text: '#0F172A',
-    textMuted: '#64748B',
-    textFaint: '#94A3B8',
-    textOnPrimary: '#FFFFFF',
-
-    // Navegación / sidebar oscuro (para headers/tab de marca)
-    dark: '#111827',
-    darkSurface: '#1F2937',
-    overlay: 'rgba(15,23,42,0.45)',
-  },
+  // colors es MUTABLE: setThemeMode() reescribe sus valores in-place, y el
+  // árbol se remonta (ThemeContext) para que todas las pantallas lean el nuevo tema.
+  colors: { ...lightColors },
 
   spacing: {
     xs: 4,
@@ -72,6 +96,16 @@ export const Theme = {
   },
 
   font: {
+    // Familias de marca (cargadas en app/_layout). Usar en títulos con
+    // fontFamily: Theme.font.family.displayBold, etc.
+    family: {
+      display: 'SpaceGrotesk_600SemiBold',
+      displayBold: 'SpaceGrotesk_700Bold',
+      body: 'Inter_400Regular',
+      bodyMedium: 'Inter_500Medium',
+      bodySemibold: 'Inter_600SemiBold',
+      bodyBold: 'Inter_700Bold',
+    },
     size: {
       xs: 11,
       sm: 13,
@@ -108,6 +142,13 @@ export const Theme = {
 };
 
 export type AppTheme = typeof Theme;
+export type ThemeMode = 'light' | 'dark';
+
+// Reescribe Theme.colors in-place con la paleta del modo. El ThemeContext
+// llama a esto y luego remonta el árbol para que todo tome el nuevo tema.
+export function setThemeMode(mode: ThemeMode) {
+  Object.assign(Theme.colors, mode === 'dark' ? darkColors : lightColors);
+}
 
 // -------------------------------------------------------------------------
 // Compatibilidad con los hooks/plantilla existentes de Expo

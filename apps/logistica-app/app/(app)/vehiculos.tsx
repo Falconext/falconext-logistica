@@ -17,6 +17,7 @@ import {
   InfoRow,
   Theme,
 } from '../../components/ui';
+import ImageUpload from '../../components/ImageUpload';
 import api from '../../services/api';
 import type { Vehiculo } from '../../types';
 
@@ -32,6 +33,7 @@ const empty: Partial<Vehiculo> = {
   poliza_seguro: '',
   revision_tecnica: '',
   kilometraje_actual: undefined,
+  url_foto: '',
 };
 
 export default function VehiculosScreen() {
@@ -237,6 +239,15 @@ export default function VehiculosScreen() {
         title={editing ? 'Editar vehículo' : 'Nuevo vehículo'}
         footer={<Button title={editing ? 'Guardar cambios' : 'Crear vehículo'} loading={saving} onPress={save} />}
       >
+        <View style={{ marginBottom: S.md }}>
+          <ImageUpload
+            variant="wide"
+            label="Subir foto del vehículo"
+            value={form.url_foto}
+            onChange={(url) => setForm({ ...form, url_foto: url })}
+            onClear={() => setForm({ ...form, url_foto: '' })}
+          />
+        </View>
         <FormField label="Placa *" value={form.placa || ''} onChangeText={(t) => setForm({ ...form, placa: t })} placeholder="ABC-123" autoCapitalize="characters" />
         <FormField label="Marca / Modelo" value={form.marca_modelo || ''} onChangeText={(t) => setForm({ ...form, marca_modelo: t })} placeholder="Volvo FH 460" />
         <FormField label="Tipo de unidad" value={form.tipo_unidad || ''} onChangeText={(t) => setForm({ ...form, tipo_unidad: t })} placeholder="Furgón / Tracto" />

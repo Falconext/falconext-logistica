@@ -17,6 +17,7 @@ import {
   InfoRow,
   Theme,
 } from '../../components/ui';
+import ImageUpload from '../../components/ImageUpload';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { formatMoney } from '../../constants/currency';
@@ -67,6 +68,7 @@ type FormState = {
   costo: string;
   taller: string;
   kilometraje: string;
+  evidence_url: string;
 };
 
 const emptyForm: FormState = {
@@ -77,6 +79,7 @@ const emptyForm: FormState = {
   costo: '',
   taller: '',
   kilometraje: '',
+  evidence_url: '',
 };
 
 export default function MantenimientoScreen() {
@@ -161,6 +164,7 @@ export default function MantenimientoScreen() {
       costo: m.costo != null ? String(m.costo) : '',
       taller: m.taller || '',
       kilometraje: m.kilometraje != null ? String(m.kilometraje) : '',
+      evidence_url: m.evidence_url || '',
     });
     setDetail(null);
     setFormVisible(true);
@@ -189,6 +193,7 @@ export default function MantenimientoScreen() {
           descripcion: form.descripcion,
           taller: form.taller,
           kilometraje: form.kilometraje || undefined,
+          evidence_url: form.evidence_url || undefined,
         });
       } else {
         await api.post('/mantenimiento', {
@@ -199,6 +204,7 @@ export default function MantenimientoScreen() {
           costo: form.costo || '0',
           taller: form.taller,
           kilometraje: form.kilometraje,
+          evidence_url: form.evidence_url || undefined,
         });
       }
       setFormVisible(false);
@@ -426,6 +432,14 @@ export default function MantenimientoScreen() {
           onChangeText={(t) => setForm({ ...form, kilometraje: t })}
           placeholder="km"
           keyboardType="numeric"
+        />
+        <Text style={styles.selectLabel}>Evidencia</Text>
+        <ImageUpload
+          variant="wide"
+          label="Subir evidencia"
+          value={form.evidence_url}
+          onChange={(url) => setForm({ ...form, evidence_url: url })}
+          onClear={() => setForm({ ...form, evidence_url: '' })}
         />
       </FormModal>
     </Screen>

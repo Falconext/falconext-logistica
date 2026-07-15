@@ -44,6 +44,8 @@ export default function AppTabsLayout() {
       <Tabs.Screen name="dispositivos" options={{ href: null }} />
       <Tabs.Screen name="geocercas" options={{ href: null }} />
       <Tabs.Screen name="admin" options={{ href: null }} />
+      <Tabs.Screen name="usuarios" options={{ href: null }} />
+      <Tabs.Screen name="roles" options={{ href: null }} />
     </Tabs>
   );
 }

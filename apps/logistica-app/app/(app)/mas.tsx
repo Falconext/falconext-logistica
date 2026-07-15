@@ -14,10 +14,15 @@ import {
   Receipt,
   Fuel,
   Radio,
+  UserCog,
+  KeyRound,
+  Sun,
+  Moon,
   LucideIcon,
 } from 'lucide-react-native';
 import { Screen, AppHeader, Card, Theme } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { canAccessModule, isAdmin as isAdminUser } from '../../constants/modules';
 
 const C = Theme.colors;
@@ -44,11 +49,14 @@ const items: Item[] = [
   { key: 'dispositivos', label: 'Dispositivos GPS', desc: 'Rastreadores de flota', href: '/(app)/dispositivos', icon: ShieldCheck, color: '#16A34A' },
   { key: 'geocercas', label: 'Geocercas', desc: 'Zonas y eventos', href: '/(app)/geocercas', icon: Map, color: '#0891B2' },
   { key: 'admin', label: 'Admin Empresas', desc: 'Tenants e integraciones', href: '/(app)/admin', icon: Briefcase, color: '#64748B', adminOnly: true },
+  { key: 'usuarios', label: 'Usuarios', desc: 'Gestión de usuarios y accesos', href: '/(app)/usuarios', icon: UserCog, color: '#1a1a1c', adminOnly: true },
+  { key: 'roles', label: 'Roles', desc: 'Perfiles de acceso y módulos', href: '/(app)/roles', icon: KeyRound, color: '#7C3AED', adminOnly: true },
 ];
 
 export default function MasScreen() {
   const router = useRouter();
   const { user, logout } = useAuth();
+  const { isDark, toggle } = useTheme();
   const isAdmin = isAdminUser(user);
 
   const confirmLogout = () => {
@@ -80,6 +88,18 @@ export default function MasScreen() {
       </Card>
 
       <View style={{ height: S.lg }} />
+
+      {/* Toggle de tema (claro / oscuro) */}
+      <TouchableOpacity activeOpacity={0.7} onPress={toggle} style={styles.row}>
+        <View style={[styles.rowIcon, { backgroundColor: C.accent + '1A' }]}>
+          {isDark ? <Sun size={20} color={C.accent} /> : <Moon size={20} color={C.accent} />}
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.rowLabel}>{isDark ? 'Tema claro' : 'Tema oscuro'}</Text>
+          <Text style={styles.rowDesc}>Cambiar apariencia de la app</Text>
+        </View>
+        <ChevronRight size={20} color={C.textFaint} />
+      </TouchableOpacity>
 
       {visible.map((item) => (
         <TouchableOpacity

@@ -10,10 +10,14 @@ import {
   Package,
   DollarSign,
   TrendingUp,
+  TrendingDown,
   CheckCircle2,
   Clock,
   ChevronRight,
   ArrowUpRight,
+  Fuel,
+  Receipt,
+  Coins,
 } from 'lucide-react-native';
 import {
   Screen,
@@ -27,6 +31,7 @@ import {
 } from '../../components/ui';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { formatMoney } from '../../constants/currency';
 
 const C = Theme.colors;
 const S = Theme.spacing;
@@ -42,6 +47,16 @@ interface DashboardStats {
   clients: { active: number };
   maintenance: { thisMonth: number };
   alerts: { pending: number };
+  costs?: {
+    fuel: number;
+    tolls: number;
+    maintenance: number;
+    total: number;
+    prevTotal: number;
+    changePct: number | null;
+    income: number;
+    margin: number;
+  };
 }
 
 // Contrato de /dashboard/alerts (ver apps/web/app/page.tsx)
@@ -184,6 +199,81 @@ export default function DashboardScreen() {
           </View>
         </Card>
 
+        {/* Costos del mes */}
+        {(() => {
+          const costs = stats?.costs;
+          const pct = costs?.changePct ?? null;
+          // Costo: color INVERSO. Más costo = malo (rojo), menos = bueno (verde).
+          const up = pct != null && pct > 0;
+          const down = pct != null && pct < 0;
+          const pctColor = up ? C.danger : down ? C.success : C.textFaint;
+          const PctIcon = up ? TrendingUp : down ? TrendingDown : null;
+          return (
+            <Card style={styles.opCard}>
+              <View style={styles.cardHead}>
+                <View style={styles.cardHeadLeft}>
+                  <View style={[styles.cardIcon, { backgroundColor: C.dark }]}>
+                    <Coins size={16} color="#fff" />
+                  </View>
+                  <Text style={styles.cardTitle}>Costos del mes</Text>
+                </View>
+                <TouchableOpacity style={styles.linkBtn} onPress={() => go('/(app)/reportes')} hitSlop={8}>
+                  <Text style={styles.linkText}>Ver reportes</Text>
+                  <ArrowUpRight size={15} color={C.textMuted} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.costTotalRow}>
+                <Text style={styles.costTotal}>{formatMoney(costs?.total ?? 0, user?.moneda)}</Text>
+                {pct != null && (
+                  <View style={styles.costPct}>
+                    {PctIcon && <PctIcon size={14} color={pctColor} />}
+                    <Text style={[styles.costPctText, { color: pctColor }]}>
+                      {up ? '+' : ''}{pct.toFixed(1)}%
+                    </Text>
+                    <Text style={styles.costPctSub}>vs mes anterior</Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.costBreakdown}>
+                <View style={styles.costRow}>
+                  <View style={styles.costRowLeft}>
+                    <Fuel size={15} color={C.info} />
+                    <Text style={styles.costLabel}>Combustible</Text>
+                  </View>
+                  <Text style={styles.costValue}>{formatMoney(costs?.fuel ?? 0, user?.moneda)}</Text>
+                </View>
+                <View style={styles.costRow}>
+                  <View style={styles.costRowLeft}>
+                    <Receipt size={15} color={C.danger} />
+                    <Text style={styles.costLabel}>Peajes / Multas</Text>
+                  </View>
+                  <Text style={styles.costValue}>{formatMoney(costs?.tolls ?? 0, user?.moneda)}</Text>
+                </View>
+                <View style={styles.costRow}>
+                  <View style={styles.costRowLeft}>
+                    <Wrench size={15} color={C.success} />
+                    <Text style={styles.costLabel}>Mantenimiento</Text>
+                  </View>
+                  <Text style={styles.costValue}>{formatMoney(costs?.maintenance ?? 0, user?.moneda)}</Text>
+                </View>
+              </View>
+
+              {costs && costs.income > 0 ? (
+                <View style={styles.marginRow}>
+                  <Text style={styles.marginLabel}>Margen</Text>
+                  <Text style={[styles.marginValue, { color: costs.margin >= 0 ? C.success : C.danger }]}>
+                    {formatMoney(costs.margin, user?.moneda)}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.marginEmpty}>Sin ingresos registrados</Text>
+              )}
+            </Card>
+          );
+        })()}
+
         {/* Accesos rápidos */}
         <SectionTitle style={styles.section}>Accesos rápidos</SectionTitle>
         <View style={styles.accessGrid}>
@@ -289,6 +379,36 @@ const styles = StyleSheet.create({
   rateRow: { flexDirection: 'row', alignItems: 'baseline', gap: S.sm, marginTop: S.md },
   rateValue: { fontSize: F.size.xxl, fontWeight: F.weight.bold, color: C.success },
   rateLabel: { fontSize: F.size.sm, color: C.textMuted },
+
+  costTotalRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: S.sm },
+  costTotal: { fontSize: F.size.display, fontWeight: F.weight.bold, color: C.text },
+  costPct: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  costPctText: { fontSize: F.size.sm, fontWeight: F.weight.semibold },
+  costPctSub: { fontSize: F.size.xs, color: C.textFaint },
+  costBreakdown: { marginTop: S.md, gap: S.sm },
+  costRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  costRowLeft: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
+  costLabel: { fontSize: F.size.sm, color: C.textMuted },
+  costValue: { fontSize: F.size.md, fontWeight: F.weight.semibold, color: C.text },
+  marginRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: S.md,
+    paddingTop: S.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: C.border,
+  },
+  marginLabel: { fontSize: F.size.sm, color: C.textMuted },
+  marginValue: { fontSize: F.size.md, fontWeight: F.weight.bold },
+  marginEmpty: {
+    marginTop: S.md,
+    paddingTop: S.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: C.border,
+    fontSize: F.size.xs,
+    color: C.textFaint,
+  },
 
   section: { marginTop: S.sm, marginBottom: S.md },
   accessGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: S.sm, marginBottom: S.lg },

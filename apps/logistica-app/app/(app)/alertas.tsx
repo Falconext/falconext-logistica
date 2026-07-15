@@ -21,6 +21,7 @@ const C = Theme.colors;
 const S = Theme.spacing;
 
 type Severity = 'critical' | 'warning' | 'info';
+type EntityType = 'TRABAJADOR' | 'VEHICULO' | 'DOCUMENTO';
 
 interface DocumentAlert {
   trabajadorId: string;
@@ -31,6 +32,9 @@ interface DocumentAlert {
   expirationDate: string;
   daysRemaining: number;
   severity: Severity;
+  entityType?: EntityType;
+  entityId?: string;
+  entityName?: string;
 }
 
 interface AlertSummary {
@@ -48,6 +52,12 @@ const severityMeta: Record<Severity, { label: string; variant: 'danger' | 'warni
   info: { label: 'Planeado', variant: 'info' },
 };
 
+const entityMeta: Record<EntityType, { label: string; variant: 'info' | 'neutral' | 'success' }> = {
+  TRABAJADOR: { label: 'Trabajador', variant: 'neutral' },
+  VEHICULO: { label: 'Vehículo', variant: 'info' },
+  DOCUMENTO: { label: 'Documento', variant: 'success' },
+};
+
 const docIcon: Record<string, string> = {
   passport: '🛂',
   license: '🪪',
@@ -56,7 +66,16 @@ const docIcon: Record<string, string> = {
   id: '🆔',
   fiscal: '💰',
   translation: '📝',
+  insurance: '🛡️',
+  seguro: '🛡️',
+  revision_tecnica: '🔧',
 };
+
+function daysLabel(days: number) {
+  if (days === 0) return 'Vence hoy';
+  if (days < 0) return `Vencido hace ${Math.abs(days)} días`;
+  return `Vence en ${days} días`;
+}
 
 function fmtDate(iso?: string) {
   if (!iso) return '—';
@@ -105,8 +124,9 @@ export default function AlertasScreen() {
     return alerts.filter((a) => {
       if (filter !== 'all' && a.severity !== filter) return false;
       if (!q) return true;
+      const name = a.entityName || a.trabajadorNombre;
       return (
-        a.trabajadorNombre?.toLowerCase().includes(q) ||
+        name?.toLowerCase().includes(q) ||
         a.documentLabel?.toLowerCase().includes(q) ||
         a.cargo?.toLowerCase().includes(q)
       );
@@ -115,6 +135,8 @@ export default function AlertasScreen() {
 
   const renderCard = ({ item: a }: { item: DocumentAlert }) => {
     const meta = severityMeta[a.severity];
+    const ent = a.entityType ? entityMeta[a.entityType] : null;
+    const name = a.entityName || a.trabajadorNombre;
     return (
       <TouchableOpacity activeOpacity={0.7} style={styles.card} onPress={() => setDetail(a)}>
         <View style={styles.cardIcon}>
@@ -122,13 +144,18 @@ export default function AlertasScreen() {
         </View>
         <View style={{ flex: 1 }}>
           <View style={styles.cardTop}>
-            <Text style={styles.name} numberOfLines={1}>{a.trabajadorNombre}</Text>
-            <Badge label={`${a.daysRemaining} días`} variant={meta.variant} />
+            <Text style={styles.name} numberOfLines={1}>{name}</Text>
+            <Badge label={severityMeta[a.severity].label} variant={meta.variant} />
           </View>
-          <Text style={styles.docLabel}>{a.documentLabel}</Text>
+          <View style={styles.badgeRow}>
+            {ent && <Badge label={ent.label} variant={ent.variant} />}
+            <Text style={styles.docLabel}>{a.documentLabel}</Text>
+          </View>
           <View style={styles.metaRow}>
-            <Text style={styles.meta}>{a.cargo || 'Sin cargo'}</Text>
-            <Text style={styles.meta}>· Vence {fmtDate(a.expirationDate)}</Text>
+            <Text style={[styles.days, { color: C[meta.variant === 'danger' ? 'danger' : meta.variant === 'warning' ? 'warning' : 'info'] }]}>
+              {daysLabel(a.daysRemaining)}
+            </Text>
+            <Text style={styles.meta}>· {fmtDate(a.expirationDate)}</Text>
           </View>
         </View>
       </TouchableOpacity>
@@ -201,18 +228,21 @@ export default function AlertasScreen() {
       <FormModal
         visible={!!detail}
         onClose={() => setDetail(null)}
-        title={detail?.trabajadorNombre || 'Detalle'}
+        title={detail?.entityName || detail?.trabajadorNombre || 'Detalle'}
       >
         {detail && (
           <View>
-            <View style={{ marginBottom: S.md }}>
+            <View style={styles.detailBadges}>
               <Badge label={severityMeta[detail.severity].label} variant={severityMeta[detail.severity].variant} />
+              {detail.entityType && (
+                <Badge label={entityMeta[detail.entityType].label} variant={entityMeta[detail.entityType].variant} />
+              )}
             </View>
-            <InfoRow label="Trabajador" value={detail.trabajadorNombre} />
-            <InfoRow label="Cargo" value={detail.cargo} />
+            <InfoRow label="Entidad" value={detail.entityName || detail.trabajadorNombre} />
+            <InfoRow label="Tipo" value={detail.entityType ? entityMeta[detail.entityType].label : detail.cargo} />
             <InfoRow label="Documento" value={detail.documentLabel} />
             <InfoRow label="Fecha de vencimiento" value={fmtDate(detail.expirationDate)} />
-            <InfoRow label="Días restantes" value={`${detail.daysRemaining} días`} />
+            <InfoRow label="Estado" value={daysLabel(detail.daysRemaining)} />
           </View>
         )}
       </FormModal>
@@ -246,7 +276,10 @@ const styles = StyleSheet.create({
   docEmoji: { fontSize: 22 },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: S.sm },
   name: { fontSize: 16, fontWeight: '700', color: C.text, flex: 1 },
-  docLabel: { fontSize: 14, color: C.text, marginTop: 2, fontWeight: '500' },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm, marginTop: 4, flexWrap: 'wrap' },
+  docLabel: { fontSize: 14, color: C.text, fontWeight: '500', flexShrink: 1 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' },
   meta: { fontSize: 12, color: C.textFaint },
+  days: { fontSize: 12, fontWeight: '600' },
+  detailBadges: { flexDirection: 'row', gap: S.sm, marginBottom: S.md, flexWrap: 'wrap' },
 });

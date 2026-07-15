@@ -55,6 +55,7 @@ export interface Vehiculo {
   permisos_especiales?: string;
   id_interno_furgon?: string;
   kilometraje_actual?: number;
+  url_foto?: string;
 }
 
 export interface Programacion {
@@ -86,6 +87,7 @@ export interface Mantenimiento {
   estado?: string;
   kilometraje?: number;
   taller?: string;
+  evidence_url?: string;
 }
 
 export interface DispositivoGps {

@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
+import { View, Text, Image, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Users, UserCheck, IdCard, Trash2, Pencil, User, Phone } from 'lucide-react-native';
 import {
@@ -18,6 +18,7 @@ import {
   SectionTitle,
   Theme,
 } from '../../components/ui';
+import ImageUpload from '../../components/ImageUpload';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { formatMoney } from '../../constants/currency';
@@ -37,6 +38,7 @@ const empty: Partial<Trabajador> = {
   fecha_vencimiento_licencia: '',
   numero_pasaporte: '',
   sueldo_base: '',
+  url_foto: '',
 };
 
 const isActivo = (estado?: string) => (estado || '').toLowerCase() === 'activo';
@@ -133,6 +135,7 @@ export default function TrabajadoresScreen() {
         fecha_vencimiento_licencia: form.fecha_vencimiento_licencia?.trim() || undefined,
         numero_pasaporte: form.numero_pasaporte?.trim() || undefined,
         sueldo_base: sueldoStr ? Number(sueldoStr) : undefined,
+        url_foto: form.url_foto?.trim() || undefined,
       };
       if (editing) {
         await api.patch(`/trabajadores/${editing.id}`, payload);
@@ -244,6 +247,11 @@ export default function TrabajadoresScreen() {
       >
         {detail && (
           <View>
+            {detail.url_foto ? (
+              <View style={styles.detailPhotoWrap}>
+                <Image source={{ uri: detail.url_foto }} style={styles.detailPhoto} />
+              </View>
+            ) : null}
             <SectionTitle>Información general</SectionTitle>
             <InfoRow label="Nombre" value={detail.nombre_completo} />
             <InfoRow label="ID" value={detail.id_trabajador} />
@@ -274,6 +282,15 @@ export default function TrabajadoresScreen() {
         title={editing ? 'Editar trabajador' : 'Nuevo trabajador'}
         footer={<Button title={editing ? 'Guardar cambios' : 'Crear trabajador'} loading={saving} onPress={save} />}
       >
+        <View style={{ marginBottom: S.md }}>
+          <ImageUpload
+            variant="avatar"
+            label="Subir foto"
+            value={form.url_foto}
+            onChange={(url) => setForm({ ...form, url_foto: url })}
+            onClear={() => setForm({ ...form, url_foto: '' })}
+          />
+        </View>
         <FormField label="Nombre completo *" value={form.nombre_completo || ''} onChangeText={(t) => setForm({ ...form, nombre_completo: t })} placeholder="Juan Pérez" autoCapitalize="words" />
         <FormField label="Cargo *" value={form.cargo || ''} onChangeText={(t) => setForm({ ...form, cargo: t })} placeholder="Chofer" autoCapitalize="words" />
         <FormField label="Estado laboral" value={form.estado_laboral || ''} onChangeText={(t) => setForm({ ...form, estado_laboral: t })} placeholder="Activo / Inactivo" autoCapitalize="words" />
@@ -317,4 +334,6 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   meta: { fontSize: 12, color: C.textFaint },
+  detailPhotoWrap: { alignItems: 'center', marginBottom: S.md },
+  detailPhoto: { width: 96, height: 96, borderRadius: Theme.radius.full, backgroundColor: C.surfaceAlt },
 });

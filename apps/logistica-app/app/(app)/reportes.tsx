@@ -11,6 +11,9 @@ import {
   Truck,
   Trophy,
   CalendarDays,
+  Coins,
+  Fuel,
+  Wrench,
 } from 'lucide-react-native';
 import {
   Screen,
@@ -62,6 +65,34 @@ interface ReportsResponse {
     evolution: EvolutionPoint[];
     workers: WorkerRank[];
     vehicles: VehicleUsage[];
+  };
+}
+
+// ---- Tipos del contrato /dashboard/costs-report --------------------------
+interface CostsReport {
+  summary: { fuel: number; tolls: number; maintenance: number; total: number; income: number; margin: number };
+  trend: { mes: string; combustible: number; peajes: number; mantenimiento: number; total: number }[];
+  byArea: { area: string; total: number }[];
+  topVehiculos: { targa: string; total: number }[];
+  topChoferes: { codigo: string; nombre: string; total: number }[];
+}
+
+const EMPTY_COSTS: CostsReport = {
+  summary: { fuel: 0, tolls: 0, maintenance: 0, total: 0, income: 0, margin: 0 },
+  trend: [],
+  byArea: [],
+  topVehiculos: [],
+  topChoferes: [],
+};
+
+// Rango por defecto para costos: últimos 6 meses (local, sin desfase de zona).
+const pad = (n: number) => String(n).padStart(2, '0');
+const toLocalISO = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+function costsDefaultRange(): { from: string; to: string } {
+  const now = new Date();
+  return {
+    from: toLocalISO(new Date(now.getFullYear(), now.getMonth() - 5, 1)),
+    to: toLocalISO(now),
   };
 }
 
@@ -120,6 +151,7 @@ export default function ReportesScreen() {
   const [evolution, setEvolution] = useState<EvolutionPoint[]>([]);
   const [workers, setWorkers] = useState<WorkerRank[]>([]);
   const [vehicles, setVehicles] = useState<VehicleUsage[]>([]);
+  const [costs, setCosts] = useState<CostsReport>(EMPTY_COSTS);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -128,14 +160,23 @@ export default function ReportesScreen() {
     setError(null);
     try {
       const { from, to } = periodRange(key);
-      const res = await api.get<ReportsResponse>('/dashboard/reports', {
-        params: { from: from.toISOString(), to: to.toISOString() },
-      });
+      const costsRange = costsDefaultRange();
+      const [res, costsRes] = await Promise.all([
+        api.get<ReportsResponse>('/dashboard/reports', {
+          params: { from: from.toISOString(), to: to.toISOString() },
+        }),
+        api
+          .get<CostsReport>('/dashboard/costs-report', {
+            params: { from: costsRange.from, to: costsRange.to },
+          })
+          .catch(() => null),
+      ]);
       const data = res.data;
       setKpis(data?.kpis ?? EMPTY_KPIS);
       setEvolution(Array.isArray(data?.charts?.evolution) ? data.charts.evolution : []);
       setWorkers(Array.isArray(data?.charts?.workers) ? data.charts.workers : []);
       setVehicles(Array.isArray(data?.charts?.vehicles) ? data.charts.vehicles : []);
+      setCosts(costsRes?.data ? { ...EMPTY_COSTS, ...costsRes.data } : EMPTY_COSTS);
     } catch (e: any) {
       setError(e?.response?.data?.message || 'No se pudieron cargar los reportes.');
     } finally {
@@ -186,7 +227,17 @@ export default function ReportesScreen() {
     [evolution]
   );
 
+  const maxChofer = useMemo(
+    () => costs.topChoferes.reduce((mx, c) => Math.max(mx, c.total || 0), 0),
+    [costs.topChoferes]
+  );
+  const maxVehiculoCost = useMemo(
+    () => costs.topVehiculos.reduce((mx, v) => Math.max(mx, v.total || 0), 0),
+    [costs.topVehiculos]
+  );
+
   const hasData = kpis.total_routes > 0 || evolution.length > 0;
+  const hasCosts = costs.summary.total > 0 || costs.topChoferes.length > 0 || costs.topVehiculos.length > 0;
 
   return (
     <Screen>
@@ -367,6 +418,99 @@ export default function ReportesScreen() {
               </Card>
             </>
           )}
+
+          {/* Costos (últimos 6 meses) */}
+          <SectionTitle style={styles.section}>Costos (últimos 6 meses)</SectionTitle>
+
+          <View style={styles.statsRow}>
+            <StatCard label="Costo total" value={formatMoney(costs.summary.total, user?.moneda)} icon={Coins} color={C.accent} />
+            <StatCard label="Combustible" value={formatMoney(costs.summary.fuel, user?.moneda)} icon={Fuel} color={C.info} />
+          </View>
+          <View style={styles.statsRow}>
+            <StatCard label="Peajes / Multas" value={formatMoney(costs.summary.tolls, user?.moneda)} icon={Receipt} color={C.danger} />
+            <StatCard label="Mantenimiento" value={formatMoney(costs.summary.maintenance, user?.moneda)} icon={Wrench} color={C.success} />
+          </View>
+
+          {costs.summary.income > 0 ? (
+            <View style={styles.marginRow}>
+              <Text style={styles.marginLabel}>Ingresos {formatMoney(costs.summary.income, user?.moneda)} · Margen</Text>
+              <Text style={[styles.marginValue, { color: costs.summary.margin >= 0 ? C.success : C.danger }]}>
+                {formatMoney(costs.summary.margin, user?.moneda)}
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.marginEmpty}>Sin ingresos registrados · solo se muestran los costos.</Text>
+          )}
+
+          {!hasCosts ? (
+            <EmptyState
+              title="Sin costos en el periodo"
+              subtitle="No hay combustible, peajes ni mantenimiento registrados."
+              icon={Coins}
+            />
+          ) : (
+            <>
+              {/* Top choferes por costos */}
+              <SectionTitle style={styles.section}>Top choferes por costos</SectionTitle>
+              <Card>
+                {costs.topChoferes.length === 0 ? (
+                  <Text style={styles.rankEmpty}>Sin datos de choferes.</Text>
+                ) : (
+                  costs.topChoferes.slice(0, 8).map((c, i) => (
+                    <View key={`${c.codigo}-${i}`} style={styles.rankRow}>
+                      <View style={styles.rankHead}>
+                        <View style={styles.rankLeft}>
+                          {i === 0 ? (
+                            <Trophy size={15} color={C.accent} />
+                          ) : (
+                            <Text style={styles.rankPos}>{i + 1}</Text>
+                          )}
+                          <Text style={styles.rankName} numberOfLines={1}>{c.nombre || c.codigo}</Text>
+                        </View>
+                        <Text style={styles.rankValue}>{formatMoney(c.total, user?.moneda)}</Text>
+                      </View>
+                      <View style={styles.barTrack}>
+                        <View
+                          style={[
+                            styles.barFill,
+                            { backgroundColor: C.danger, width: `${maxChofer ? (c.total / maxChofer) * 100 : 0}%` },
+                          ]}
+                        />
+                      </View>
+                    </View>
+                  ))
+                )}
+              </Card>
+
+              {/* Top vehículos por costos */}
+              <SectionTitle style={styles.section}>Top vehículos por costos</SectionTitle>
+              <Card>
+                {costs.topVehiculos.length === 0 ? (
+                  <Text style={styles.rankEmpty}>Sin datos de vehículos.</Text>
+                ) : (
+                  costs.topVehiculos.slice(0, 8).map((v, i) => (
+                    <View key={`${v.targa}-${i}`} style={styles.rankRow}>
+                      <View style={styles.rankHead}>
+                        <View style={styles.rankLeft}>
+                          <Truck size={15} color={C.textMuted} />
+                          <Text style={styles.rankName} numberOfLines={1}>{v.targa}</Text>
+                        </View>
+                        <Text style={styles.rankValue}>{formatMoney(v.total, user?.moneda)}</Text>
+                      </View>
+                      <View style={styles.barTrack}>
+                        <View
+                          style={[
+                            styles.barFill,
+                            { backgroundColor: C.info, width: `${maxVehiculoCost ? (v.total / maxVehiculoCost) * 100 : 0}%` },
+                          ]}
+                        />
+                      </View>
+                    </View>
+                  ))
+                )}
+              </Card>
+            </>
+          )}
         </ScrollView>
       )}
     </Screen>
@@ -405,6 +549,17 @@ const styles = StyleSheet.create({
   hlValue: { fontSize: 22, fontWeight: '700', color: C.text },
   hlLabel: { fontSize: 13, color: C.textMuted, marginTop: 2 },
   section: { marginTop: S.lg, marginBottom: S.sm },
+  marginRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: S.sm,
+    marginTop: S.xs,
+    marginBottom: S.xs,
+  },
+  marginLabel: { fontSize: 13, color: C.textMuted, flexShrink: 1 },
+  marginValue: { fontSize: 14, fontWeight: '700' },
+  marginEmpty: { fontSize: 12, color: C.textFaint, marginTop: S.xs, marginBottom: S.xs },
   rankEmpty: { fontSize: 13, color: C.textMuted, textAlign: 'center', paddingVertical: S.sm },
   rankRow: { marginBottom: S.md },
   rankHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
