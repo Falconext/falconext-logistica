@@ -30,6 +30,10 @@ model Trabajador {
   fecha_nacimiento DateTime?
   url_foto         String?
 
+  // Rastreo GPS: si el trabajador reporta su ubicación desde la app.
+  // Al activarse se auto-provisiona un Device con token para este trabajador.
+  trackable        Boolean @default(false)
+
   // Documentación Personal
   numero_pasaporte            String?
   fecha_vencimiento_pasaporte DateTime?

@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, Image, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
+import { View, Text, Image, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, Switch } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Users, UserCheck, IdCard, Trash2, Pencil, User, Phone } from 'lucide-react-native';
 import {
@@ -42,6 +42,7 @@ const empty: Partial<Trabajador> = {
   numero_pasaporte: '',
   sueldo_base: '',
   url_foto: '',
+  trackable: false,
 };
 
 const isActivo = (estado?: string) => (estado || '').toLowerCase() === 'activo';
@@ -141,6 +142,7 @@ export default function TrabajadoresScreen() {
         numero_pasaporte: form.numero_pasaporte?.trim() || undefined,
         sueldo_base: sueldoStr ? Number(sueldoStr) : undefined,
         url_foto: form.url_foto?.trim() || undefined,
+        trackable: !!form.trackable,
       };
       if (editing) {
         await api.patch(`/trabajadores/${editing.id}`, payload);
@@ -321,6 +323,19 @@ export default function TrabajadoresScreen() {
         />
         <FormField label="N° pasaporte" value={form.numero_pasaporte || ''} onChangeText={(t) => setForm({ ...form, numero_pasaporte: t })} placeholder="Pasaporte" autoCapitalize="characters" />
         <FormField label="Sueldo base" value={form.sueldo_base !== undefined && form.sueldo_base !== null ? String(form.sueldo_base) : ''} onChangeText={(t) => setForm({ ...form, sueldo_base: t })} placeholder="1500" keyboardType="numeric" />
+
+        <View style={styles.toggleRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.toggleLabel}>Será rastreado</Text>
+            <Text style={styles.toggleDesc}>Comparte su ubicación GPS desde la app (módulo Rastreo)</Text>
+          </View>
+          <Switch
+            value={!!form.trackable}
+            onValueChange={(v) => setForm({ ...form, trackable: v })}
+            trackColor={{ true: C.primary, false: C.border }}
+            thumbColor="#fff"
+          />
+        </View>
       </FormModal>
     </Screen>
   );
@@ -356,4 +371,13 @@ const makeStyles = () => StyleSheet.create({
   meta: { fontSize: 12, color: C.textFaint },
   detailPhotoWrap: { alignItems: 'center', marginBottom: S.md },
   detailPhoto: { width: 96, height: 96, borderRadius: Theme.radius.full, backgroundColor: C.surfaceAlt },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: S.md,
+    paddingVertical: S.sm,
+    marginTop: S.xs,
+  },
+  toggleLabel: { fontSize: 15, fontWeight: '600', color: C.text },
+  toggleDesc: { fontSize: 13, color: C.textMuted, marginTop: 2 },
 });

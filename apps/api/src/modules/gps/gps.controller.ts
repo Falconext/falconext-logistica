@@ -42,6 +42,13 @@ export class GpsController {
         return this.gpsService.getDevices(req.user.tenantId);
     }
 
+    // Device del usuario autenticado (para el módulo Rastreo de la app móvil).
+    @UseGuards(JwtAuthGuard)
+    @Get('mi-dispositivo')
+    async getMiDispositivo(@Req() req) {
+        return this.gpsService.getMiDispositivo(req.user.tenantId, req.user.trabajadorId ?? null);
+    }
+
     @UseGuards(JwtAuthGuard)
     @Get('trabajador/:trabajadorId/ubicacion')
     async getTrabajadorLocation(@Param('trabajadorId') trabajadorId: string, @Req() req) {

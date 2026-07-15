@@ -19,6 +19,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             role: payload.role,
             tenantId: payload.tenantId,
             esAdmin: payload.esAdmin ?? (payload.role === 'SUPERADMIN' || payload.role === 'ADMIN'),
+            modulos: payload.modulos ?? [],
             trabajadorId: payload.trabajadorId ?? null,
             trabajadorCodigo: payload.trabajadorCodigo ?? null,
             soloPropios: payload.soloPropios ?? false,

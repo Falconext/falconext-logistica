@@ -19,6 +19,7 @@ export interface Trabajador {
     fecha_vencimiento_pasaporte?: string;
     licencia_conducir?: string;
     fecha_vencimiento_licencia?: string;
+    trackable?: boolean;
     // ... other fields
 }
 

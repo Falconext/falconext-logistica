@@ -1,5 +1,5 @@
 
-import { IsString, IsNotEmpty, IsOptional, IsEmail, IsDateString } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEmail, IsDateString, IsBoolean } from 'class-validator';
 
 export class CreateTrabajadorDto {
     @IsString()
@@ -28,6 +28,11 @@ export class CreateTrabajadorDto {
     @IsString()
     @IsOptional()
     url_foto?: string;
+
+    // Rastreo GPS: al crearse en true se auto-provisiona el Device del trabajador.
+    @IsBoolean()
+    @IsOptional()
+    trackable?: boolean;
 
     // Docs
     @IsString()

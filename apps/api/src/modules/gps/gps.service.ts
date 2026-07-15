@@ -110,6 +110,46 @@ export class GpsService {
         return { success: true };
     }
 
+    // Device del usuario autenticado (vía su trabajador vinculado).
+    // Devuelve el token durable que la app usa para reportar en segundo plano.
+    // Si el trabajador es rastreable y aún no tiene Device, lo crea al vuelo.
+    async getMiDispositivo(tenantId: string, trabajadorId: string | null) {
+        if (!trabajadorId) {
+            return { trackable: false, token: null, deviceId: null, name: null, vehiculoId: null };
+        }
+
+        const trabajador = await this.prisma.trabajador.findFirst({
+            where: { id: trabajadorId, tenant_id: tenantId },
+        });
+
+        if (!trabajador || !trabajador.trackable) {
+            return { trackable: false, token: null, deviceId: null, name: null, vehiculoId: null };
+        }
+
+        let device = await this.prisma.device.findFirst({
+            where: { tenant_id: tenantId, trabajador_id: trabajador.id },
+        });
+
+        if (!device) {
+            device = await this.prisma.device.create({
+                data: {
+                    imei: `emp-${trabajador.id_trabajador || trabajador.id}`,
+                    name: `Rastreo ${trabajador.nombre_completo}`,
+                    tenant_id: tenantId,
+                    trabajador_id: trabajador.id,
+                },
+            });
+        }
+
+        return {
+            trackable: true,
+            token: device.token,
+            deviceId: device.id,
+            name: device.name,
+            vehiculoId: device.vehiculo_id,
+        };
+    }
+
     async verifyDeviceToken(token: string) {
         const device = await this.prisma.device.findUnique({
             where: { token: token }

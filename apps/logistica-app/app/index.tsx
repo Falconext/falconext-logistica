@@ -10,25 +10,21 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Truck, Lock, User, ArrowRight, Smartphone } from 'lucide-react-native';
+import { Truck, Lock, User, ArrowRight } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Theme } from '../constants/theme';
 
 const C = Theme.colors;
 
-type Tab = 'user' | 'device';
-
 export default function LoginScreen() {
   const router = useRouter();
   const { themeKey } = useTheme();
   const styles = useMemo(() => makeStyles(), [themeKey]);
-  const { loginUser, loginDevice, isLoading, mode } = useAuth();
-  const [tab, setTab] = useState<Tab>('user');
+  const { loginUser, isLoading, mode } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [deviceTok, setDeviceTok] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -36,7 +32,6 @@ export default function LoginScreen() {
   useEffect(() => {
     if (isLoading) return;
     if (mode === 'user') router.replace('/(app)/dashboard' as any);
-    else if (mode === 'device') router.replace('/conductor' as any);
   }, [isLoading, mode]);
 
   const handleUserLogin = async () => {
@@ -50,22 +45,6 @@ export default function LoginScreen() {
       await loginUser(email.trim(), password);
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Correo o contraseña incorrectos');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleDeviceLogin = async () => {
-    if (!deviceTok.trim()) {
-      setError('Ingresa el token del dispositivo');
-      return;
-    }
-    setSubmitting(true);
-    setError('');
-    try {
-      await loginDevice(deviceTok.trim());
-    } catch (err: any) {
-      setError(err?.message || 'Token inválido');
     } finally {
       setSubmitting(false);
     }
@@ -93,94 +72,44 @@ export default function LoginScreen() {
           <Text style={styles.subtitle}>Gestión de flota y operaciones</Text>
         </View>
 
-        {/* Selector de modo */}
-        <View style={styles.tabs}>
-          <TouchableOpacity
-            style={[styles.tab, tab === 'user' && styles.tabActive]}
-            onPress={() => { setTab('user'); setError(''); }}
-          >
-            <User size={16} color={tab === 'user' ? C.primary : C.textMuted} />
-            <Text style={[styles.tabText, tab === 'user' && styles.tabTextActive]}>Usuario</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, tab === 'device' && styles.tabActive]}
-            onPress={() => { setTab('device'); setError(''); }}
-          >
-            <Smartphone size={16} color={tab === 'device' ? C.primary : C.textMuted} />
-            <Text style={[styles.tabText, tab === 'device' && styles.tabTextActive]}>Chofer</Text>
+        <View style={styles.form}>
+          <View style={styles.inputWrap}>
+            <User size={20} color={C.textFaint} />
+            <TextInput
+              style={styles.input}
+              placeholder="Correo electrónico"
+              placeholderTextColor={C.textFaint}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={email}
+              onChangeText={setEmail}
+            />
+          </View>
+          <View style={styles.inputWrap}>
+            <Lock size={20} color={C.textFaint} />
+            <TextInput
+              style={styles.input}
+              placeholder="Contraseña"
+              placeholderTextColor={C.textFaint}
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+            />
+          </View>
+
+          {!!error && <Text style={styles.error}>{error}</Text>}
+
+          <TouchableOpacity style={styles.button} onPress={handleUserLogin} disabled={submitting}>
+            {submitting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Text style={styles.buttonText}>Iniciar Sesión</Text>
+                <ArrowRight size={18} color="#fff" />
+              </>
+            )}
           </TouchableOpacity>
         </View>
-
-        {tab === 'user' ? (
-          <View style={styles.form}>
-            <View style={styles.inputWrap}>
-              <User size={20} color={C.textFaint} />
-              <TextInput
-                style={styles.input}
-                placeholder="Correo electrónico"
-                placeholderTextColor={C.textFaint}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={email}
-                onChangeText={setEmail}
-              />
-            </View>
-            <View style={styles.inputWrap}>
-              <Lock size={20} color={C.textFaint} />
-              <TextInput
-                style={styles.input}
-                placeholder="Contraseña"
-                placeholderTextColor={C.textFaint}
-                secureTextEntry
-                value={password}
-                onChangeText={setPassword}
-              />
-            </View>
-
-            {!!error && <Text style={styles.error}>{error}</Text>}
-
-            <TouchableOpacity style={styles.button} onPress={handleUserLogin} disabled={submitting}>
-              {submitting ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Text style={styles.buttonText}>Iniciar Sesión</Text>
-                  <ArrowRight size={18} color="#fff" />
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.form}>
-            <Text style={styles.hint}>
-              Ingresa el token del dispositivo (lo obtiene el administrador en Dispositivos GPS) para compartir tu ubicación.
-            </Text>
-            <View style={styles.inputWrap}>
-              <Smartphone size={20} color={C.textFaint} />
-              <TextInput
-                style={styles.input}
-                placeholder="Token del dispositivo"
-                placeholderTextColor={C.textFaint}
-                autoCapitalize="none"
-                value={deviceTok}
-                onChangeText={setDeviceTok}
-              />
-            </View>
-
-            {!!error && <Text style={styles.error}>{error}</Text>}
-
-            <TouchableOpacity style={styles.button} onPress={handleDeviceLogin} disabled={submitting}>
-              {submitting ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Text style={styles.buttonText}>Conectar</Text>
-                  <ArrowRight size={18} color="#fff" />
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
       </View>
 
       <Text style={styles.footer}>v1.0.0 • Logística Pro</Text>

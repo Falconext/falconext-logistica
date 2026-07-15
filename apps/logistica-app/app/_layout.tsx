@@ -34,7 +34,6 @@ function ThemedStack() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Theme.colors.background } }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="(app)" />
-        <Stack.Screen name="conductor" />
       </Stack>
       <StatusBar style={isDark ? 'light' : 'dark'} />
     </ThemeProvider>

@@ -47,6 +47,7 @@ export default function AppTabsLayout() {
       <Tabs.Screen name="reportes" options={{ href: null }} />
       <Tabs.Screen name="alertas" options={{ href: null }} />
       <Tabs.Screen name="flota" options={{ href: null }} />
+      <Tabs.Screen name="rastreo" options={{ href: null }} />
       <Tabs.Screen name="dispositivos" options={{ href: null }} />
       <Tabs.Screen name="geocercas" options={{ href: null }} />
       <Tabs.Screen name="admin" options={{ href: null }} />

@@ -19,6 +19,7 @@ export const MODULES: ModuleDef[] = [
   { key: 'reportes', name: 'Reportes', route: '/(app)/reportes' },
   { key: 'alertas', name: 'Alertas', route: '/(app)/alertas' },
   { key: 'flota', name: 'Flota en Vivo', route: '/(app)/flota' },
+  { key: 'rastreo', name: 'Rastreo', route: '/(app)/rastreo' },
   { key: 'dispositivos', name: 'Dispositivos GPS', route: '/(app)/dispositivos' },
   { key: 'geocercas', name: 'Geocercas', route: '/(app)/geocercas' },
 ];
