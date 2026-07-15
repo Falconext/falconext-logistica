@@ -256,7 +256,9 @@ export default function AlertasScreen() {
 const makeStyles = () => StyleSheet.create({
   body: { flex: 1, paddingHorizontal: S.lg, paddingTop: S.md },
   statsRow: { flexDirection: 'row', gap: S.sm, marginBottom: S.md, flexWrap: 'wrap' },
-  statWrap: { flexGrow: 1, flexBasis: '47%', borderRadius: Theme.radius.lg, borderColor: 'transparent', borderWidth: 1.5 },
+  // flexDirection:'row' para que el StatCard interno (flex:1) llene el ancho y su
+  // altura la defina el contenido; sin esto el flex:1 colapsaba la tarjeta a 0.
+  statWrap: { flexGrow: 1, flexBasis: '47%', flexDirection: 'row', borderRadius: Theme.radius.lg, borderColor: 'transparent', borderWidth: 1.5 },
   card: {
     flexDirection: 'row',
     gap: S.md,
