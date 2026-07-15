@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { Fuel, Calendar, Pencil, Trash2, Coins, ClipboardList, User } from 'lucide-react-native';
+import { Fuel, Calendar, Pencil, Trash2, Coins, ClipboardList } from 'lucide-react-native';
 import {
   Screen,
   AppHeader,
@@ -17,10 +17,12 @@ import {
   InfoRow,
   Theme,
 } from '../../components/ui';
+import DatePicker from '../../components/DatePicker';
+import Select from '../../components/Select';
 import api from '../../services/api';
 import { formatMoney } from '../../constants/currency';
 import { useAuth } from '../../context/AuthContext';
-import type { Trabajador } from '../../types';
+import type { Trabajador, Vehiculo } from '../../types';
 
 const C = Theme.colors;
 const S = Theme.spacing;
@@ -87,6 +89,7 @@ export default function CombustibleScreen() {
 
   const [items, setItems] = useState<Combustible[]>([]);
   const [trabajadores, setTrabajadores] = useState<Trabajador[]>([]);
+  const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
   const [total, setTotal] = useState(0);
   const [sum, setSum] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -101,15 +104,17 @@ export default function CombustibleScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [cRes, tRes] = await Promise.all([
+      const [cRes, tRes, vRes] = await Promise.all([
         api.get('/combustible', { params: { take: 100 } }),
         api.get('/trabajadores'),
+        api.get('/vehiculos'),
       ]);
       const data = cRes.data || {};
       setItems(Array.isArray(data.items) ? data.items : []);
       setTotal(Number(data.total ?? (Array.isArray(data.items) ? data.items.length : 0)));
       setSum(Number(data.sum ?? 0));
       setTrabajadores(Array.isArray(tRes.data) ? tRes.data : []);
+      setVehiculos(Array.isArray(vRes.data) ? vRes.data : []);
     } catch (e) {
       console.error('Error cargando combustible', e);
     } finally {
@@ -309,12 +314,13 @@ export default function CombustibleScreen() {
         title={editing ? 'Editar registro' : 'Nuevo registro'}
         footer={<Button title={editing ? 'Guardar cambios' : 'Registrar'} loading={saving} onPress={save} />}
       >
-        <FormField
+        <Select
           label="Placa (targa) *"
           value={form.targa}
-          onChangeText={(t) => setForm({ ...form, targa: t })}
-          placeholder="ABC-123"
-          autoCapitalize="characters"
+          onChange={(v) => setForm({ ...form, targa: v })}
+          options={vehiculos.map((v) => ({ value: v.placa, label: v.placa }))}
+          placeholder="Selecciona un vehículo"
+          searchable
         />
         <FormField
           label="Monto"
@@ -330,53 +336,30 @@ export default function CombustibleScreen() {
           placeholder="AUTOBOT / IP / etc."
         />
 
-        <Text style={styles.selectLabel}>Área</Text>
-        <View style={styles.selectWrap}>
-          {AREAS.map((a) => {
-            const active = form.area === a;
-            return (
-              <TouchableOpacity
-                key={a}
-                onPress={() => setForm({ ...form, area: active ? '' : a })}
-                activeOpacity={0.8}
-                style={[styles.option, active && styles.optionActive]}
-              >
-                <Text style={[styles.optionText, active && styles.optionTextActive]}>{a}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        <Select
+          label="Área"
+          value={form.area}
+          onChange={(v) => setForm({ ...form, area: v })}
+          options={AREAS.map((a) => ({ value: a, label: a }))}
+          placeholder="Selecciona un área"
+          searchable={false}
+        />
 
-        <FormField
+        <DatePicker
           label="Fecha"
           value={form.fecha}
-          onChangeText={(t) => setForm({ ...form, fecha: t })}
+          onChange={(v) => setForm({ ...form, fecha: v })}
           placeholder="AAAA-MM-DD"
         />
 
-        <Text style={styles.selectLabel}>Trabajador</Text>
-        <View style={styles.selectWrap}>
-          {trabajadores.length === 0 ? (
-            <Text style={styles.selectEmpty}>No hay trabajadores disponibles</Text>
-          ) : (
-            trabajadores.map((t) => {
-              const active = form.trabajador_id === t.id;
-              return (
-                <TouchableOpacity
-                  key={t.id}
-                  onPress={() => setForm({ ...form, trabajador_id: active ? '' : t.id })}
-                  activeOpacity={0.8}
-                  style={[styles.option, active && styles.optionActive]}
-                >
-                  <User size={15} color={active ? C.textOnPrimary : C.textMuted} />
-                  <Text style={[styles.optionText, active && styles.optionTextActive]}>
-                    {t.nombre_completo}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })
-          )}
-        </View>
+        <Select
+          label="Trabajador"
+          value={form.trabajador_id}
+          onChange={(v) => setForm({ ...form, trabajador_id: v })}
+          options={trabajadores.map((t) => ({ value: t.id, label: t.nombre_completo }))}
+          placeholder="Selecciona un trabajador"
+          searchable
+        />
       </FormModal>
     </Screen>
   );

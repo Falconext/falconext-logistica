@@ -18,6 +18,8 @@ import {
   Theme,
 } from '../../components/ui';
 import ImageUpload from '../../components/ImageUpload';
+import DatePicker from '../../components/DatePicker';
+import Select from '../../components/Select';
 import api from '../../services/api';
 import type { Vehiculo } from '../../types';
 
@@ -31,6 +33,7 @@ const empty: Partial<Vehiculo> = {
   anio_fabricacion: undefined,
   estado_vehiculo: 'ACTIVO',
   poliza_seguro: '',
+  fecha_vencimiento_seguro: '',
   revision_tecnica: '',
   kilometraje_actual: undefined,
   url_foto: '',
@@ -252,8 +255,24 @@ export default function VehiculosScreen() {
         <FormField label="Marca / Modelo" value={form.marca_modelo || ''} onChangeText={(t) => setForm({ ...form, marca_modelo: t })} placeholder="Volvo FH 460" />
         <FormField label="Tipo de unidad" value={form.tipo_unidad || ''} onChangeText={(t) => setForm({ ...form, tipo_unidad: t })} placeholder="Furgón / Tracto" />
         <FormField label="Año de fabricación" value={form.anio_fabricacion ? String(form.anio_fabricacion) : ''} onChangeText={(t) => setForm({ ...form, anio_fabricacion: t as any })} placeholder="2022" keyboardType="numeric" />
-        <FormField label="Estado" value={form.estado_vehiculo || ''} onChangeText={(t) => setForm({ ...form, estado_vehiculo: t })} placeholder="ACTIVO / INACTIVO" autoCapitalize="characters" />
+        <Select
+          label="Estado"
+          value={form.estado_vehiculo || ''}
+          onChange={(v) => setForm({ ...form, estado_vehiculo: v })}
+          placeholder="Selecciona el estado"
+          searchable={false}
+          options={[
+            { value: 'ACTIVO', label: 'ACTIVO' },
+            { value: 'INACTIVO', label: 'INACTIVO' },
+          ]}
+        />
         <FormField label="Póliza de seguro" value={form.poliza_seguro || ''} onChangeText={(t) => setForm({ ...form, poliza_seguro: t })} placeholder="N° de póliza" />
+        <DatePicker
+          label="Venc. seguro"
+          value={form.fecha_vencimiento_seguro || ''}
+          onChange={(v) => setForm({ ...form, fecha_vencimiento_seguro: v })}
+          placeholder="Selecciona la fecha"
+        />
         <FormField label="Revisión técnica" value={form.revision_tecnica || ''} onChangeText={(t) => setForm({ ...form, revision_tecnica: t })} placeholder="Vigencia" />
         <FormField label="Kilometraje actual" value={form.kilometraje_actual ? String(form.kilometraje_actual) : ''} onChangeText={(t) => setForm({ ...form, kilometraje_actual: t as any })} placeholder="120000" keyboardType="numeric" />
       </FormModal>

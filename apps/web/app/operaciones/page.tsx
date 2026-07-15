@@ -36,6 +36,69 @@ const WINDOW_OPTIONS: { label: string; days: number | null }[] = [
     { label: 'Todo', days: null },
 ];
 
+// Tarjeta de detalle de la operación seleccionada.
+// En desktop flota sobre el mapa (abajo-izquierda); en móvil se muestra debajo del mapa.
+function RouteDetailCard({ selected, format, onEdit, onDelete }: {
+    selected: Programacion;
+    format: (n: number) => string;
+    onEdit: () => void;
+    onDelete: () => void;
+}) {
+    return (
+        <div className="bg-white rounded-2xl shadow-lg lg:shadow-xl border border-slate-200 p-4">
+            <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-slate-900 truncate">{selected.cliente || 'Operación'}</span>
+                        <span className={`px-2 py-0.5 rounded-md text-[11px] font-medium border ${estadoMeta(selected.estado).badge}`}>
+                            {estadoMeta(selected.estado).label}
+                        </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">{selected.id_programacion}</p>
+                </div>
+                <div className="shrink-0 flex items-center gap-2">
+                    <button
+                        onClick={onEdit}
+                        className="px-3 py-1.5 rounded-lg bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-xs font-medium transition"
+                    >
+                        Editar
+                    </button>
+                    <button
+                        onClick={onDelete}
+                        title="Eliminar operación"
+                        className="w-8 h-8 rounded-lg border border-slate-200 text-slate-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 flex items-center justify-center transition"
+                    >
+                        <Trash2 size={14} />
+                    </button>
+                </div>
+            </div>
+            <div className="mt-3 space-y-2 text-sm">
+                <div className="flex items-start gap-2">
+                    <MapPin size={15} className="text-emerald-500 mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                        <p className="text-[11px] text-slate-400">Origen</p>
+                        <p className="text-slate-700 truncate">{selected.lugar_retiro || '—'}</p>
+                    </div>
+                </div>
+                <div className="flex items-start gap-2">
+                    <MapPin size={15} className="text-slate-900 mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                        <p className="text-[11px] text-slate-400">Destino</p>
+                        <p className="text-slate-700 truncate">{selected.lugar_entrega || '—'}</p>
+                    </div>
+                </div>
+            </div>
+            <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-4 text-xs text-slate-500 flex-wrap">
+                <span className="flex items-center gap-1.5"><Truck size={13} /> {selected.vehiculo_id || '—'}</span>
+                <span className="flex items-center gap-1.5 truncate"><User size={13} /> {selected.trabajador_id || 'Sin asignar'}</span>
+                {selected.ingreso_estimado != null && (
+                    <span className="ml-auto font-semibold text-slate-900 tabular-nums">{format(selected.ingreso_estimado)}</span>
+                )}
+            </div>
+        </div>
+    );
+}
+
 export default function OperacionesPage() {
     const { format } = useCurrency();
     const [rutas, setRutas] = useState<Programacion[]>([]);
@@ -208,7 +271,7 @@ export default function OperacionesPage() {
     return (
         <div className="flex flex-col lg:flex-row gap-4 lg:h-[calc(100vh-4rem)]">
             {/* ================= LEFT: LIST ================= */}
-            <div className="w-full lg:max-w-[400px] lg:shrink-0 flex flex-col rounded-2xl border border-slate-200 bg-white overflow-hidden max-h-[70vh] lg:max-h-none">
+            <div className="w-full lg:max-w-[400px] lg:shrink-0 flex flex-col rounded-2xl border border-slate-200 bg-white overflow-hidden max-h-[55vh] lg:max-h-none">
                 {/* Header */}
                 <div className="p-4 pb-3">
                     <div className="flex items-center justify-between mb-3">
@@ -292,8 +355,9 @@ export default function OperacionesPage() {
                 </div>
             </div>
 
-            {/* ================= RIGHT: MAP ================= */}
-            <div className="flex-1 relative rounded-2xl border border-slate-200 overflow-hidden bg-slate-100 min-h-[60vh] lg:min-h-0">
+            {/* ================= RIGHT: MAP + DETAIL ================= */}
+            <div className="flex-1 flex flex-col min-h-0 gap-3">
+              <div className="relative rounded-2xl border border-slate-200 overflow-hidden bg-slate-100 h-[52vh] lg:h-auto lg:flex-1">
                 {/* Map (memoized — no re-render on search/hover/layers) */}
                 <div className="absolute inset-0">
                     <MapView
@@ -306,8 +370,8 @@ export default function OperacionesPage() {
                     />
                 </div>
 
-                {/* Top-right controls */}
-                <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+                {/* Controles: debajo de la barra de estado en móvil, arriba-derecha en desktop */}
+                <div className="absolute top-[68px] right-3 sm:top-4 sm:right-4 flex items-center gap-2 z-20">
                     <div className="flex items-center bg-white rounded-xl shadow-sm border border-slate-200 p-1">
                         <button
                             onClick={() => setMapType('roadmap')}
@@ -360,60 +424,30 @@ export default function OperacionesPage() {
                     </div>
                 </div>
 
-                {/* Selected route detail (bottom-left card) */}
+                {/* Detalle flotante — solo desktop */}
                 {selected && (
-                    <div className="absolute bottom-4 left-4 right-4 md:right-auto md:w-[360px] bg-white rounded-2xl shadow-xl border border-slate-200 p-4 z-10">
-                        <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                    <span className="font-bold text-slate-900 truncate">{selected.cliente || 'Operación'}</span>
-                                    <span className={`px-2 py-0.5 rounded-md text-[11px] font-medium border ${estadoMeta(selected.estado).badge}`}>
-                                        {estadoMeta(selected.estado).label}
-                                    </span>
-                                </div>
-                                <p className="text-xs text-slate-400 mt-0.5">{selected.id_programacion}</p>
-                            </div>
-                            <div className="shrink-0 flex items-center gap-2">
-                                <button
-                                    onClick={() => { setEditingRuta(selected); setIsNewRouteModalOpen(true); }}
-                                    className="px-3 py-1.5 rounded-lg bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-xs font-medium transition"
-                                >
-                                    Editar
-                                </button>
-                                <button
-                                    onClick={() => setDeleting(selected)}
-                                    title="Eliminar operación"
-                                    className="w-8 h-8 rounded-lg border border-slate-200 text-slate-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 flex items-center justify-center transition"
-                                >
-                                    <Trash2 size={14} />
-                                </button>
-                            </div>
-                        </div>
-                        <div className="mt-3 space-y-2 text-sm">
-                            <div className="flex items-start gap-2">
-                                <MapPin size={15} className="text-emerald-500 mt-0.5 shrink-0" />
-                                <div className="min-w-0">
-                                    <p className="text-[11px] text-slate-400">Origen</p>
-                                    <p className="text-slate-700 truncate">{selected.lugar_retiro || '—'}</p>
-                                </div>
-                            </div>
-                            <div className="flex items-start gap-2">
-                                <MapPin size={15} className="text-slate-900 mt-0.5 shrink-0" />
-                                <div className="min-w-0">
-                                    <p className="text-[11px] text-slate-400">Destino</p>
-                                    <p className="text-slate-700 truncate">{selected.lugar_entrega || '—'}</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-4 text-xs text-slate-500">
-                            <span className="flex items-center gap-1.5"><Truck size={13} /> {selected.vehiculo_id || '—'}</span>
-                            <span className="flex items-center gap-1.5 truncate"><User size={13} /> {selected.trabajador_id || 'Sin asignar'}</span>
-                            {selected.ingreso_estimado != null && (
-                                <span className="ml-auto font-semibold text-slate-900 tabular-nums">{format(selected.ingreso_estimado)}</span>
-                            )}
-                        </div>
+                    <div className="hidden lg:block absolute bottom-4 left-4 w-[360px] z-10">
+                        <RouteDetailCard
+                            selected={selected}
+                            format={format}
+                            onEdit={() => { setEditingRuta(selected); setIsNewRouteModalOpen(true); }}
+                            onDelete={() => setDeleting(selected)}
+                        />
                     </div>
                 )}
+              </div>
+
+              {/* Detalle apilado — solo móvil/tablet (debajo del mapa, no lo tapa) */}
+              {selected && (
+                  <div className="lg:hidden">
+                      <RouteDetailCard
+                          selected={selected}
+                          format={format}
+                          onEdit={() => { setEditingRuta(selected); setIsNewRouteModalOpen(true); }}
+                          onDelete={() => setDeleting(selected)}
+                      />
+                  </div>
+              )}
             </div>
 
             {/* Modal */}

@@ -36,6 +36,8 @@ import {
   InfoRow,
   Theme,
 } from '../../components/ui';
+import DatePicker from '../../components/DatePicker';
+import Select from '../../components/Select';
 import api from '../../services/api';
 import type { Programacion, Vehiculo, Trabajador } from '../../types';
 
@@ -362,45 +364,23 @@ export default function OperacionesScreen() {
       >
         <Text style={styles.formSection}>Recursos y cliente</Text>
 
-        <Text style={styles.pickerLabel}>Vehículo *</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-          {vehiculos.length === 0 ? (
-            <Text style={styles.chipEmpty}>Cargando vehículos...</Text>
-          ) : (
-            vehiculos.map((v) => {
-              const active = form.vehiculo_id === v.placa;
-              return (
-                <TouchableOpacity
-                  key={v.id}
-                  style={[styles.chip, active && styles.chipActive]}
-                  onPress={() => setForm({ ...form, vehiculo_id: v.placa })}
-                >
-                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{v.placa}</Text>
-                </TouchableOpacity>
-              );
-            })
-          )}
-        </ScrollView>
+        <Select
+          label="Vehículo *"
+          value={form.vehiculo_id}
+          onChange={(v) => setForm({ ...form, vehiculo_id: v })}
+          options={vehiculos.map((v) => ({ value: v.placa, label: v.placa }))}
+          placeholder="Selecciona un vehículo"
+          searchable
+        />
 
-        <Text style={styles.pickerLabel}>Conductor</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-          {trabajadores.length === 0 ? (
-            <Text style={styles.chipEmpty}>Cargando conductores...</Text>
-          ) : (
-            trabajadores.map((w) => {
-              const active = form.trabajador_id === w.nombre_completo;
-              return (
-                <TouchableOpacity
-                  key={w.id}
-                  style={[styles.chip, active && styles.chipActive]}
-                  onPress={() => setForm({ ...form, trabajador_id: w.nombre_completo })}
-                >
-                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{w.nombre_completo}</Text>
-                </TouchableOpacity>
-              );
-            })
-          )}
-        </ScrollView>
+        <Select
+          label="Conductor"
+          value={form.trabajador_id}
+          onChange={(v) => setForm({ ...form, trabajador_id: v })}
+          options={trabajadores.map((w) => ({ value: w.nombre_completo, label: w.nombre_completo }))}
+          placeholder="Selecciona un conductor"
+          searchable
+        />
 
         <FormField
           label="Cliente / Destinatario"
@@ -418,13 +398,14 @@ export default function OperacionesScreen() {
           placeholder="Ej: Av. Javier Prado Este 4200, Surco"
         />
         <View style={styles.dateRow}>
-          <FormField
-            label="Fecha"
-            value={form.retiro_fecha}
-            onChangeText={(t) => setForm({ ...form, retiro_fecha: t })}
-            placeholder="AAAA-MM-DD"
-            style={{ flex: 1 }}
-          />
+          <View style={{ flex: 1 }}>
+            <DatePicker
+              label="Fecha"
+              value={form.retiro_fecha}
+              onChange={(v) => setForm({ ...form, retiro_fecha: v })}
+              placeholder="AAAA-MM-DD"
+            />
+          </View>
           <FormField
             label="Hora"
             value={form.retiro_hora}
@@ -442,13 +423,14 @@ export default function OperacionesScreen() {
           placeholder="Ej: Aeropuerto Jorge Chávez, Callao"
         />
         <View style={styles.dateRow}>
-          <FormField
-            label="Fecha"
-            value={form.entrega_fecha}
-            onChangeText={(t) => setForm({ ...form, entrega_fecha: t })}
-            placeholder="AAAA-MM-DD"
-            style={{ flex: 1 }}
-          />
+          <View style={{ flex: 1 }}>
+            <DatePicker
+              label="Fecha"
+              value={form.entrega_fecha}
+              onChange={(v) => setForm({ ...form, entrega_fecha: v })}
+              placeholder="AAAA-MM-DD"
+            />
+          </View>
           <FormField
             label="Hora"
             value={form.entrega_hora}
@@ -461,22 +443,14 @@ export default function OperacionesScreen() {
         {editing && (
           <>
             <Text style={styles.formSection}>Estado</Text>
-            <View style={styles.estadoWrap}>
-              {ALL_ESTADOS.map((e) => {
-                const active = form.estado === e;
-                return (
-                  <TouchableOpacity
-                    key={e}
-                    style={[styles.chip, active && styles.chipActive]}
-                    onPress={() => setForm({ ...form, estado: e })}
-                  >
-                    <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                      {estadoMeta(e).label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            <Select
+              label="Estado"
+              value={form.estado}
+              onChange={(v) => setForm({ ...form, estado: v })}
+              options={ALL_ESTADOS.map((e) => ({ value: e, label: estadoMeta(e).label }))}
+              placeholder="Selecciona un estado"
+              searchable={false}
+            />
           </>
         )}
 

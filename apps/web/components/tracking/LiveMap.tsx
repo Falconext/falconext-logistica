@@ -277,14 +277,14 @@ export function LiveMap({ originAddress, destinationAddress, apiKey, onArrival, 
             </GoogleMap>
 
             {/* Premium Status Panel */}
-            <div className="absolute top-4 left-4 right-4 z-10">
-                <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl p-5 rounded-2xl border border-slate-200/50 dark:border-slate-700/50 shadow-2xl">
-                    <div className="flex items-center justify-between gap-6">
+            <div className="absolute top-3 left-3 right-3 sm:top-4 sm:left-4 sm:right-4 z-10">
+                <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl p-3 sm:p-5 rounded-2xl border border-slate-200/50 dark:border-slate-700/50 shadow-2xl">
+                    <div className="flex items-center justify-between gap-3 sm:gap-6">
                         {/* Status */}
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2.5 sm:gap-3">
                             <div className="relative">
-                                <div className={`h-12 w-12 rounded-xl ${currentStatus.color} flex items-center justify-center shadow-lg`}>
-                                    <Truck className="text-white" size={24} />
+                                <div className={`h-9 w-9 sm:h-12 sm:w-12 rounded-xl ${currentStatus.color} flex items-center justify-center shadow-lg`}>
+                                    <Truck className="text-white w-5 h-5 sm:w-6 sm:h-6" />
                                 </div>
                                 {currentStatus.pulse && (
                                     <span className="absolute -top-1 -right-1 flex h-4 w-4">
@@ -294,8 +294,8 @@ export function LiveMap({ originAddress, destinationAddress, apiKey, onArrival, 
                                 )}
                             </div>
                             <div>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">Estado</p>
-                                <p className="text-lg font-bold text-slate-900 dark:text-white">{currentStatus.text}</p>
+                                <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">Estado</p>
+                                <p className="text-sm sm:text-lg font-bold text-slate-900 dark:text-white leading-tight">{currentStatus.text}</p>
                             </div>
                         </div>
 
@@ -318,16 +318,16 @@ export function LiveMap({ originAddress, destinationAddress, apiKey, onArrival, 
                         </div>
 
                         {/* ETA */}
-                        <div className="text-center px-4 border-l border-slate-200 dark:border-slate-700">
-                            <div className="flex items-center gap-2 text-emerald-500">
+                        <div className="text-center px-3 sm:px-4 border-l border-slate-200 dark:border-slate-700">
+                            <div className="flex items-center gap-1.5 sm:gap-2 text-emerald-500">
                                 <Clock size={16} />
-                                <span className="text-xs font-bold uppercase tracking-wider">ETA</span>
+                                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider">ETA</span>
                             </div>
-                            <p className="text-2xl font-mono font-bold text-slate-900 dark:text-white">{eta || '...'}</p>
+                            <p className="text-lg sm:text-2xl font-mono font-bold text-slate-900 dark:text-white leading-tight">{eta || '...'}</p>
                         </div>
 
                         {/* Progress */}
-                        <div className="flex-1 max-w-xs">
+                        <div className="hidden sm:block flex-1 max-w-xs">
                             <div className="flex justify-between text-xs font-bold mb-1">
                                 <span className="text-slate-500">Progreso</span>
                                 <span className="text-blue-600 dark:text-blue-400">{progress}%</span>
@@ -345,8 +345,8 @@ export function LiveMap({ originAddress, destinationAddress, apiKey, onArrival, 
                 </div>
             </div>
 
-            {/* Route Info Banner */}
-            <div className="absolute bottom-4 left-4 right-4 z-10">
+            {/* Route Info Banner (oculto en móvil: la tarjeta de detalle ya muestra origen/destino) */}
+            <div className="hidden lg:block absolute bottom-4 left-4 right-4 z-10">
                 <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl px-5 py-3 rounded-xl border border-slate-200/50 dark:border-slate-700/50 shadow-xl flex items-center justify-between">
                     <div className="flex items-center gap-3 text-sm">
                         <div className="h-3 w-3 rounded-full bg-emerald-500"></div>

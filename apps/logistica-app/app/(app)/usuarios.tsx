@@ -18,6 +18,7 @@ import {
 } from '../../components/ui';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import Select from '../../components/Select';
 
 const C = Theme.colors;
 const S = Theme.spacing;
@@ -343,25 +344,16 @@ export default function UsuariosScreen() {
           </View>
         ) : (
           <View style={{ marginBottom: S.md }}>
-            <Text style={styles.fieldLabel}>Rol *</Text>
-            <View style={styles.chipWrap}>
-              {roles.length === 0 ? (
-                <Text style={styles.hint}>No hay roles disponibles. Crea uno primero.</Text>
-              ) : (
-                roles.map((r) => {
-                  const active = form.rol_id === r.id;
-                  return (
-                    <TouchableOpacity
-                      key={r.id}
-                      style={[styles.chip, active && styles.chipActive]}
-                      onPress={() => setForm({ ...form, rol_id: r.id })}
-                    >
-                      <Text style={[styles.chipText, active && styles.chipTextActive]}>{r.nombre}</Text>
-                    </TouchableOpacity>
-                  );
-                })
-              )}
-            </View>
+            <Select
+              label="Rol *"
+              value={form.rol_id}
+              onChange={(v) => setForm({ ...form, rol_id: v })}
+              options={roles.map((r) => ({ value: r.id, label: r.nombre }))}
+              placeholder="Seleccionar rol"
+            />
+            {roles.length === 0 && (
+              <Text style={styles.hint}>No hay roles disponibles. Crea uno primero.</Text>
+            )}
             {selectedRole && (
               <Text style={styles.hint}>
                 {selectedRole.es_admin
@@ -397,28 +389,18 @@ export default function UsuariosScreen() {
                 Trabajador vinculado{needsTrabajador ? ' *' : ''}
               </Text>
             </View>
-            <View style={styles.chipWrap}>
-              <TouchableOpacity
-                style={[styles.chip, !form.trabajador_id && styles.chipActive]}
-                onPress={() => setForm({ ...form, trabajador_id: '' })}
-              >
-                <Text style={[styles.chipText, !form.trabajador_id && styles.chipTextActive]}>Sin vincular</Text>
-              </TouchableOpacity>
-              {trabajadores.map((t) => {
-                const active = form.trabajador_id === t.id;
-                return (
-                  <TouchableOpacity
-                    key={t.id}
-                    style={[styles.chip, active && styles.chipActive]}
-                    onPress={() => setForm({ ...form, trabajador_id: t.id })}
-                  >
-                    <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                      {t.nombre_completo}{t.id_trabajador ? ` (${t.id_trabajador})` : ''}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            <Select
+              value={form.trabajador_id}
+              onChange={(v) => setForm({ ...form, trabajador_id: v })}
+              options={[
+                { value: '', label: 'Sin vincular' },
+                ...trabajadores.map((t) => ({
+                  value: t.id,
+                  label: `${t.nombre_completo}${t.id_trabajador ? ` (${t.id_trabajador})` : ''}`,
+                })),
+              ]}
+              placeholder="Sin vincular"
+            />
             <Text style={styles.hint}>
               {needsTrabajador
                 ? 'Obligatorio: identifica de qué persona son los registros que verá.'

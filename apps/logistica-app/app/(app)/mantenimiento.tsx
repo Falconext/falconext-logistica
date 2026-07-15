@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { Wrench, Calendar, Pencil, Car, Coins, ShieldAlert, ClipboardList, Gauge } from 'lucide-react-native';
+import { Wrench, Calendar, Pencil, Coins, ShieldAlert, ClipboardList, Gauge } from 'lucide-react-native';
 import {
   Screen,
   AppHeader,
@@ -18,6 +18,8 @@ import {
   Theme,
 } from '../../components/ui';
 import ImageUpload from '../../components/ImageUpload';
+import DatePicker from '../../components/DatePicker';
+import Select from '../../components/Select';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { formatMoney } from '../../constants/currency';
@@ -346,53 +348,30 @@ export default function MantenimientoScreen() {
       >
         {!editing && (
           <>
-            <Text style={styles.selectLabel}>Vehículo *</Text>
-            <View style={styles.selectWrap}>
-              {vehiculos.length === 0 ? (
-                <Text style={styles.selectEmpty}>No hay vehículos disponibles</Text>
-              ) : (
-                vehiculos.map((v) => {
-                  const active = form.vehiculo_id === v.id;
-                  return (
-                    <TouchableOpacity
-                      key={v.id}
-                      onPress={() => setForm({ ...form, vehiculo_id: v.id })}
-                      activeOpacity={0.8}
-                      style={[styles.option, active && styles.optionActive]}
-                    >
-                      <Car size={15} color={active ? C.textOnPrimary : C.textMuted} />
-                      <Text style={[styles.optionText, active && styles.optionTextActive]}>
-                        {v.placa}
-                        {v.marca_modelo ? ` · ${v.marca_modelo}` : ''}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })
-              )}
-            </View>
+            <Select
+              label="Vehículo *"
+              value={form.vehiculo_id}
+              onChange={(v) => setForm({ ...form, vehiculo_id: v })}
+              options={vehiculos.map((v) => ({
+                value: v.id,
+                label: `${v.placa}${v.marca_modelo ? ` · ${v.marca_modelo}` : ''}`,
+              }))}
+              placeholder="Seleccionar vehículo"
+            />
 
-            <Text style={styles.selectLabel}>Tipo</Text>
-            <View style={styles.selectWrap}>
-              {TIPOS.map((t) => {
-                const active = form.tipo === t;
-                return (
-                  <TouchableOpacity
-                    key={t}
-                    onPress={() => setForm({ ...form, tipo: t })}
-                    activeOpacity={0.8}
-                    style={[styles.option, active && styles.optionActive]}
-                  >
-                    <Text style={[styles.optionText, active && styles.optionTextActive]}>{t}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            <Select
+              label="Tipo"
+              value={form.tipo}
+              onChange={(v) => setForm({ ...form, tipo: v as Tipo })}
+              options={TIPOS.map((t) => ({ value: t, label: t }))}
+              placeholder="Seleccionar tipo"
+              searchable={false}
+            />
 
-            <FormField
+            <DatePicker
               label="Fecha"
               value={form.fecha}
-              onChangeText={(t) => setForm({ ...form, fecha: t })}
-              placeholder="AAAA-MM-DD"
+              onChange={(v) => setForm({ ...form, fecha: v })}
             />
           </>
         )}

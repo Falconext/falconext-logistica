@@ -19,6 +19,8 @@ import {
   Theme,
 } from '../../components/ui';
 import ImageUpload from '../../components/ImageUpload';
+import DatePicker from '../../components/DatePicker';
+import Select from '../../components/Select';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { formatMoney } from '../../constants/currency';
@@ -293,12 +295,27 @@ export default function TrabajadoresScreen() {
         </View>
         <FormField label="Nombre completo *" value={form.nombre_completo || ''} onChangeText={(t) => setForm({ ...form, nombre_completo: t })} placeholder="Juan Pérez" autoCapitalize="words" />
         <FormField label="Cargo *" value={form.cargo || ''} onChangeText={(t) => setForm({ ...form, cargo: t })} placeholder="Chofer" autoCapitalize="words" />
-        <FormField label="Estado laboral" value={form.estado_laboral || ''} onChangeText={(t) => setForm({ ...form, estado_laboral: t })} placeholder="Activo / Inactivo" autoCapitalize="words" />
+        <Select
+          label="Estado laboral"
+          value={form.estado_laboral || ''}
+          onChange={(v) => setForm({ ...form, estado_laboral: v })}
+          placeholder="Selecciona el estado"
+          searchable={false}
+          options={[
+            { value: 'Activo', label: 'Activo' },
+            { value: 'Inactivo', label: 'Inactivo' },
+          ]}
+        />
         <FormField label="Área de trabajo" value={form.area_trabajo || ''} onChangeText={(t) => setForm({ ...form, area_trabajo: t })} placeholder="Operaciones" />
         <FormField label="Teléfono" value={form.telefono || ''} onChangeText={(t) => setForm({ ...form, telefono: t })} placeholder="+51 999 999 999" keyboardType="phone-pad" />
         <FormField label="Email personal" value={form.email_personal || ''} onChangeText={(t) => setForm({ ...form, email_personal: t })} placeholder="correo@ejemplo.com" keyboardType="email-address" autoCapitalize="none" />
         <FormField label="Licencia de conducir" value={form.licencia_conducir || ''} onChangeText={(t) => setForm({ ...form, licencia_conducir: t })} placeholder="N° de licencia" autoCapitalize="characters" />
-        <FormField label="Venc. licencia (AAAA-MM-DD)" value={form.fecha_vencimiento_licencia || ''} onChangeText={(t) => setForm({ ...form, fecha_vencimiento_licencia: t })} placeholder="2026-12-31" autoCapitalize="none" />
+        <DatePicker
+          label="Venc. licencia"
+          value={form.fecha_vencimiento_licencia || ''}
+          onChange={(v) => setForm({ ...form, fecha_vencimiento_licencia: v })}
+          placeholder="Selecciona la fecha"
+        />
         <FormField label="N° pasaporte" value={form.numero_pasaporte || ''} onChangeText={(t) => setForm({ ...form, numero_pasaporte: t })} placeholder="Pasaporte" autoCapitalize="characters" />
         <FormField label="Sueldo base" value={form.sueldo_base !== undefined && form.sueldo_base !== null ? String(form.sueldo_base) : ''} onChangeText={(t) => setForm({ ...form, sueldo_base: t })} placeholder="1500" keyboardType="numeric" />
       </FormModal>

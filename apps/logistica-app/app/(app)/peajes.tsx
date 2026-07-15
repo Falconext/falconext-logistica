@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { Receipt, Calendar, Pencil, Trash2, Coins, ClipboardList, Clock, Car } from 'lucide-react-native';
+import { Receipt, Calendar, Pencil, Trash2, Coins, ClipboardList, Clock } from 'lucide-react-native';
 import {
   Screen,
   AppHeader,
@@ -17,6 +17,8 @@ import {
   InfoRow,
   Theme,
 } from '../../components/ui';
+import DatePicker from '../../components/DatePicker';
+import Select from '../../components/Select';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { formatMoney } from '../../constants/currency';
@@ -42,6 +44,8 @@ interface Peaje {
 
 const ESTADOS = ['PENDIENTE', 'PAGADO', 'ANULADO'] as const;
 type Estado = (typeof ESTADOS)[number];
+
+const TIPOS = ['Peaje', 'Multa'] as const;
 
 function estadoVariant(estado?: string | null): 'success' | 'warning' | 'danger' | 'neutral' {
   switch ((estado || '').toUpperCase()) {
@@ -323,25 +327,13 @@ export default function PeajesScreen() {
         footer={<Button title={editing ? 'Guardar cambios' : 'Registrar'} loading={saving} onPress={save} />}
       >
         {vehiculos.length > 0 && (
-          <>
-            <Text style={styles.selectLabel}>Vehículo</Text>
-            <View style={styles.selectWrap}>
-              {vehiculos.map((v) => {
-                const active = form.targa === v.placa;
-                return (
-                  <TouchableOpacity
-                    key={v.id}
-                    onPress={() => setForm({ ...form, targa: v.placa })}
-                    activeOpacity={0.8}
-                    style={[styles.option, active && styles.optionActive]}
-                  >
-                    <Car size={15} color={active ? C.textOnPrimary : C.textMuted} />
-                    <Text style={[styles.optionText, active && styles.optionTextActive]}>{v.placa}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </>
+          <Select
+            label="Vehículo"
+            value={form.targa}
+            onChange={(v) => setForm({ ...form, targa: v })}
+            options={vehiculos.map((v) => ({ value: v.placa, label: v.placa }))}
+            placeholder="Seleccionar vehículo"
+          />
         )}
 
         <FormField
@@ -352,28 +344,22 @@ export default function PeajesScreen() {
           autoCapitalize="characters"
         />
 
-        <Text style={styles.selectLabel}>Estado</Text>
-        <View style={styles.selectWrap}>
-          {ESTADOS.map((e) => {
-            const active = form.estado === e;
-            return (
-              <TouchableOpacity
-                key={e}
-                onPress={() => setForm({ ...form, estado: e })}
-                activeOpacity={0.8}
-                style={[styles.option, active && styles.optionActive]}
-              >
-                <Text style={[styles.optionText, active && styles.optionTextActive]}>{e}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        <Select
+          label="Estado"
+          value={form.estado}
+          onChange={(v) => setForm({ ...form, estado: v as Estado })}
+          options={ESTADOS.map((e) => ({ value: e, label: e }))}
+          placeholder="Seleccionar estado"
+          searchable={false}
+        />
 
-        <FormField
+        <Select
           label="Tipo"
           value={form.tipo}
-          onChangeText={(t) => setForm({ ...form, tipo: t })}
+          onChange={(v) => setForm({ ...form, tipo: v })}
+          options={TIPOS.map((t) => ({ value: t, label: t }))}
           placeholder="Peaje / Multa"
+          searchable={false}
         />
         <FormField
           label="Monto"
@@ -382,11 +368,10 @@ export default function PeajesScreen() {
           placeholder="0.00"
           keyboardType="numeric"
         />
-        <FormField
+        <DatePicker
           label="Fecha"
           value={form.fecha}
-          onChangeText={(t) => setForm({ ...form, fecha: t })}
-          placeholder="AAAA-MM-DD"
+          onChange={(v) => setForm({ ...form, fecha: v })}
         />
         <FormField
           label="Trabajador (código)"
