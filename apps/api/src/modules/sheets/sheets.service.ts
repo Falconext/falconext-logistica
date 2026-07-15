@@ -18,14 +18,23 @@ export class SheetsService {
 
     private async initializeAuth() {
         try {
-            // Path to your Service Account Key
-            // In a real env, this could be an ENV VAR with the JSON content
-            const keyFilePath = path.join(process.cwd(), 'google-credentials.json');
-
-            this.authClient = new google.auth.JWT({
-                keyFile: keyFilePath,
-                scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-            });
+            const scopes = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
+            // En serverless (Vercel) no hay archivo en disco: se usa la variable de entorno
+            // GOOGLE_CREDENTIALS_JSON (JSON crudo o codificado en base64). En local cae al
+            // archivo google-credentials.json de la raíz del proyecto.
+            const raw = process.env.GOOGLE_CREDENTIALS_JSON;
+            if (raw) {
+                const text = raw.trim().startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf8');
+                const creds = JSON.parse(text);
+                this.authClient = new google.auth.JWT({
+                    email: creds.client_email,
+                    key: creds.private_key,
+                    scopes,
+                });
+            } else {
+                const keyFilePath = path.join(process.cwd(), 'google-credentials.json');
+                this.authClient = new google.auth.JWT({ keyFile: keyFilePath, scopes });
+            }
 
             await this.authClient.authorize();
             this.logger.log('Google Sheets Auth successful');

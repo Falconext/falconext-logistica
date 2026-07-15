@@ -3,12 +3,17 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // "native" para desarrollo local; el target de Vercel (AWS Lambda) para producción.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // URL con pooling (Neon: ...-pooler...) para el runtime serverless.
+  url       = env("DATABASE_URL")
+  // URL directa (sin pooler) que Prisma usa para migraciones.
+  directUrl = env("DIRECT_URL")
 }
 
 model Trabajador {

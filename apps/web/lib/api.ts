@@ -1,8 +1,10 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
 
+// La URL del backend se toma de la variable de entorno en producción
+// (p. ej. https://mi-api.vercel.app/api) y cae a localhost en desarrollo.
 const api = axios.create({
-    baseURL: 'http://localhost:3005/api',
+    baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005/api',
 });
 
 api.interceptors.request.use((config) => {
