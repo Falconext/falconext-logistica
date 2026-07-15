@@ -126,6 +126,9 @@ export class ProgramacionService {
                 // `fecha` es requerida en el modelo pero los clientes (app y web) sólo
                 // envían fecha_retiro/fecha_entrega. La derivamos para no fallar el create.
                 fecha: data.fecha || data.fecha_retiro || data.fecha_entrega || new Date(),
+                // El default del modelo es 'PENDING' (inglés) pero los clientes usan
+                // estados en español (PENDIENTE/RETIRADO/ENTREGADO...). Alineamos.
+                estado: data.estado || 'PENDIENTE',
                 tenant_id: resolvedTenant
             }
         });

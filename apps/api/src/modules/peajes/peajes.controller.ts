@@ -24,8 +24,8 @@ export class PeajesController {
     }
 
     @Patch(':id')
-    update(@Param('id') id: string, @Body() data: any) {
-        return this.peajesService.update(id, data);
+    update(@Param('id') id: string, @Body() data: any, @Req() req) {
+        return this.peajesService.update(id, data, req.user.tenantId);
     }
 
     @Delete(':id')

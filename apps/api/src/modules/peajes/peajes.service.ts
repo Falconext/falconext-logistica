@@ -71,9 +71,11 @@ export class PeajesService {
         return { items, total, counts };
     }
 
-    update(id: string, data: any) {
-        return this.prisma.peaje.update({
-            where: { id },
+    update(id: string, data: any, tenantId?: string) {
+        // updateMany permite filtrar por tenant además del id (aislamiento multi-empresa):
+        // sólo actualiza si el peaje pertenece al tenant del usuario.
+        return this.prisma.peaje.updateMany({
+            where: tenantId ? { id, tenant_id: tenantId } : { id },
             data: {
                 id_multa: data.id_multa,
                 estado: data.estado,
