@@ -186,7 +186,9 @@ export default function MapboxWebView(props: MapboxWebViewProps) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, overflow: 'hidden', backgroundColor: '#e8eef5' },
+  // Sin flex:1: la altura la define el `style` que pasa cada pantalla (height:280,
+  // etc.). Con flex:1 el height se ignoraba en columnas y el mapa salía muy chico.
+  container: { overflow: 'hidden', backgroundColor: '#e8eef5' },
   web: { flex: 1, backgroundColor: 'transparent' },
   toggle: {
     position: 'absolute',
