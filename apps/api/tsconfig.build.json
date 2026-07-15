@@ -5,6 +5,7 @@
         "test",
         "dist",
         "api",
+        "prisma",
         "**/*spec.ts"
     ]
 }
