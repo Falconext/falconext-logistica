@@ -11,6 +11,21 @@ export class SyncService {
         private sheetsService: SheetsService
     ) { }
 
+    /**
+     * Ejecuta `fn` sobre los items en lotes concurrentes. Evita el timeout de la
+     * función serverless: antes se hacía un upsert secuencial por fila (~6000 idas
+     * y vueltas a la BD > 30s). En paralelo por lotes baja a pocos segundos.
+     */
+    private async batchRun<T>(items: T[], size: number, fn: (item: T) => Promise<any>): Promise<number> {
+        let done = 0;
+        for (let i = 0; i < items.length; i += size) {
+            const chunk = items.slice(i, i + size);
+            await Promise.all(chunk.map((it) => fn(it)));
+            done += chunk.length;
+        }
+        return done;
+    }
+
     async syncSheet(tenantId: string) {
         // 1. Get Tenant Config
         const tenant = await this.prisma.tenant.findUnique({
@@ -105,13 +120,15 @@ export class SyncService {
         const idxIngreso = getIndex('INGRESO');
         const idxETA = getIndex('ETA');
 
-        let count = 0;
         let skipCount = 0;
 
+        // Construir las operaciones de upsert (validando filas) y luego ejecutarlas
+        // en lotes concurrentes para no exceder el tiempo de la función.
+        const ops: any[] = [];
         for (const row of dataRows) {
             const idProgramacion = row[idxId];
 
-            if (!idProgramacion || idProgramacion.trim() === '') {
+            if (!idProgramacion || idProgramacion.toString().trim() === '') {
                 skipCount++;
                 continue;
             }
@@ -119,7 +136,7 @@ export class SyncService {
             // Date Parsing
             const dateStr = row[idxFecha];
             const etaStr = row[idxETA];
-            let fecha = this.parseDeliveryDate(dateStr, etaStr);
+            const fecha = this.parseDeliveryDate(dateStr, etaStr);
 
             // Driver Lookup
             const driverCode = row[idxConductorCode]?.toString().trim();
@@ -133,38 +150,27 @@ export class SyncService {
             const estadoRaw = row[idxEstado]?.toString().trim() || '';
             const estado = this.mapEstado(estadoRaw);
 
-            // Upsert Programacion
-            await this.prisma.programacion.upsert({
+            const base = {
+                fecha,
+                cliente: row[idxCliente] || '',
+                lugar_retiro: 'VIA DANTE ALIGHIERI 1, Peschiera Borromeo, 20068',
+                lugar_entrega: row[idxEntrega] || '',
+                vehiculo_id: vehicleName,
+                trabajador_id: driverName,
+                tenant_id: tenantId,
+                estado,
+                ingreso_estimado: row[idxIngreso] ? parseFloat(row[idxIngreso].toString().replace(',', '.')) : 0,
+                fecha_entrega: fecha,
+            };
+
+            ops.push({
                 where: { id_programacion: idProgramacion.toString() },
-                update: {
-                    fecha,
-                    cliente: row[idxCliente] || '',
-                    lugar_retiro: 'VIA DANTE ALIGHIERI 1, Peschiera Borromeo, 20068',
-                    lugar_entrega: row[idxEntrega] || '',
-                    vehiculo_id: vehicleName,
-                    trabajador_id: driverName,
-                    tenant_id: tenantId,
-                    estado,
-                    ingreso_estimado: row[idxIngreso] ? parseFloat(row[idxIngreso].replace(',', '.')) : 0,
-                    fecha_entrega: fecha,
-                    actualizado_en: new Date()
-                },
-                create: {
-                    id_programacion: idProgramacion.toString(),
-                    fecha,
-                    cliente: row[idxCliente] || '',
-                    lugar_retiro: 'VIA DANTE ALIGHIERI 1, Peschiera Borromeo, 20068',
-                    lugar_entrega: row[idxEntrega] || '',
-                    vehiculo_id: vehicleName,
-                    trabajador_id: driverName,
-                    tenant_id: tenantId,
-                    estado,
-                    ingreso_estimado: row[idxIngreso] ? parseFloat(row[idxIngreso].replace(',', '.')) : 0,
-                    fecha_entrega: fecha
-                }
+                update: { ...base, actualizado_en: new Date() },
+                create: { id_programacion: idProgramacion.toString(), ...base },
             });
-            count++;
         }
+
+        const count = await this.batchRun(ops, 25, (op) => this.prisma.programacion.upsert(op));
 
         // 6. Sync MANCATO P. (Peajes/Multas)
         const peajeCount = await this.syncPeajes(tenant.google_sheet_id, tenantId);
@@ -206,7 +212,7 @@ export class SyncService {
             const idxTipo = getIdx('TIPO');
             const idxMes = getIdx('MES');
 
-            let count = 0;
+            const ops: any[] = [];
             for (const row of rows.slice(1)) {
                 const idMulta = row[idxId]?.toString().trim();
                 if (!idMulta) continue;
@@ -223,40 +229,27 @@ export class SyncService {
                     }
                 }
 
-                await this.prisma.peaje.upsert({
+                const base = {
+                    estado: row[idxEstado]?.toString().trim() || null,
+                    fecha,
+                    hora: row[idxHora]?.toString().trim() || null,
+                    targa: row[idxTarga]?.toString().trim() || null,
+                    monto,
+                    trabajador_id: row[idxTrabajador]?.toString().trim() || null,
+                    comentarios: row[idxComentarios]?.toString().trim() || null,
+                    archivo: row[idxArchivo]?.toString().trim() || null,
+                    recibo_pago: row[idxRecibo]?.toString().trim() || null,
+                    tipo: row[idxTipo]?.toString().trim() || null,
+                    mes: row[idxMes]?.toString().trim() || null,
+                };
+
+                ops.push({
                     where: { id_multa: idMulta },
-                    update: {
-                        estado: row[idxEstado]?.toString().trim() || null,
-                        fecha,
-                        hora: row[idxHora]?.toString().trim() || null,
-                        targa: row[idxTarga]?.toString().trim() || null,
-                        monto,
-                        trabajador_id: row[idxTrabajador]?.toString().trim() || null,
-                        comentarios: row[idxComentarios]?.toString().trim() || null,
-                        archivo: row[idxArchivo]?.toString().trim() || null,
-                        recibo_pago: row[idxRecibo]?.toString().trim() || null,
-                        tipo: row[idxTipo]?.toString().trim() || null,
-                        mes: row[idxMes]?.toString().trim() || null,
-                        actualizado_en: new Date()
-                    },
-                    create: {
-                        id_multa: idMulta,
-                        estado: row[idxEstado]?.toString().trim() || null,
-                        fecha,
-                        hora: row[idxHora]?.toString().trim() || null,
-                        targa: row[idxTarga]?.toString().trim() || null,
-                        monto,
-                        trabajador_id: row[idxTrabajador]?.toString().trim() || null,
-                        comentarios: row[idxComentarios]?.toString().trim() || null,
-                        archivo: row[idxArchivo]?.toString().trim() || null,
-                        recibo_pago: row[idxRecibo]?.toString().trim() || null,
-                        tipo: row[idxTipo]?.toString().trim() || null,
-                        mes: row[idxMes]?.toString().trim() || null,
-                        tenant_id: tenantId
-                    }
+                    update: { ...base, actualizado_en: new Date() },
+                    create: { id_multa: idMulta, ...base, tenant_id: tenantId },
                 });
-                count++;
             }
+            const count = await this.batchRun(ops, 25, (op) => this.prisma.peaje.upsert(op));
             this.logger.log(`Synced ${count} peajes from MANCATO P.`);
             return count;
         } catch (e) {
@@ -286,7 +279,7 @@ export class SyncService {
             const idxMes = getIdx('MES');
             const idxArchivo = getIdx('ARCHIVO');
 
-            let count = 0;
+            const ops: any[] = [];
             for (const row of rows.slice(1)) {
                 const idRegistro = row[idxId]?.toString().trim();
                 if (!idRegistro) continue;
@@ -307,34 +300,24 @@ export class SyncService {
                     }
                 }
 
-                await this.prisma.combustible.upsert({
+                const base = {
+                    trabajador_id: row[idxTrabajador]?.toString().trim() || null,
+                    fecha,
+                    monto,
+                    targa: row[idxTarga]?.toString().trim() || null,
+                    metodo: row[idxMetodo]?.toString().trim() || null,
+                    area: row[idxArea]?.toString().trim() || null,
+                    mes: row[idxMes]?.toString().trim() || null,
+                    archivo: row[idxArchivo]?.toString().trim() || null,
+                };
+
+                ops.push({
                     where: { id_registro: idRegistro },
-                    update: {
-                        trabajador_id: row[idxTrabajador]?.toString().trim() || null,
-                        fecha,
-                        monto,
-                        targa: row[idxTarga]?.toString().trim() || null,
-                        metodo: row[idxMetodo]?.toString().trim() || null,
-                        area: row[idxArea]?.toString().trim() || null,
-                        mes: row[idxMes]?.toString().trim() || null,
-                        archivo: row[idxArchivo]?.toString().trim() || null,
-                        actualizado_en: new Date()
-                    },
-                    create: {
-                        id_registro: idRegistro,
-                        trabajador_id: row[idxTrabajador]?.toString().trim() || null,
-                        fecha,
-                        monto,
-                        targa: row[idxTarga]?.toString().trim() || null,
-                        metodo: row[idxMetodo]?.toString().trim() || null,
-                        area: row[idxArea]?.toString().trim() || null,
-                        mes: row[idxMes]?.toString().trim() || null,
-                        archivo: row[idxArchivo]?.toString().trim() || null,
-                        tenant_id: tenantId
-                    }
+                    update: { ...base, actualizado_en: new Date() },
+                    create: { id_registro: idRegistro, ...base, tenant_id: tenantId },
                 });
-                count++;
             }
+            const count = await this.batchRun(ops, 25, (op) => this.prisma.combustible.upsert(op));
             this.logger.log(`Synced ${count} combustible records.`);
             return count;
         } catch (e) {
