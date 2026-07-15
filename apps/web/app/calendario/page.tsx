@@ -18,7 +18,8 @@ export default function CalendarioPage() {
         async function fetchData() {
             try {
                 const res = await api.get('/programacion');
-                setRutas(res.data);
+                // /programacion devuelve { items, total, counts } (paginado) o un array legacy.
+                setRutas(Array.isArray(res.data) ? res.data : (res.data?.items ?? []));
             } catch (error) {
                 console.error('Error fetching operations:', error);
             } finally {

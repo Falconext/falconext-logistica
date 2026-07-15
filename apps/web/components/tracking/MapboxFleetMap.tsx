@@ -140,9 +140,15 @@ export function MapboxFleetMap() {
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
 
-      {/* Panel lateral */}
-      <div className="absolute top-4 left-4 bottom-4 w-72 z-10 flex flex-col bg-white/95 dark:bg-[#0f1522]/95 backdrop-blur rounded-2xl shadow-xl border border-slate-200 dark:border-[#202a40] overflow-hidden">
-        <div className="p-4 border-b border-slate-100 dark:border-[#202a40]">
+      {/* Panel: hoja inferior en móvil, panel lateral izquierdo en desktop */}
+      <div className="absolute z-10 flex flex-col bg-white/95 dark:bg-[#0f1522]/95 backdrop-blur rounded-2xl shadow-xl border border-slate-200 dark:border-[#202a40] overflow-hidden
+                      inset-x-2 bottom-2 max-h-[42vh]
+                      sm:inset-x-auto sm:top-4 sm:left-4 sm:bottom-4 sm:w-72 sm:max-h-none">
+        {/* Handle estilo hoja (solo móvil) */}
+        <div className="sm:hidden flex justify-center pt-2 pb-1 shrink-0">
+          <span className="h-1 w-10 rounded-full bg-slate-300 dark:bg-slate-600" />
+        </div>
+        <div className="px-4 pb-4 pt-1 sm:p-4 border-b border-slate-100 dark:border-[#202a40] shrink-0">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-slate-900 dark:text-white">Flota en vivo</h3>
             <span className="text-xs font-semibold text-emerald-600">{onlineCount} en línea</span>

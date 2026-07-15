@@ -3,7 +3,7 @@
 import { useEffect, useState, memo, useCallback, useRef } from 'react';
 import api from '../../lib/api';
 import { Programacion } from '../../types';
-import { LiveMap } from '../../components/tracking/LiveMap';
+import { MapboxRouteMap } from '../../components/tracking/MapboxRouteMap';
 import { LiveMapReal } from '../../components/tracking/LiveMapReal';
 import NewRouteModal from './NewRouteModal';
 import {
@@ -554,7 +554,7 @@ const MapView = memo(function MapView({ deviceId, worker, origin, destination, p
         return <LiveMapReal deviceId={deviceId} apiKey={MAPS_KEY} vehiclePlate={plate} workerName={worker} />;
     }
     if (origin && destination) {
-        return <LiveMap originAddress={origin} destinationAddress={destination} apiKey={MAPS_KEY} mapType={mapType} preview />;
+        return <MapboxRouteMap originAddress={origin} destinationAddress={destination} mapType={mapType} />;
     }
     return (
         <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-3">

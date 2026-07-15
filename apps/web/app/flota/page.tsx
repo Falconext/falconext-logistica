@@ -5,7 +5,7 @@ import { Radio } from 'lucide-react';
 
 export default function FlotaPage() {
   return (
-    <div className="h-[calc(100vh-100px)] flex flex-col gap-4">
+    <div className="h-[calc(100dvh-170px)] sm:h-[calc(100vh-100px)] flex flex-col gap-3 sm:gap-4">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-[#1a1a1c] flex items-center justify-center text-[#FFC933] shrink-0">
           <Radio size={20} />
