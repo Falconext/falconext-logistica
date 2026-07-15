@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Radio, Wifi, Gauge, MapPin, Clock, User, Truck } from 'lucide-react-native';
 import {
@@ -90,6 +90,9 @@ export default function FlotaScreen() {
   const [query, setQuery] = useState('');
   // Fuerza re-render periódico para actualizar "hace X min" y el estado en línea.
   const [, setTick] = useState(0);
+  // Punto al que centrar el mapa al tocar una tarjeta.
+  const [focus, setFocus] = useState<{ lng: number; lat: number; nonce: number } | undefined>();
+  const focusNonce = useRef(0);
 
   const load = useCallback(async () => {
     try {
@@ -173,8 +176,15 @@ export default function FlotaScreen() {
   const renderCard = ({ item: d }: { item: Device }) => {
     const pos = lastPosition(d);
     const online = isOnline(pos);
+    const hasPos = !!pos && Number.isFinite(pos.latitude) && Number.isFinite(pos.longitude);
     return (
-      <View style={styles.card}>
+      <TouchableOpacity
+        activeOpacity={hasPos ? 0.7 : 1}
+        onPress={() => {
+          if (hasPos) setFocus({ lng: pos!.longitude, lat: pos!.latitude, nonce: focusNonce.current++ });
+        }}
+        style={styles.card}
+      >
         <View style={[styles.cardIcon, { backgroundColor: online ? C.successSoft : C.neutralSoft }]}>
           <Radio size={20} color={online ? C.success : C.neutral} />
         </View>
@@ -223,7 +233,7 @@ export default function FlotaScreen() {
             </Text>
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -247,6 +257,7 @@ export default function FlotaScreen() {
             color: isOnline(pos) ? '#16A34A' : '#94A3B8',
             popup: `<b>${deviceTitle(d)}</b><br/>${timeAgo(pos.timestamp)} · ${kmh(pos.speed)}`,
           }))}
+          focus={focus}
         />
 
         <View style={{ marginBottom: S.md }}>

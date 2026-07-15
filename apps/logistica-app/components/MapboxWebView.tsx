@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Env } from '../constants/Env';
@@ -37,6 +37,9 @@ export interface MapboxWebViewProps {
   onCenterChange?: (lng: number, lat: number) => void;
   onRouteInfo?: (info: { eta: number; dist: string }) => void;
   themeToggle?: boolean; // muestra el toggle Día/Noche (default true)
+  // Centra el mapa en estas coords (vuela sin recargar). nonce fuerza re-disparo
+  // aunque se toque el mismo punto otra vez.
+  focus?: { lng: number; lat: number; nonce?: number };
   style?: ViewStyle;
 }
 
@@ -63,13 +66,15 @@ mapboxgl.accessToken=CFG.token;
 var styleMap={dark:'mapbox://styles/mapbox/dark-v11',satellite:'mapbox://styles/mapbox/satellite-streets-v12',streets:'mapbox://styles/mapbox/standard'};
 var map=new mapboxgl.Map({container:'map',style:styleMap[CFG.mapStyle]||styleMap.streets,center:CFG.center||[-77.04,-12.04],zoom:CFG.zoom||11,attributionControl:false});
 map.addControl(new mapboxgl.NavigationControl({showCompass:false}),'top-right');
+window.__markers=[];
+window.__focus=function(lng,lat){try{if(!map)return;map.flyTo({center:[lng,lat],zoom:15,duration:900,essential:true});var best=null,bd=1e9;window.__markers.forEach(function(o){var dd=Math.abs(o.lng-lng)+Math.abs(o.lat-lat);if(dd<bd){bd=dd;best=o;}});if(best&&best.mk.getPopup&&best.mk.getPopup()&&!best.mk.getPopup().isOpen())best.mk.togglePopup();}catch(e){}};
 var isStandard=(CFG.mapStyle||'streets')==='streets';
 function applyTheme(p){try{if(isStandard){map.setConfigProperty('basemap','theme','faded');map.setConfigProperty('basemap','lightPreset',p);}}catch(e){}}
 window.__setPreset=function(p){applyTheme(p);};
 map.on('style.load',function(){applyTheme(CFG.preset||'day');});
 map.on('load',function(){
   var bounds=new mapboxgl.LngLatBounds();var has=false;
-  (CFG.markers||[]).forEach(function(m){var mk=new mapboxgl.Marker({color:m.color||'#2563EB'}).setLngLat([m.lng,m.lat]);if(m.popup)mk.setPopup(new mapboxgl.Popup({offset:14,closeButton:false}).setHTML(m.popup));mk.addTo(map);bounds.extend([m.lng,m.lat]);has=true;});
+  (CFG.markers||[]).forEach(function(m){var mk=new mapboxgl.Marker({color:m.color||'#2563EB'}).setLngLat([m.lng,m.lat]);if(m.popup)mk.setPopup(new mapboxgl.Popup({offset:14,closeButton:false}).setHTML(m.popup));mk.addTo(map);window.__markers.push({lng:m.lng,lat:m.lat,mk:mk});bounds.extend([m.lng,m.lat]);has=true;});
   (CFG.circles||[]).forEach(function(c,i){var poly=circle(c.lng,c.lat,c.radius);map.addSource('c'+i,{type:'geojson',data:poly});map.addLayer({id:'cf'+i,type:'fill',source:'c'+i,paint:{'fill-color':c.color||'#3B82F6','fill-opacity':0.2}});map.addLayer({id:'cl'+i,type:'line',source:'c'+i,paint:{'line-color':c.color||'#2563EB','line-width':2}});bounds.extend([c.lng,c.lat]);has=true;});
   if(CFG.draggableCenter){var dc=CFG.draggableCenter;var dm=new mapboxgl.Marker({color:'#2563EB',draggable:true}).setLngLat([dc.lng,dc.lat]).addTo(map);dm.on('dragend',function(){var ll=dm.getLngLat();post({type:'center',lng:ll.lng,lat:ll.lat});});map.on('click',function(e){dm.setLngLat(e.lngLat);post({type:'center',lng:e.lngLat.lng,lat:e.lngLat.lat});});bounds.extend([dc.lng,dc.lat]);has=true;}
   if(CFG.route){drawRoute(CFG.route);return;}
@@ -108,6 +113,14 @@ export default function MapboxWebView(props: MapboxWebViewProps) {
     setPreset(p);
     webRef.current?.injectJavaScript(`window.__setPreset && window.__setPreset('${p}'); true;`);
   };
+
+  // Volar al punto enfocado (tocar una tarjeta) sin recargar el mapa.
+  const focus = props.focus;
+  useEffect(() => {
+    if (focus && webRef.current) {
+      webRef.current.injectJavaScript(`window.__focus && window.__focus(${focus.lng}, ${focus.lat}); true;`);
+    }
+  }, [focus?.lng, focus?.lat, focus?.nonce]);
 
   const config = useMemo(
     () => ({
