@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -56,7 +56,8 @@ const items: Item[] = [
 export default function MasScreen() {
   const router = useRouter();
   const { user, logout } = useAuth();
-  const { isDark, toggle } = useTheme();
+  const { isDark, toggle, themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const isAdmin = isAdminUser(user);
 
   const confirmLogout = () => {
@@ -122,7 +123,7 @@ export default function MasScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   avatar: {
     width: 48,
     height: 48,

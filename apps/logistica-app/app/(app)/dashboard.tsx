@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
@@ -31,6 +31,7 @@ import {
 } from '../../components/ui';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { formatMoney } from '../../constants/currency';
 
 const C = Theme.colors;
@@ -79,6 +80,8 @@ const ACCESOS: { label: string; icon: any; route: string; color: string }[] = [
 ];
 
 export default function DashboardScreen() {
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const router = useRouter();
   const { user } = useAuth();
 
@@ -167,7 +170,7 @@ export default function DashboardScreen() {
               <View style={[styles.cardIcon, { backgroundColor: C.dark }]}>
                 <DollarSign size={16} color="#fff" />
               </View>
-              <Text style={styles.cardTitle}>Operaciones del mes</Text>
+              <Text style={styles.cardTitle} numberOfLines={1}>Operaciones del mes</Text>
             </View>
             <TouchableOpacity style={styles.linkBtn} onPress={() => go('/(app)/operaciones')} hitSlop={8}>
               <Text style={styles.linkText}>Ver detalles</Text>
@@ -215,7 +218,7 @@ export default function DashboardScreen() {
                   <View style={[styles.cardIcon, { backgroundColor: C.dark }]}>
                     <Coins size={16} color="#fff" />
                   </View>
-                  <Text style={styles.cardTitle}>Costos del mes</Text>
+                  <Text style={styles.cardTitle} numberOfLines={1}>Costos del mes</Text>
                 </View>
                 <TouchableOpacity style={styles.linkBtn} onPress={() => go('/(app)/reportes')} hitSlop={8}>
                   <Text style={styles.linkText}>Ver reportes</Text>
@@ -347,7 +350,7 @@ export default function DashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   body: { paddingHorizontal: S.lg, paddingTop: S.md, paddingBottom: S.xxl },
   welcome: { marginBottom: S.lg },
   hello: { fontSize: F.size.md, color: C.textMuted },
@@ -358,10 +361,10 @@ const styles = StyleSheet.create({
 
   opCard: { marginTop: S.sm, marginBottom: S.lg },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: S.md },
-  cardHeadLeft: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
+  cardHeadLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: S.sm },
   cardIcon: { width: 34, height: 34, borderRadius: R.md, alignItems: 'center', justifyContent: 'center' },
-  cardTitle: { fontSize: F.size.md, fontWeight: F.weight.bold, color: C.text },
-  linkBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  cardTitle: { flexShrink: 1, fontSize: F.size.md, fontWeight: F.weight.bold, color: C.text },
+  linkBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0, marginLeft: S.sm },
   linkText: { fontSize: F.size.sm, color: C.textMuted },
 
   opRow: { flexDirection: 'row', gap: S.sm },

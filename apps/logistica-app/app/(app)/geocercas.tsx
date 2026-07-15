@@ -17,7 +17,9 @@ import {
   InfoRow,
   Theme,
 } from '../../components/ui';
+import MapboxWebView from '../../components/MapboxWebView';
 import api from '../../services/api';
+import { useTheme } from '../../context/ThemeContext';
 
 const C = Theme.colors;
 const S = Theme.spacing;
@@ -53,6 +55,8 @@ function fmtCoord(n?: number): string {
 }
 
 export default function GeocercasScreen() {
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const [items, setItems] = useState<Geofence[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -102,6 +106,35 @@ export default function GeocercasScreen() {
     );
     return { total, radioProm, cobertura };
   }, [items]);
+
+  // Geocercas con coordenadas válidas para el mapa.
+  const located = useMemo(
+    () =>
+      items.filter(
+        (g) => Number.isFinite(g.latitude) && Number.isFinite(g.longitude)
+      ),
+    [items]
+  );
+
+  const initialRegion = useMemo(() => {
+    if (located.length === 0) {
+      return { latitude: -12.0464, longitude: -77.0428, latitudeDelta: 0.5, longitudeDelta: 0.5 };
+    }
+    const lats = located.map((g) => g.latitude);
+    const lngs = located.map((g) => g.longitude);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+    // Amplía el encuadre según el radio máximo (m -> grados aprox).
+    const maxRadiusDeg = Math.max(...located.map((g) => (g.radius || 0) / 111000), 0);
+    return {
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+      latitudeDelta: Math.max((maxLat - minLat) * 1.4, maxRadiusDeg * 3, 0.02),
+      longitudeDelta: Math.max((maxLng - minLng) * 1.4, maxRadiusDeg * 3, 0.02),
+    };
+  }, [located]);
 
   const openCreate = () => {
     setForm(empty);
@@ -174,6 +207,24 @@ export default function GeocercasScreen() {
           <StatCard label="Radio prom." value={`${stats.radioProm} m`} icon={CircleIcon} color={C.info} />
           <StatCard label="Cobertura" value={`${stats.cobertura} km²`} icon={Ruler} color={C.success} />
         </View>
+
+        <MapboxWebView
+          style={styles.map}
+          fit
+          mapStyle="streets"
+          circles={located.map((g) => ({
+            lng: g.longitude,
+            lat: g.latitude,
+            radius: g.radius || 0,
+            color: '#2563EB',
+          }))}
+          markers={located.map((g) => ({
+            lng: g.longitude,
+            lat: g.latitude,
+            color: '#2563EB',
+            popup: `<b>${g.name}</b><br/>${g.description || (g.radius + ' m')}`,
+          }))}
+        />
 
         <View style={{ marginBottom: S.md }}>
           <SearchBar value={query} onChangeText={setQuery} placeholder="Buscar por nombre o descripción" />
@@ -262,9 +313,16 @@ export default function GeocercasScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   body: { flex: 1, paddingHorizontal: S.lg, paddingTop: S.md },
   statsRow: { flexDirection: 'row', gap: S.sm, marginBottom: S.md },
+  map: {
+    height: 280,
+    borderRadius: Theme.radius.lg,
+    marginBottom: S.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: C.border,
+  },
   card: {
     flexDirection: 'row',
     gap: S.md,

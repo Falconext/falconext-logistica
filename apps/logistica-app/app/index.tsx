@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Truck, Lock, User, ArrowRight, Smartphone } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { Theme } from '../constants/theme';
 
 const C = Theme.colors;
@@ -20,6 +21,8 @@ type Tab = 'user' | 'device';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const { loginUser, loginDevice, isLoading, mode } = useAuth();
   const [tab, setTab] = useState<Tab>('user');
 
@@ -185,7 +188,7 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.background, padding: 24 },
   content: { flex: 1, justifyContent: 'center' },
   brand: { alignItems: 'center', marginBottom: 32 },

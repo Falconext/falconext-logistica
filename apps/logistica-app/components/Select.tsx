@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import { View, Text, TouchableOpacity, Modal, StyleSheet, Pressable, TextInput, FlatList } from 'react-native';
 import { ChevronDown, Check, Search, X } from 'lucide-react-native';
 import { Theme } from '../constants/theme';
@@ -22,6 +23,8 @@ interface Props {
 
 /** Select móvil buscable (modal con lista filtrable). Contrato: value/onChange(value). */
 export default function Select({ value, onChange, options, label, placeholder = 'Seleccionar...', searchable = true }: Props) {
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
@@ -88,7 +91,7 @@ export default function Select({ value, onChange, options, label, placeholder = 
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   label: { fontSize: Theme.font.size.sm, fontWeight: '500', color: C.textMuted, marginBottom: 6 },
   trigger: { flexDirection: 'row', alignItems: 'center', gap: S.sm, backgroundColor: C.surfaceAlt, borderWidth: 1, borderColor: C.border, borderRadius: Theme.radius.md, paddingHorizontal: S.md, paddingVertical: 12 },
   triggerText: { flex: 1, fontSize: Theme.font.size.md },

@@ -16,6 +16,7 @@ import {
   Theme,
 } from '../../components/ui';
 import api from '../../services/api';
+import { useTheme } from '../../context/ThemeContext';
 
 const C = Theme.colors;
 const S = Theme.spacing;
@@ -85,6 +86,8 @@ function fmtDate(iso?: string) {
 }
 
 export default function AlertasScreen() {
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const [alerts, setAlerts] = useState<DocumentAlert[]>([]);
   const [summary, setSummary] = useState<AlertSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -250,7 +253,7 @@ export default function AlertasScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   body: { flex: 1, paddingHorizontal: S.lg, paddingTop: S.md },
   statsRow: { flexDirection: 'row', gap: S.sm, marginBottom: S.md, flexWrap: 'wrap' },
   statWrap: { flexGrow: 1, flexBasis: '47%', borderRadius: Theme.radius.lg, borderColor: 'transparent', borderWidth: 1.5 },

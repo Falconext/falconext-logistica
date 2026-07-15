@@ -21,6 +21,7 @@ import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { formatMoney } from '../../constants/currency';
 import type { Vehiculo } from '../../types';
 
@@ -93,6 +94,8 @@ const emptyForm: FormState = {
 
 export default function PeajesScreen() {
   const { user } = useAuth();
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const moneda = user?.moneda;
 
   const [items, setItems] = useState<Peaje[]>([]);
@@ -243,7 +246,7 @@ export default function PeajesScreen() {
           {p.trabajador_id ? <Text style={styles.meta}>· {p.trabajador_id}</Text> : null}
         </View>
       </View>
-      <Text style={styles.cost}>{formatMoney(p.monto, moneda)}</Text>
+      <Text style={styles.cost} numberOfLines={1}>{formatMoney(p.monto, moneda)}</Text>
     </TouchableOpacity>
   );
 
@@ -391,7 +394,7 @@ export default function PeajesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   body: { flex: 1, paddingHorizontal: S.lg, paddingTop: S.md },
   statsRow: { flexDirection: 'row', gap: S.sm, marginBottom: S.md },
   card: {

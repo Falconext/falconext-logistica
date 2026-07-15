@@ -17,7 +17,9 @@ import {
   InfoRow,
   Theme,
 } from '../../components/ui';
+import MapboxWebView from '../../components/MapboxWebView';
 import api from '../../services/api';
+import { useTheme } from '../../context/ThemeContext';
 
 const C = Theme.colors;
 const S = Theme.spacing;
@@ -69,6 +71,8 @@ function lastPosition(d: Device): DevicePosition | undefined {
 }
 
 export default function DispositivosScreen() {
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const [items, setItems] = useState<Device[]>([]);
   const [vehiculos, setVehiculos] = useState<VehiculoOpt[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,6 +124,38 @@ export default function DispositivosScreen() {
     const sinVehiculo = items.filter((d) => !d.vehiculo_id && !d.vehiculo).length;
     return { total: items.length, conectados, sinVehiculo };
   }, [items]);
+
+  // Dispositivos con posición válida para el mapa.
+  const located = useMemo(() => {
+    return items
+      .map((d) => ({ d, pos: lastPosition(d) }))
+      .filter(
+        (x): x is { d: Device; pos: DevicePosition & { latitude: number; longitude: number } } =>
+          !!x.pos &&
+          typeof x.pos.latitude === 'number' &&
+          typeof x.pos.longitude === 'number' &&
+          Number.isFinite(x.pos.latitude) &&
+          Number.isFinite(x.pos.longitude)
+      );
+  }, [items]);
+
+  const initialRegion = useMemo(() => {
+    if (located.length === 0) {
+      return { latitude: -12.0464, longitude: -77.0428, latitudeDelta: 0.5, longitudeDelta: 0.5 };
+    }
+    const lats = located.map((x) => x.pos.latitude);
+    const lngs = located.map((x) => x.pos.longitude);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+    return {
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+      latitudeDelta: Math.max((maxLat - minLat) * 1.4, 0.02),
+      longitudeDelta: Math.max((maxLng - minLng) * 1.4, 0.02),
+    };
+  }, [located]);
 
   const openCreate = () => {
     setNewName('');
@@ -194,6 +230,18 @@ export default function DispositivosScreen() {
           <StatCard label="Conectados" value={stats.conectados} icon={Wifi} color={C.success} />
           <StatCard label="Sin vehículo" value={stats.sinVehiculo} icon={WifiOff} color={C.warning} />
         </View>
+
+        <MapboxWebView
+          style={styles.map}
+          fit
+          mapStyle="streets"
+          markers={located.map(({ d, pos }) => ({
+            lng: pos.longitude,
+            lat: pos.latitude,
+            color: isConnected(d) ? '#16A34A' : '#94A3B8',
+            popup: `<b>${d.name}</b><br/>${d.vehiculo?.placa || d.imei}`,
+          }))}
+        />
 
         <View style={{ marginBottom: S.md }}>
           <SearchBar value={query} onChangeText={setQuery} placeholder="Buscar por nombre, IMEI o placa" />
@@ -299,9 +347,16 @@ export default function DispositivosScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   body: { flex: 1, paddingHorizontal: S.lg, paddingTop: S.md },
   statsRow: { flexDirection: 'row', gap: S.sm, marginBottom: S.md },
+  map: {
+    height: 280,
+    borderRadius: Theme.radius.lg,
+    marginBottom: S.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: C.border,
+  },
   card: {
     flexDirection: 'row',
     gap: S.md,

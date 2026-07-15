@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import { View, Text, TouchableOpacity, Modal, StyleSheet, Pressable } from 'react-native';
 import { Calendar, ChevronLeft, ChevronRight, X } from 'lucide-react-native';
 import { Theme } from '../constants/theme';
@@ -31,6 +32,8 @@ interface Props {
 
 /** DatePicker móvil (calendario en modal). Contrato igual que el nativo/web: value/onChange 'YYYY-MM-DD'. */
 export default function DatePicker({ value, onChange, label, placeholder = 'Seleccionar fecha' }: Props) {
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const selected = useMemo(() => parseISO(value), [value]);
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<Date>(() => selected ?? new Date());
@@ -104,7 +107,7 @@ export default function DatePicker({ value, onChange, label, placeholder = 'Sele
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   label: { fontSize: Theme.font.size.sm, fontWeight: '500', color: C.textMuted, marginBottom: 6 },
   trigger: { flexDirection: 'row', alignItems: 'center', gap: S.sm, backgroundColor: C.surfaceAlt, borderWidth: 1, borderColor: C.border, borderRadius: Theme.radius.md, paddingHorizontal: S.md, paddingVertical: 12 },
   triggerText: { flex: 1, fontSize: Theme.font.size.md },

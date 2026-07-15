@@ -23,6 +23,7 @@ import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { formatMoney } from '../../constants/currency';
 import type { Trabajador } from '../../types';
 
@@ -53,6 +54,8 @@ const formatSueldo = (v?: string | number, moneda?: string | null) => {
 };
 
 export default function TrabajadoresScreen() {
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const { user } = useAuth();
   const [items, setItems] = useState<Trabajador[]>([]);
   const [loading, setLoading] = useState(true);
@@ -323,7 +326,7 @@ export default function TrabajadoresScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   body: { flex: 1, paddingHorizontal: S.lg, paddingTop: S.md },
   statsRow: { flexDirection: 'row', gap: S.sm, marginBottom: S.md },
   card: {

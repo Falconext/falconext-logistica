@@ -22,6 +22,7 @@ import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
 import api from '../../services/api';
 import type { Vehiculo } from '../../types';
+import { useTheme } from '../../context/ThemeContext';
 
 const C = Theme.colors;
 const S = Theme.spacing;
@@ -40,6 +41,8 @@ const empty: Partial<Vehiculo> = {
 };
 
 export default function VehiculosScreen() {
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const [items, setItems] = useState<Vehiculo[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -280,7 +283,7 @@ export default function VehiculosScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   body: { flex: 1, paddingHorizontal: S.lg, paddingTop: S.md },
   statsRow: { flexDirection: 'row', gap: S.sm, marginBottom: S.md },
   card: {

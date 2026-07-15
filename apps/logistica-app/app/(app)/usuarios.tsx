@@ -18,6 +18,7 @@ import {
 } from '../../components/ui';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import Select from '../../components/Select';
 
 const C = Theme.colors;
@@ -73,6 +74,8 @@ function isSuperadminUser(u?: Usuario | null): boolean {
 
 export default function UsuariosScreen() {
   const { user: currentUser } = useAuth();
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
 
   const [items, setItems] = useState<Usuario[]>([]);
   const [roles, setRoles] = useState<Rol[]>([]);
@@ -413,7 +416,7 @@ export default function UsuariosScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   body: { flex: 1, paddingHorizontal: S.lg, paddingTop: S.md },
   statsRow: { flexDirection: 'row', gap: S.sm, marginBottom: S.md },
   card: {

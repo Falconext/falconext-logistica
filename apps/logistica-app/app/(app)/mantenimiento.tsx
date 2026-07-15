@@ -22,6 +22,7 @@ import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { formatMoney } from '../../constants/currency';
 import type { Mantenimiento, Vehiculo } from '../../types';
 
@@ -86,6 +87,8 @@ const emptyForm: FormState = {
 
 export default function MantenimientoScreen() {
   const { user } = useAuth();
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const [items, setItems] = useState<MantenimientoItem[]>([]);
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -242,7 +245,7 @@ export default function MantenimientoScreen() {
           ) : null}
         </View>
       </View>
-      <Text style={styles.cost}>{formatMoney(m.costo, user?.moneda)}</Text>
+      <Text style={styles.cost} numberOfLines={1}>{formatMoney(m.costo, user?.moneda)}</Text>
     </TouchableOpacity>
   );
 
@@ -425,7 +428,7 @@ export default function MantenimientoScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   body: { flex: 1, paddingHorizontal: S.lg, paddingTop: S.md },
   statsRow: { flexDirection: 'row', gap: S.sm, marginBottom: S.md },
   filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: S.sm, marginBottom: S.md },

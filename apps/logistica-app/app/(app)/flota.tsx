@@ -12,7 +12,9 @@ import {
   EmptyState,
   Theme,
 } from '../../components/ui';
+import MapboxWebView from '../../components/MapboxWebView';
 import api from '../../services/api';
+import { useTheme } from '../../context/ThemeContext';
 
 const C = Theme.colors;
 const S = Theme.spacing;
@@ -80,6 +82,8 @@ function deviceTitle(d: Device): string {
 }
 
 export default function FlotaScreen() {
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const [items, setItems] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -134,6 +138,37 @@ export default function FlotaScreen() {
     const online = items.filter((d) => isOnline(lastPosition(d))).length;
     return { total: items.length, online };
   }, [items]);
+
+  // Devices con posición válida para pintar en el mapa.
+  const located = useMemo(() => {
+    return items
+      .map((d) => ({ d, pos: lastPosition(d) }))
+      .filter(
+        (x): x is { d: Device; pos: Position } =>
+          !!x.pos &&
+          Number.isFinite(x.pos.latitude) &&
+          Number.isFinite(x.pos.longitude)
+      );
+  }, [items]);
+
+  // Región inicial: encuadra los marcadores (o Lima por defecto).
+  const initialRegion = useMemo(() => {
+    if (located.length === 0) {
+      return { latitude: -12.0464, longitude: -77.0428, latitudeDelta: 0.5, longitudeDelta: 0.5 };
+    }
+    const lats = located.map((x) => x.pos.latitude);
+    const lngs = located.map((x) => x.pos.longitude);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+    return {
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+      latitudeDelta: Math.max((maxLat - minLat) * 1.4, 0.02),
+      longitudeDelta: Math.max((maxLng - minLng) * 1.4, 0.02),
+    };
+  }, [located]);
 
   const renderCard = ({ item: d }: { item: Device }) => {
     const pos = lastPosition(d);
@@ -202,6 +237,18 @@ export default function FlotaScreen() {
           <StatCard label="En línea" value={stats.online} icon={Wifi} color={C.success} />
         </View>
 
+        <MapboxWebView
+          style={styles.map}
+          fit
+          mapStyle="streets"
+          markers={located.map(({ d, pos }) => ({
+            lng: pos.longitude,
+            lat: pos.latitude,
+            color: isOnline(pos) ? '#16A34A' : '#94A3B8',
+            popup: `<b>${deviceTitle(d)}</b><br/>${timeAgo(pos.timestamp)} · ${kmh(pos.speed)}`,
+          }))}
+        />
+
         <View style={{ marginBottom: S.md }}>
           <SearchBar value={query} onChangeText={setQuery} placeholder="Buscar por chofer o placa" />
         </View>
@@ -230,9 +277,16 @@ export default function FlotaScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   body: { flex: 1, paddingHorizontal: S.lg, paddingTop: S.md },
   statsRow: { flexDirection: 'row', gap: S.sm, marginBottom: S.md },
+  map: {
+    height: 280,
+    borderRadius: Theme.radius.lg,
+    marginBottom: S.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: C.border,
+  },
   card: {
     flexDirection: 'row',
     gap: S.md,
