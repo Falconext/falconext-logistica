@@ -32,7 +32,7 @@ const empty: Partial<Vehiculo> = {
   marca_modelo: '',
   tipo_unidad: '',
   anio_fabricacion: undefined,
-  estado_vehiculo: 'ACTIVO',
+  estado_vehiculo: 'DISPONIBLE',
   poliza_seguro: '',
   fecha_vencimiento_seguro: '',
   revision_tecnica: '',
@@ -84,7 +84,7 @@ export default function VehiculosScreen() {
   );
 
   const stats = useMemo(() => {
-    const activos = items.filter((v) => v.estado_vehiculo === 'ACTIVO').length;
+    const activos = items.filter((v) => v.estado_vehiculo === 'DISPONIBLE').length;
     const sinSeguro = items.filter((v) => !v.poliza_seguro).length;
     return { total: items.length, activos, sinSeguro };
   }, [items]);
@@ -148,7 +148,7 @@ export default function VehiculosScreen() {
   };
 
   const renderCard = ({ item: v }: { item: Vehiculo }) => {
-    const activo = v.estado_vehiculo === 'ACTIVO';
+    const activo = v.estado_vehiculo === 'DISPONIBLE';
     return (
       <TouchableOpacity activeOpacity={0.7} style={styles.card} onPress={() => setDetail(v)}>
         <View style={styles.cardIcon}>
@@ -265,8 +265,9 @@ export default function VehiculosScreen() {
           placeholder="Selecciona el estado"
           searchable={false}
           options={[
-            { value: 'ACTIVO', label: 'ACTIVO' },
-            { value: 'INACTIVO', label: 'INACTIVO' },
+            { value: 'DISPONIBLE', label: 'DISPONIBLE' },
+            { value: 'NO DISPONIBLE', label: 'NO DISPONIBLE' },
+            { value: 'EN MANTENIMIENTO', label: 'EN MANTENIMIENTO' },
           ]}
         />
         <FormField label="Póliza de seguro" value={form.poliza_seguro || ''} onChangeText={(t) => setForm({ ...form, poliza_seguro: t })} placeholder="N° de póliza" />

@@ -74,8 +74,9 @@ export default function CalendarioScreen() {
   const load = useCallback(async () => {
     try {
       setError(null);
-      const res = await api.get('/programacion');
-      setItems(Array.isArray(res.data) ? res.data : []);
+      // /programacion pagina como { items, total, counts } (no es un array).
+      const res = await api.get('/programacion', { params: { take: 1000 } });
+      setItems(Array.isArray(res.data) ? res.data : (res.data?.items ?? []));
     } catch (e: any) {
       setError(e?.response?.data?.message || 'No se pudo cargar el calendario.');
     } finally {

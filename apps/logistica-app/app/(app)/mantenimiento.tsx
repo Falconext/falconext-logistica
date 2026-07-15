@@ -105,10 +105,11 @@ export default function MantenimientoScreen() {
   const load = useCallback(async () => {
     try {
       const [mRes, vRes] = await Promise.all([
-        api.get('/mantenimiento'),
+        api.get('/mantenimiento', { params: { take: 1000 } }),
         api.get('/vehiculos'),
       ]);
-      setItems(Array.isArray(mRes.data) ? mRes.data : []);
+      // /mantenimiento pagina como { items, total } (no es un array).
+      setItems(Array.isArray(mRes.data) ? mRes.data : (mRes.data?.items ?? []));
       setVehiculos(Array.isArray(vRes.data) ? vRes.data : []);
     } catch (e) {
       console.error('Error cargando mantenimiento', e);
