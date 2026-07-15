@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Smartphone, Truck, Wifi, WifiOff, MapPin } from 'lucide-react-native';
@@ -80,6 +80,9 @@ export default function DispositivosScreen() {
   const [query, setQuery] = useState('');
 
   const [detail, setDetail] = useState<Device | null>(null);
+  // Punto al que centrar el mapa al tocar una tarjeta.
+  const [focus, setFocus] = useState<{ lng: number; lat: number; nonce: number } | undefined>();
+  const focusNonce = useRef(0);
   const [formVisible, setFormVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [newName, setNewName] = useState('');
@@ -191,8 +194,18 @@ export default function DispositivosScreen() {
 
   const renderCard = ({ item: d }: { item: Device }) => {
     const conectado = isConnected(d);
+    const pos = lastPosition(d);
+    const hasPos = !!pos && typeof pos.latitude === 'number' && typeof pos.longitude === 'number';
     return (
-      <TouchableOpacity activeOpacity={0.7} style={styles.card} onPress={() => setDetail(d)}>
+      <TouchableOpacity
+        activeOpacity={0.7}
+        style={styles.card}
+        onPress={() => {
+          // Centra el mapa en el dispositivo (si tiene ubicación) y abre su detalle.
+          if (hasPos) setFocus({ lng: pos!.longitude as number, lat: pos!.latitude as number, nonce: focusNonce.current++ });
+          setDetail(d);
+        }}
+      >
         <View style={styles.cardIcon}>
           <Smartphone size={20} color={C.primary} />
         </View>
@@ -241,6 +254,7 @@ export default function DispositivosScreen() {
             color: isConnected(d) ? '#16A34A' : '#94A3B8',
             popup: `<b>${d.name}</b><br/>${d.vehiculo?.placa || d.imei}`,
           }))}
+          focus={focus}
         />
 
         <View style={{ marginBottom: S.md }}>

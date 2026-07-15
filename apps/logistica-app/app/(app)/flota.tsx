@@ -20,7 +20,7 @@ const C = Theme.colors;
 const S = Theme.spacing;
 
 // Umbral de conexión: una posición más reciente que esto se considera "en línea".
-const ONLINE_MS = 5 * 60 * 1000;
+const ONLINE_MS = 10 * 60 * 1000; // "conectado" si reportó actividad hace <10 min (igual que Dispositivos)
 const REFRESH_MS = 12 * 1000;
 
 type Position = {
@@ -33,6 +33,7 @@ type Position = {
 type Device = {
   id: string;
   name?: string;
+  last_activity?: string | null;
   vehiculo?: { placa?: string } | null;
   trabajador?: { nombre_completo?: string } | null;
   positions?: Position[];
@@ -47,9 +48,14 @@ function lastPosition(d: Device): Position | undefined {
   );
 }
 
-function isOnline(p?: Position): boolean {
-  if (!p) return false;
-  return Date.now() - new Date(p.timestamp).getTime() < ONLINE_MS;
+// "Conectado" = el dispositivo reportó actividad hace poco. Se usa la MISMA
+// lógica y ventana que la pantalla de Dispositivos GPS (last_activity, 10 min)
+// para que el estado sea consistente entre ambas pantallas.
+function isConnected(d: Device): boolean {
+  if (!d.last_activity) return false;
+  const t = new Date(d.last_activity).getTime();
+  if (Number.isNaN(t)) return false;
+  return Date.now() - t <= ONLINE_MS;
 }
 
 // "hace X min" a partir de un timestamp.
@@ -138,7 +144,7 @@ export default function FlotaScreen() {
   }, [items, query]);
 
   const stats = useMemo(() => {
-    const online = items.filter((d) => isOnline(lastPosition(d))).length;
+    const online = items.filter((d) => isConnected(d)).length;
     return { total: items.length, online };
   }, [items]);
 
@@ -175,7 +181,7 @@ export default function FlotaScreen() {
 
   const renderCard = ({ item: d }: { item: Device }) => {
     const pos = lastPosition(d);
-    const online = isOnline(pos);
+    const online = isConnected(d);
     const hasPos = !!pos && Number.isFinite(pos.latitude) && Number.isFinite(pos.longitude);
     return (
       <TouchableOpacity
@@ -254,7 +260,7 @@ export default function FlotaScreen() {
           markers={located.map(({ d, pos }) => ({
             lng: pos.longitude,
             lat: pos.latitude,
-            color: isOnline(pos) ? '#16A34A' : '#94A3B8',
+            color: isConnected(d) ? '#16A34A' : '#94A3B8',
             popup: `<b>${deviceTitle(d)}</b><br/>${timeAgo(pos.timestamp)} · ${kmh(pos.speed)}`,
           }))}
           focus={focus}
