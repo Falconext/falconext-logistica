@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { AppState } from 'react-native';
 import { ThemeProvider, DefaultTheme } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -9,6 +11,9 @@ import 'react-native-reanimated';
 import { AuthProvider } from '../context/AuthContext';
 import { ThemeModeProvider, useTheme } from '../context/ThemeContext';
 import { Theme } from '../constants/theme';
+// Importar el servicio DEFINE la tarea de fondo en el arranque (necesario para
+// que el SO pueda relanzar la app y seguir rastreando aunque se haya cerrado).
+import { resumeTrackingIfNeeded } from '../services/LocationService';
 
 function buildNavTheme() {
   return {
@@ -52,6 +57,17 @@ export default function RootLayout() {
     SpaceGrotesk_600SemiBold,
     SpaceGrotesk_700Bold,
   });
+
+  // Vigilante del rastreo: reanuda el servicio si el chofer lo tenía activo, al
+  // abrir la app y cada vez que vuelve a primer plano. Así, si el SO lo mató o
+  // el teléfono se reinició, se vuelve a encender solo en cuanto se abre la app.
+  useEffect(() => {
+    resumeTrackingIfNeeded();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') resumeTrackingIfNeeded();
+    });
+    return () => sub.remove();
+  }, []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

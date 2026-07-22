@@ -356,4 +356,159 @@ export class GpsService {
             take: limit
         });
     }
+
+    // Análisis de recorrido ("Reporte de Ruta") para un rango de fechas.
+    // Convierte las posiciones crudas en métricas que le sirven a la empresa:
+    // distancia recorrida, tiempo en movimiento vs detenido, paradas detectadas
+    // (dónde y cuánto), velocidad promedio/máxima y el tiempo de cada tramo entre
+    // paradas ("demora de un punto a otro").
+    async getTripAnalysis(deviceId: string, from: Date, to: Date) {
+        const positions = await this.prisma.position.findMany({
+            where: { device_id: deviceId, timestamp: { gte: from, lte: to } },
+            orderBy: { timestamp: 'asc' },
+        });
+
+        const pts = positions
+            .map(p => ({
+                lat: Number(p.latitude),
+                lng: Number(p.longitude),
+                speed: p.speed != null ? Number(p.speed) : 0, // m/s (crudo del dispositivo)
+                t: new Date(p.timestamp).getTime(),
+            }))
+            .filter(p => !isNaN(p.lat) && !isNaN(p.lng));
+
+        const empty = {
+            points: pts.length,
+            distanceKm: 0, durationMin: 0, movingMin: 0, stoppedMin: 0,
+            avgSpeedKmh: 0, maxSpeedKmh: 0,
+            startTime: pts[0] ? new Date(pts[0].t).toISOString() : null,
+            endTime: pts.length ? new Date(pts[pts.length - 1].t).toISOString() : null,
+            stops: [] as any[], legs: [] as any[],
+        };
+        if (pts.length < 2) return empty;
+
+        // Distancia total + velocidad máxima (filtrando saltos absurdos del GPS).
+        let distanceKm = 0;
+        let maxSpeedKmh = 0;
+        const cumDist: number[] = [0]; // km acumulados hasta el punto i
+        for (let i = 1; i < pts.length; i++) {
+            const d = this.getDistanceFromLatLonInKm(pts[i - 1].lat, pts[i - 1].lng, pts[i].lat, pts[i].lng);
+            distanceKm += d;
+            cumDist[i] = distanceKm;
+        }
+        for (const p of pts) {
+            const kmh = p.speed * 3.6;
+            if (kmh > maxSpeedKmh && kmh < 200) maxSpeedKmh = kmh;
+        }
+
+        const startTime = pts[0].t;
+        const endTime = pts[pts.length - 1].t;
+        const durationMs = endTime - startTime;
+
+        // Detección de paradas: puntos que se quedan dentro de un radio pequeño
+        // durante al menos STOP_MIN. Robusto ante el ruido del GPS.
+        const STOP_RADIUS_M = 60;
+        const STOP_MIN_MS = 3 * 60 * 1000; // 3 minutos
+        const GAP_MERGE_KM = 0.15; // si entre dos paradas apenas se movió, es la misma
+        const rawStops: any[] = [];
+        let i = 0;
+        while (i < pts.length) {
+            let j = i;
+            let sumLat = pts[i].lat, sumLng = pts[i].lng, cnt = 1;
+            while (j + 1 < pts.length) {
+                const dM = this.getDistanceFromLatLonInKm(pts[i].lat, pts[i].lng, pts[j + 1].lat, pts[j + 1].lng) * 1000;
+                if (dM > STOP_RADIUS_M) break;
+                j++; sumLat += pts[j].lat; sumLng += pts[j].lng; cnt++;
+            }
+            const dwellMs = pts[j].t - pts[i].t;
+            if (dwellMs >= STOP_MIN_MS) {
+                rawStops.push({ iStart: i, iEnd: j, sumLat, sumLng, cnt });
+                i = j + 1;
+            } else {
+                i++;
+            }
+        }
+
+        // Fusionar paradas contiguas si el vehículo casi no se movió entre ellas
+        // (una sola parada real que el GPS partió por saltos de señal).
+        const merged: any[] = [];
+        for (const s of rawStops) {
+            const prev = merged[merged.length - 1];
+            if (prev) {
+                const gapKm = cumDist[s.iStart] - cumDist[prev.iEnd];
+                if (gapKm < GAP_MERGE_KM) {
+                    prev.iEnd = s.iEnd;
+                    prev.sumLat += s.sumLat; prev.sumLng += s.sumLng; prev.cnt += s.cnt;
+                    continue;
+                }
+            }
+            merged.push({ ...s });
+        }
+
+        const stops = merged.map(s => ({
+            lat: s.sumLat / s.cnt,
+            lng: s.sumLng / s.cnt,
+            startTime: new Date(pts[s.iStart].t).toISOString(),
+            endTime: new Date(pts[s.iEnd].t).toISOString(),
+            durationMin: Math.round((pts[s.iEnd].t - pts[s.iStart].t) / 60000),
+            _tStart: pts[s.iStart].t, _tEnd: pts[s.iEnd].t,
+        }));
+
+        const stoppedMs = stops.reduce((a, s) => a + (s._tEnd - s._tStart), 0);
+        const movingMs = Math.max(0, durationMs - stoppedMs);
+        const avgSpeedKmh = movingMs > 0 ? distanceKm / (movingMs / 3600000) : 0;
+
+        // Distancia recorrida dentro de una ventana de tiempo [a, b].
+        const distInWindow = (a: number, b: number) => {
+            let acc = 0;
+            for (let k = 1; k < pts.length; k++) {
+                if (pts[k].t <= a) continue;
+                if (pts[k - 1].t >= b) break;
+                acc += cumDist[k] - cumDist[k - 1];
+            }
+            return acc;
+        };
+
+        // Tramos ("recorridos") entre hitos: Salida → Parada 1 → Parada 2 → … → Llegada.
+        // Cada tramo trae su duración (la demora punto a punto) y distancia.
+        const milestones = [
+            { label: 'Salida', arr: startTime, dep: startTime },
+            ...stops.map((s, idx) => ({ label: `Parada ${idx + 1}`, arr: s._tStart, dep: s._tEnd })),
+            { label: 'Llegada', arr: endTime, dep: endTime },
+        ];
+        const legs: any[] = [];
+        for (let k = 0; k < milestones.length - 1; k++) {
+            const legStart = milestones[k].dep;
+            const legEnd = milestones[k + 1].arr;
+            const legMs = legEnd - legStart;
+            if (legMs <= 0) continue;
+            const legKm = distInWindow(legStart, legEnd);
+            legs.push({
+                from: milestones[k].label,
+                to: milestones[k + 1].label,
+                startTime: new Date(legStart).toISOString(),
+                endTime: new Date(legEnd).toISOString(),
+                durationMin: Math.round(legMs / 60000),
+                distanceKm: Math.round(legKm * 100) / 100,
+                avgSpeedKmh: legMs > 0 ? Math.round((legKm / (legMs / 3600000)) * 10) / 10 : 0,
+            });
+        }
+
+        // Quitar campos internos de las paradas.
+        const cleanStops = stops.map(({ _tStart, _tEnd, ...rest }) => rest);
+
+        return {
+            points: pts.length,
+            distanceKm: Math.round(distanceKm * 100) / 100,
+            durationMin: Math.round(durationMs / 60000),
+            movingMin: Math.round(movingMs / 60000),
+            stoppedMin: Math.round(stoppedMs / 60000),
+            avgSpeedKmh: Math.round(avgSpeedKmh * 10) / 10,
+            maxSpeedKmh: Math.round(maxSpeedKmh * 10) / 10,
+            startTime: new Date(startTime).toISOString(),
+            endTime: new Date(endTime).toISOString(),
+            stops: cleanStops,
+            legs,
+        };
+    }
 }

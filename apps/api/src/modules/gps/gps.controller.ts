@@ -74,7 +74,15 @@ export class GpsController {
         const toDate = to ? new Date(to) : new Date();
         const limitNum = limit ? parseInt(limit) : undefined;
         return this.gpsService.getHistory(deviceId, fromDate, toDate, limitNum);
-        return this.gpsService.getHistory(deviceId, fromDate, toDate, limitNum);
+    }
+
+    // Análisis de recorrido (distancia, tiempos, paradas, tramos) de un rango.
+    @UseGuards(JwtAuthGuard)
+    @Get('history/:deviceId/analisis')
+    async getTripAnalysis(@Param('deviceId') deviceId: string, @Query('from') from: string, @Query('to') to: string) {
+        const fromDate = from ? new Date(from) : new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const toDate = to ? new Date(to) : new Date();
+        return this.gpsService.getTripAnalysis(deviceId, fromDate, toDate);
     }
 
     @UseGuards(JwtAuthGuard)

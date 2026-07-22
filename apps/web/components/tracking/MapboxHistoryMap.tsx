@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { Play, Pause, FastForward, Calendar as CalendarIcon, RotateCcw } from 'lucide-react';
+import { Play, Pause, FastForward, Calendar as CalendarIcon, RotateCcw, Route, Clock, Gauge, TrendingUp, MapPin, Timer, Navigation } from 'lucide-react';
 import api from '../../lib/api';
 import { toast } from 'sonner';
 import { STANDARD_STYLE, applyFadedTheme, MapThemeToggle, MapPreset } from './mapTheme';
@@ -26,16 +26,64 @@ interface Position {
     heading: number;
 }
 
+interface Stop {
+    lat: number;
+    lng: number;
+    startTime: string;
+    endTime: string;
+    durationMin: number;
+}
+
+interface Leg {
+    from: string;
+    to: string;
+    startTime: string;
+    endTime: string;
+    durationMin: number;
+    distanceKm: number;
+    avgSpeedKmh: number;
+}
+
+interface Trip {
+    points: number;
+    distanceKm: number;
+    durationMin: number;
+    movingMin: number;
+    stoppedMin: number;
+    avgSpeedKmh: number;
+    maxSpeedKmh: number;
+    startTime: string | null;
+    endTime: string | null;
+    stops: Stop[];
+    legs: Leg[];
+}
+
+// "135" -> "2h 15m" ; "45" -> "45 min"
+function fmtDur(min: number): string {
+    if (!min || min < 1) return '0 min';
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    if (h === 0) return `${m} min`;
+    return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+function fmtHora(iso: string | null): string {
+    if (!iso) return '--:--';
+    return new Date(iso).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+}
+
 export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: HistoryMapProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<mapboxgl.Map | null>(null);
     const cursorRef = useRef<mapboxgl.Marker | null>(null);
     const startRef = useRef<mapboxgl.Marker | null>(null);
     const endRef = useRef<mapboxgl.Marker | null>(null);
+    const stopMarkersRef = useRef<mapboxgl.Marker[]>([]);
     const playbackTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const [ready, setReady] = useState(false);
 
     const [history, setHistory] = useState<Position[]>([]);
+    const [trip, setTrip] = useState<Trip | null>(null);
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -63,7 +111,7 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
         if (ready && mapRef.current) applyFadedTheme(mapRef.current, preset);
     }, [preset, ready]);
 
-    // Cargar historial cuando cambia fecha o dispositivo.
+    // Cargar historial + análisis cuando cambia fecha o dispositivo.
     useEffect(() => {
         if (!deviceId) return;
         let cancelled = false;
@@ -71,11 +119,18 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
             setIsPlaying(false);
             setCurrentIndex(0);
             try {
-                const start = new Date(selectedDate); start.setHours(0, 0, 0, 0);
-                const end = new Date(selectedDate); end.setHours(23, 59, 59, 999);
-                const res = await api.get(`/gps/history/${deviceId}`, { params: { from: start.toISOString(), to: end.toISOString() } });
+                // Medianoche LOCAL del día elegido. Ojo: new Date('YYYY-MM-DD') se
+                // parsea como UTC y en TZ negativas (Perú) cae al día anterior; con
+                // el sufijo 'T00:00:00' se interpreta en la zona del navegador.
+                const start = new Date(selectedDate + 'T00:00:00');
+                const end = new Date(selectedDate + 'T23:59:59.999');
+                const params = { from: start.toISOString(), to: end.toISOString() };
+                const [resHist, resTrip] = await Promise.all([
+                    api.get(`/gps/history/${deviceId}`, { params }),
+                    api.get(`/gps/history/${deviceId}/analisis`, { params }),
+                ]);
                 if (cancelled) return;
-                const data: Position[] = (res.data || []).map((d: any) => ({
+                const data: Position[] = (resHist.data || []).map((d: any) => ({
                     lng: parseFloat(d.longitude),
                     lat: parseFloat(d.latitude),
                     timestamp: new Date(d.timestamp),
@@ -83,6 +138,7 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
                     heading: d.heading || 0,
                 })).filter((p: Position) => !isNaN(p.lat) && !isNaN(p.lng)).reverse(); // API DESC -> cronológico
                 setHistory(data);
+                setTrip(resTrip.data || null);
                 if (data.length === 0) toast.info('No hay historial para la fecha seleccionada');
             } catch (error) {
                 console.error('Error fetching history:', error);
@@ -92,7 +148,7 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
         return () => { cancelled = true; };
     }, [deviceId, selectedDate]);
 
-    // Dibujar la ruta + marcadores A/B + encuadrar cuando cambia el historial.
+    // Dibujar la ruta + marcadores A/B + paradas numeradas + encuadrar.
     useEffect(() => {
         const map = mapRef.current;
         if (!map || !ready) return;
@@ -124,7 +180,21 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
             history.forEach(p => b.extend([p.lng, p.lat]));
             map.fitBounds(b, { padding: 60, maxZoom: 16, duration: 0 });
         }
-    }, [history, ready]);
+
+        // Marcadores de paradas (numerados, naranja).
+        stopMarkersRef.current.forEach(m => m.remove());
+        stopMarkersRef.current = [];
+        (trip?.stops || []).forEach((s, idx) => {
+            const el = document.createElement('div');
+            el.style.cssText = 'width:26px;height:26px;border-radius:50%;background:#F97316;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;cursor:pointer';
+            el.innerHTML = `<span style="color:#fff;font-size:12px;font-weight:800;font-family:system-ui">${idx + 1}</span>`;
+            const popup = new mapboxgl.Popup({ offset: 16, closeButton: false }).setHTML(
+                `<div style="font-family:system-ui;font-size:12px"><b>Parada ${idx + 1}</b><br/>${fmtHora(s.startTime)} – ${fmtHora(s.endTime)}<br/>Detenido: <b>${fmtDur(s.durationMin)}</b></div>`
+            );
+            const m = new mapboxgl.Marker({ element: el, anchor: 'center' }).setLngLat([s.lng, s.lat]).setPopup(popup).addTo(map);
+            stopMarkersRef.current.push(m);
+        });
+    }, [history, trip, ready]);
 
     // Mover el cursor de reproducción.
     useEffect(() => {
@@ -160,8 +230,18 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
 
     if (!TOKEN) return <div className="h-full flex items-center justify-center text-slate-400">Configura NEXT_PUBLIC_MAPBOX_TOKEN.</div>;
 
+    const stats = [
+        { icon: Route, label: 'Distancia', value: `${trip?.distanceKm ?? 0} km`, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-100 dark:bg-blue-900/30' },
+        { icon: Clock, label: 'Duración total', value: fmtDur(trip?.durationMin ?? 0), color: 'text-violet-600 dark:text-violet-400', bg: 'bg-violet-100 dark:bg-violet-900/30' },
+        { icon: Navigation, label: 'En movimiento', value: fmtDur(trip?.movingMin ?? 0), color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-100 dark:bg-emerald-900/30' },
+        { icon: Timer, label: 'Detenido', value: fmtDur(trip?.stoppedMin ?? 0), color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-100 dark:bg-orange-900/30' },
+        { icon: Gauge, label: 'Vel. promedio', value: `${trip?.avgSpeedKmh ?? 0} km/h`, color: 'text-cyan-600 dark:text-cyan-400', bg: 'bg-cyan-100 dark:bg-cyan-900/30' },
+        { icon: TrendingUp, label: 'Vel. máxima', value: `${trip?.maxSpeedKmh ?? 0} km/h`, color: 'text-rose-600 dark:text-rose-400', bg: 'bg-rose-100 dark:bg-rose-900/30' },
+        { icon: MapPin, label: 'Paradas', value: `${trip?.stops.length ?? 0}`, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30' },
+    ];
+
     return (
-        <div className="relative h-full w-full flex flex-col gap-4">
+        <div className="w-full flex flex-col gap-4">
             {/* Header de controles */}
             <div className="flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                 <div className="flex items-center gap-3">
@@ -179,9 +259,9 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="text-right mr-4">
-                        <p className="text-xs text-slate-500">Puntos</p>
-                        <p className="font-bold text-slate-900 dark:text-white">{history.length}</p>
+                    <div className="text-right mr-2">
+                        <p className="text-xs text-slate-500">Jornada</p>
+                        <p className="font-bold text-slate-900 dark:text-white">{fmtHora(trip?.startTime ?? null)} – {fmtHora(trip?.endTime ?? null)}</p>
                     </div>
                     <div className="text-right border-l pl-4 border-slate-200 dark:border-slate-700">
                         <p className="text-xs text-slate-500">{vehiclePlate || 'Dispositivo'}</p>
@@ -190,8 +270,23 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
                 </div>
             </div>
 
+            {/* Tarjetas de métricas del recorrido */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+                {stats.map((s) => (
+                    <div key={s.label} className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-2.5">
+                        <div className={`${s.bg} ${s.color} p-2 rounded-lg shrink-0`}>
+                            <s.icon size={18} />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-[11px] text-slate-500 leading-tight truncate">{s.label}</p>
+                            <p className="font-bold text-slate-900 dark:text-white text-sm leading-tight truncate">{s.value}</p>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
             {/* Mapa */}
-            <div className="flex-1 relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm h-[58vh] min-h-[360px]">
                 <div ref={containerRef} className="h-full w-full" />
 
                 <MapThemeToggle preset={preset} onChange={setPreset} className="absolute top-3 right-3" />
@@ -235,6 +330,43 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
                     />
                 </div>
             </div>
+
+            {/* Tramos y paradas (timeline del día) */}
+            {trip && trip.legs.length > 0 && (
+                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
+                    <h3 className="font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                        <Route size={18} className="text-blue-600 dark:text-blue-400" />
+                        Recorrido del día
+                    </h3>
+                    <div className="relative pl-6">
+                        {/* línea vertical del timeline */}
+                        <div className="absolute left-[9px] top-1 bottom-1 w-0.5 bg-slate-200 dark:bg-slate-700" />
+                        {trip.legs.map((leg, idx) => {
+                            const stopAfter = trip.stops[idx]; // la parada al final de este tramo (si existe)
+                            return (
+                                <div key={idx} className="relative pb-4 last:pb-0">
+                                    {/* punto del timeline */}
+                                    <div className="absolute -left-[19px] top-0.5 w-3.5 h-3.5 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900" />
+                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                                        <span className="font-semibold text-slate-900 dark:text-white">{leg.from} → {leg.to}</span>
+                                        <span className="text-slate-400 text-xs">{fmtHora(leg.startTime)} – {fmtHora(leg.endTime)}</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-slate-500 mt-0.5">
+                                        <span className="inline-flex items-center gap-1"><Clock size={12} /> {fmtDur(leg.durationMin)}</span>
+                                        <span className="inline-flex items-center gap-1"><Route size={12} /> {leg.distanceKm} km</span>
+                                        <span className="inline-flex items-center gap-1"><Gauge size={12} /> {leg.avgSpeedKmh} km/h prom.</span>
+                                    </div>
+                                    {stopAfter && (
+                                        <div className="mt-1.5 ml-1 inline-flex items-center gap-1.5 text-xs font-medium text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded-md">
+                                            <MapPin size={12} /> Parada {idx + 1} · detenido {fmtDur(stopAfter.durationMin)}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

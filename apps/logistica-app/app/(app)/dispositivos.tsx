@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
-import { useFocusEffect } from 'expo-router';
-import { Smartphone, Truck, Wifi, WifiOff, MapPin } from 'lucide-react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { Smartphone, Truck, Wifi, WifiOff, MapPin, History } from 'lucide-react-native';
 import {
   Screen,
   AppHeader,
@@ -72,6 +72,7 @@ function lastPosition(d: Device): DevicePosition | undefined {
 
 export default function DispositivosScreen() {
   const { themeKey } = useTheme();
+  const router = useRouter();
   const styles = useMemo(() => makeStyles(), [themeKey]);
   const [items, setItems] = useState<Device[]>([]);
   const [vehiculos, setVehiculos] = useState<VehiculoOpt[]>([]);
@@ -308,6 +309,22 @@ export default function DispositivosScreen() {
                 <Text style={styles.tokenLabel}>Token de acceso</Text>
               </View>
               <Text style={styles.tokenValue} selectable>{detail.token}</Text>
+            </View>
+
+            <View style={{ marginTop: S.md }}>
+              <Button
+                title="Ver historial de ruta"
+                variant="secondary"
+                icon={History}
+                onPress={() => {
+                  const d = detail;
+                  setDetail(null);
+                  router.push({
+                    pathname: '/(app)/historial',
+                    params: { deviceId: d.id, name: d.name, placa: d.vehiculo?.placa || '' },
+                  } as any);
+                }}
+              />
             </View>
           </View>
         )}
