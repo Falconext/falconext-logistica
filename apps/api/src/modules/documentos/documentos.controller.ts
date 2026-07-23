@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { DocumentosService } from './documentos.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -20,6 +20,11 @@ export class DocumentosController {
             return this.documentosService.findAll(req.user.tenantId, 'TRABAJADOR', req.user.trabajadorId);
         }
         return this.documentosService.findAll(req.user.tenantId, entidad, entidadId);
+    }
+
+    @Patch(':id')
+    update(@Param('id') id: string, @Body() data: any, @Req() req) {
+        return this.documentosService.update(id, data, req.user.tenantId);
     }
 
     @Delete(':id')

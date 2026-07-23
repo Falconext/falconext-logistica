@@ -39,6 +39,9 @@ export function isAdmin(user: UserLike | null | undefined): boolean {
 
 export function canAccessModule(user: UserLike | null | undefined, key: string): boolean {
   if (!user) return false;
+  // Rastreo (compartir tu propia ubicación GPS) queda disponible para CUALQUIER
+  // rol: no se gatea por módulo, cualquier trabajador logueado puede activarlo.
+  if (key === 'rastreo') return true;
   if (isAdmin(user)) return true;
   return Array.isArray(user.modulos) && user.modulos.includes(key);
 }

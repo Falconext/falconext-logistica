@@ -47,7 +47,7 @@ export interface Documento {
     entidad_id: string;
     tipo: string;
     nombre?: string;
-    url: string;
+    url?: string | null;
     fecha_vencimiento?: string;
 }
 

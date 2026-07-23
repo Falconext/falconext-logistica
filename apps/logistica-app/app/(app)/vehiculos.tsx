@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { Truck, Crosshair, Trash2, Pencil, ShieldAlert, Car, CheckCircle2 } from 'lucide-react-native';
+import { Truck, Crosshair, Trash2, Pencil, ShieldAlert, Car, CheckCircle2, FolderArchive } from 'lucide-react-native';
 import {
   Screen,
   AppHeader,
@@ -20,6 +20,8 @@ import {
 import ImageUpload from '../../components/ImageUpload';
 import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
+import DocumentosPanel from '../../components/DocumentosPanel';
+import { VEHICULO_DOCS } from '../../components/documentTypes';
 import api from '../../services/api';
 import type { Vehiculo } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
@@ -50,6 +52,7 @@ export default function VehiculosScreen() {
 
   const [formVisible, setFormVisible] = useState(false);
   const [detail, setDetail] = useState<Vehiculo | null>(null);
+  const [docsFor, setDocsFor] = useState<Vehiculo | null>(null);
   const [editing, setEditing] = useState<Vehiculo | null>(null);
   const [form, setForm] = useState<Partial<Vehiculo>>(empty);
   const [saving, setSaving] = useState(false);
@@ -215,9 +218,12 @@ export default function VehiculosScreen() {
         title={detail?.placa || 'Detalle'}
         footer={
           detail && (
-            <View style={{ flexDirection: 'row', gap: S.sm }}>
-              <Button title="Editar" icon={Pencil} variant="secondary" style={{ flex: 1 }} onPress={() => detail && openEdit(detail)} />
-              <Button title="Eliminar" icon={Trash2} variant="danger" style={{ flex: 1 }} onPress={() => detail && remove(detail)} />
+            <View style={{ gap: S.sm }}>
+              <Button title="Documentos (PDFs)" icon={FolderArchive} onPress={() => { const v = detail; setDetail(null); setDocsFor(v); }} />
+              <View style={{ flexDirection: 'row', gap: S.sm }}>
+                <Button title="Editar" icon={Pencil} variant="secondary" style={{ flex: 1 }} onPress={() => detail && openEdit(detail)} />
+                <Button title="Eliminar" icon={Trash2} variant="danger" style={{ flex: 1 }} onPress={() => detail && remove(detail)} />
+              </View>
             </View>
           )
         }
@@ -237,6 +243,18 @@ export default function VehiculosScreen() {
           </View>
         )}
       </FormModal>
+
+      {/* Documentos del vehículo (subir/previsualizar PDFs + vencimientos) */}
+      {docsFor && (
+        <DocumentosPanel
+          visible={!!docsFor}
+          onClose={() => setDocsFor(null)}
+          entidad="VEHICULO"
+          entidadId={docsFor.id}
+          docTypes={VEHICULO_DOCS}
+          nombre={docsFor.placa}
+        />
+      )}
 
       {/* Crear / editar */}
       <FormModal

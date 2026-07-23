@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, Image, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, Switch } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { Users, UserCheck, IdCard, Trash2, Pencil, User, Phone, KeyRound } from 'lucide-react-native';
+import { Users, UserCheck, IdCard, Trash2, Pencil, User, Phone, KeyRound, FolderArchive } from 'lucide-react-native';
 import {
   Screen,
   AppHeader,
@@ -20,6 +20,8 @@ import {
 } from '../../components/ui';
 import ImageUpload from '../../components/ImageUpload';
 import DatePicker from '../../components/DatePicker';
+import DocumentosPanel from '../../components/DocumentosPanel';
+import { TRABAJADOR_DOCS } from '../../components/documentTypes';
 import Select from '../../components/Select';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -66,6 +68,7 @@ export default function TrabajadoresScreen() {
 
   const [formVisible, setFormVisible] = useState(false);
   const [detail, setDetail] = useState<Trabajador | null>(null);
+  const [docsFor, setDocsFor] = useState<Trabajador | null>(null);
   const [editing, setEditing] = useState<Trabajador | null>(null);
   const [form, setForm] = useState<Partial<Trabajador>>(empty);
   const [saving, setSaving] = useState(false);
@@ -310,8 +313,9 @@ export default function TrabajadoresScreen() {
         footer={
           detail ? (
             <View style={{ gap: S.sm }}>
+              <Button title="Documentos (PDFs)" icon={FolderArchive} onPress={() => { const t = detail; setDetail(null); setDocsFor(t); }} />
               {isAdminUser && (
-                <Button title="Dar acceso a la app" icon={KeyRound} onPress={() => detail && openAccess(detail)} />
+                <Button title="Dar acceso a la app" icon={KeyRound} variant="secondary" onPress={() => detail && openAccess(detail)} />
               )}
               <View style={{ flexDirection: 'row', gap: S.sm }}>
                 <Button title="Editar" icon={Pencil} variant="secondary" style={{ flex: 1 }} onPress={() => detail && openEdit(detail)} />
@@ -350,6 +354,18 @@ export default function TrabajadoresScreen() {
           </View>
         )}
       </FormModal>
+
+      {/* Documentos del trabajador (subir/previsualizar PDFs + vencimientos) */}
+      {docsFor && (
+        <DocumentosPanel
+          visible={!!docsFor}
+          onClose={() => setDocsFor(null)}
+          entidad="TRABAJADOR"
+          entidadId={docsFor.id}
+          docTypes={TRABAJADOR_DOCS}
+          nombre={docsFor.nombre_completo}
+        />
+      )}
 
       {/* Crear / editar */}
       <FormModal

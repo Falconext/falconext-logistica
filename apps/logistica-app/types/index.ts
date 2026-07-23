@@ -134,3 +134,13 @@ export interface Tenant {
 export interface DashboardStats {
   [key: string]: number | string;
 }
+
+export interface Documento {
+  id: string;
+  entidad: 'VEHICULO' | 'TRABAJADOR' | 'MANTENIMIENTO';
+  entidad_id: string;
+  tipo: string;
+  nombre?: string;
+  url?: string | null;
+  fecha_vencimiento?: string | null;
+}

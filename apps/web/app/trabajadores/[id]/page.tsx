@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import api from '../../../lib/api';
-import { Truck, FileText, Phone, Mail, MapPin, ArrowLeft, Fuel, Receipt, ChevronLeft, ChevronRight, Calendar, Navigation, X, Radio, KeyRound } from 'lucide-react';
+import { Truck, FileText, Phone, Mail, MapPin, ArrowLeft, Fuel, Receipt, ChevronLeft, ChevronRight, Calendar, Navigation, X, Radio, KeyRound, FolderArchive } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import clsx from 'clsx';
@@ -11,6 +11,8 @@ import { MapboxLiveMap as LiveMapReal } from '../../../components/tracking/Mapbo
 import UsuarioModal, { Usuario } from '../../admin/usuarios/UsuarioModal';
 import { useAuthStore } from '../../../lib/store';
 import { isAdmin } from '../../../lib/modules';
+import DocumentosPanel from '../../../components/DocumentosPanel';
+import { TRABAJADOR_DOCS } from '../../../components/documentTypes';
 
 interface WorkerLocation {
     device: { id: string; name: string; last_activity: string | null; vehiculo_placa: string | null } | null;
@@ -43,7 +45,7 @@ export default function TrabajadorDetailsPage() {
     const [worker, setWorker] = useState<any>(null);
     const [historial, setHistorial] = useState<HistorialData>({ rutas: [], peajes: [], combustible: [] });
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'rutas' | 'peajes' | 'combustible'>('rutas');
+    const [activeTab, setActiveTab] = useState<'documentos' | 'rutas' | 'peajes' | 'combustible'>('documentos');
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedMonth, setSelectedMonth] = useState<string>('all');
     const [location, setLocation] = useState<WorkerLocation | null>(null);
@@ -113,7 +115,8 @@ export default function TrabajadorDetailsPage() {
     const currentData = useMemo(() => {
         if (activeTab === 'rutas') return historial.rutas || [];
         if (activeTab === 'peajes') return historial.peajes || [];
-        return historial.combustible || [];
+        if (activeTab === 'combustible') return historial.combustible || [];
+        return [];
     }, [activeTab, historial]);
 
     // Get month key from date
@@ -184,6 +187,7 @@ export default function TrabajadorDetailsPage() {
     }
 
     const tabs = [
+        { id: 'documentos', label: 'Documentos', icon: FolderArchive, count: null as number | null },
         { id: 'rutas', label: 'Rutas', icon: Truck, count: historial.rutas?.length || 0 },
         { id: 'peajes', label: 'Peajes / Multas', icon: Receipt, count: historial.peajes?.length || 0 },
         { id: 'combustible', label: 'Combustible', icon: Fuel, count: historial.combustible?.length || 0 },
@@ -352,8 +356,11 @@ export default function TrabajadorDetailsPage() {
                         </div>
                     </div>
 
-                    {/* Month Navigation */}
-                    <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex-1 overflow-y-auto">
+                    {/* Month Navigation (no aplica en la pestaña Documentos) */}
+                    <div className={clsx(
+                        "bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex-1 overflow-y-auto",
+                        activeTab === 'documentos' && 'hidden'
+                    )}>
                         <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
                             <Calendar size={14} className="text-purple-500" /> Navegación
                         </h3>
@@ -406,30 +413,39 @@ export default function TrabajadorDetailsPage() {
                             >
                                 <tab.icon size={16} />
                                 {tab.label}
-                                <span className={clsx(
-                                    "px-2 py-0.5 rounded-full text-xs font-bold",
-                                    activeTab === tab.id
-                                        ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
-                                        : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-                                )}>
-                                    {tab.count}
-                                </span>
+                                {tab.count !== null && (
+                                    <span className={clsx(
+                                        "px-2 py-0.5 rounded-full text-xs font-bold",
+                                        activeTab === tab.id
+                                            ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                                            : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                                    )}>
+                                        {tab.count}
+                                    </span>
+                                )}
                             </button>
                         ))}
                     </div>
 
-                    {/* Header with info */}
-                    <div className="px-6 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30 flex-shrink-0">
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm text-slate-500">
-                                Mostrando {paginatedData.length} de {filteredData.length} registros
-                                {selectedMonth !== 'all' && ` • ${formatMonthLabel(selectedMonth)}`}
-                            </span>
+                    {/* Header with info (solo para pestañas de historial) */}
+                    {activeTab !== 'documentos' && (
+                        <div className="px-6 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30 flex-shrink-0">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm text-slate-500">
+                                    Mostrando {paginatedData.length} de {filteredData.length} registros
+                                    {selectedMonth !== 'all' && ` • ${formatMonthLabel(selectedMonth)}`}
+                                </span>
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     {/* Table Content */}
                     <div className="flex-1 overflow-auto">
+                        {/* Documentos */}
+                        {activeTab === 'documentos' && (
+                            <DocumentosPanel entidad="TRABAJADOR" entidadId={id} docTypes={TRABAJADOR_DOCS} />
+                        )}
+
                         {/* Rutas Table */}
                         {activeTab === 'rutas' && (
                             <table className="w-full text-left text-sm text-slate-600 dark:text-slate-400">

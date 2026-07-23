@@ -242,7 +242,8 @@ model Documento {
   entidad_id  String  // id del registro dueño
   tipo        String  // 'LICENCIA' | 'SEGURO' | 'TARJETA_CIRCULACION' | 'PASAPORTE' | 'REVISION_TECNICA' | 'OTRO'
   nombre      String?
-  url         String  // URL de Cloudinary (imagen o PDF)
+  url         String? // URL de Cloudinary (imagen o PDF). Opcional: se puede
+                      // registrar solo la fecha de vencimiento antes de subir el escaneo.
   fecha_vencimiento DateTime?
 
   creado_en      DateTime @default(now())
