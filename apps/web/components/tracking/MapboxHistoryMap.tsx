@@ -42,18 +42,24 @@ interface Leg {
     durationMin: number;
     distanceKm: number;
     avgSpeedKmh: number;
+    expectedMin?: number | null;
+    delayMin?: number | null;
 }
 
 interface Trip {
     points: number;
     distanceKm: number;
+    distanceSource?: 'mapbox' | 'gps';
     durationMin: number;
     movingMin: number;
     stoppedMin: number;
+    expectedMovingMin?: number | null;
+    delayMin?: number | null;
     avgSpeedKmh: number;
     maxSpeedKmh: number;
     startTime: string | null;
     endTime: string | null;
+    matchedGeometry?: { type: string; coordinates: [number, number][] } | null;
     stops: Stop[];
     legs: Leg[];
 }
@@ -153,7 +159,11 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
         const map = mapRef.current;
         if (!map || !ready) return;
 
-        const line = { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: history.map(p => [p.lng, p.lat]) } } as any;
+        // Ruta pegada a las calles (Map Matching) si el backend la devolvió; si no, los puntos crudos.
+        const routeCoords = trip?.matchedGeometry?.coordinates?.length
+            ? trip.matchedGeometry.coordinates
+            : history.map(p => [p.lng, p.lat]);
+        const line = { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: routeCoords } } as any;
         const draw = () => {
             if (!map.getSource('hist')) {
                 map.addSource('hist', { type: 'geojson', data: line });
@@ -334,9 +344,17 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
             {/* Tramos y paradas (timeline del día) */}
             {trip && trip.legs.length > 0 && (
                 <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
-                    <h3 className="font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                    <h3 className="font-bold text-slate-900 dark:text-white mb-3 flex flex-wrap items-center gap-2">
                         <Route size={18} className="text-blue-600 dark:text-blue-400" />
                         Recorrido del día
+                        {trip.expectedMovingMin != null && (
+                            <span className="text-xs font-normal text-slate-400">· esperado {fmtDur(trip.expectedMovingMin)} en ruta</span>
+                        )}
+                        {trip.delayMin != null && (
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${trip.delayMin > 1 ? 'text-rose-600 bg-rose-50 dark:bg-rose-900/20' : trip.delayMin < -1 ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20' : 'text-slate-500 bg-slate-100 dark:bg-slate-800'}`}>
+                                {trip.delayMin > 1 ? `+${trip.delayMin} min de demora total` : trip.delayMin < -1 ? `${Math.abs(trip.delayMin)} min más rápido` : 'En tiempo'}
+                            </span>
+                        )}
                     </h3>
                     <div className="relative pl-6">
                         {/* línea vertical del timeline */}
@@ -356,6 +374,16 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
                                         <span className="inline-flex items-center gap-1"><Route size={12} /> {leg.distanceKm} km</span>
                                         <span className="inline-flex items-center gap-1"><Gauge size={12} /> {leg.avgSpeedKmh} km/h prom.</span>
                                     </div>
+                                    {leg.expectedMin != null && (
+                                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                                            <span className="text-slate-400">Esperado: {fmtDur(leg.expectedMin)}</span>
+                                            {leg.delayMin != null && (
+                                                <span className={`font-semibold px-1.5 py-0.5 rounded ${leg.delayMin > 1 ? 'text-rose-600 bg-rose-50 dark:bg-rose-900/20' : leg.delayMin < -1 ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20' : 'text-slate-500 bg-slate-100 dark:bg-slate-800'}`}>
+                                                    {leg.delayMin > 1 ? `+${leg.delayMin} min de demora` : leg.delayMin < -1 ? `${Math.abs(leg.delayMin)} min más rápido` : 'En tiempo'}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
                                     {stopAfter && (
                                         <div className="mt-1.5 ml-1 inline-flex items-center gap-1.5 text-xs font-medium text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded-md">
                                             <MapPin size={12} /> Parada {idx + 1} · detenido {fmtDur(stopAfter.durationMin)}

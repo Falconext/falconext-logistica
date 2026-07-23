@@ -35,17 +35,23 @@ interface Leg {
   durationMin: number;
   distanceKm: number;
   avgSpeedKmh: number;
+  expectedMin?: number | null;
+  delayMin?: number | null;
 }
 interface Trip {
   points: number;
   distanceKm: number;
+  distanceSource?: 'mapbox' | 'gps';
   durationMin: number;
   movingMin: number;
   stoppedMin: number;
+  expectedMovingMin?: number | null;
+  delayMin?: number | null;
   avgSpeedKmh: number;
   maxSpeedKmh: number;
   startTime: string | null;
   endTime: string | null;
+  matchedGeometry?: { type: string; coordinates: [number, number][] } | null;
   stops: Stop[];
   legs: Leg[];
 }
@@ -178,7 +184,7 @@ export default function HistorialScreen() {
         <MapboxWebView
           style={styles.map}
           mapStyle="streets"
-          route={hasData ? { coordinates: coords } : undefined}
+          route={hasData ? { coordinates: (trip?.matchedGeometry?.coordinates?.length ? trip.matchedGeometry.coordinates : coords) } : undefined}
           markers={markers}
           fit
         />
@@ -216,6 +222,20 @@ export default function HistorialScreen() {
                 <View style={styles.timelineHeader}>
                   <RouteIcon size={16} color={C.primary} />
                   <Text style={styles.timelineTitle}>Recorrido del día</Text>
+                  {trip.delayMin != null && (
+                    <Text
+                      style={[
+                        styles.delayBadge,
+                        trip.delayMin > 1 ? styles.delayBad : trip.delayMin < -1 ? styles.delayGood : styles.delayNeutral,
+                      ]}
+                    >
+                      {trip.delayMin > 1
+                        ? `+${trip.delayMin} min demora`
+                        : trip.delayMin < -1
+                        ? `${Math.abs(trip.delayMin)} min más rápido`
+                        : 'En tiempo'}
+                    </Text>
+                  )}
                 </View>
                 {trip.legs.map((leg, idx) => {
                   const stopAfter = trip.stops[idx];
@@ -234,6 +254,25 @@ export default function HistorialScreen() {
                           <Text style={styles.legMeta}>📍 {leg.distanceKm} km</Text>
                           <Text style={styles.legMeta}>⚡ {leg.avgSpeedKmh} km/h</Text>
                         </View>
+                        {leg.expectedMin != null && (
+                          <View style={styles.etaRow}>
+                            <Text style={styles.legMeta}>Esperado: {fmtDur(leg.expectedMin)}</Text>
+                            {leg.delayMin != null && (
+                              <Text
+                                style={[
+                                  styles.delayBadge,
+                                  leg.delayMin > 1 ? styles.delayBad : leg.delayMin < -1 ? styles.delayGood : styles.delayNeutral,
+                                ]}
+                              >
+                                {leg.delayMin > 1
+                                  ? `+${leg.delayMin} min demora`
+                                  : leg.delayMin < -1
+                                  ? `${Math.abs(leg.delayMin)} min más rápido`
+                                  : 'En tiempo'}
+                              </Text>
+                            )}
+                          </View>
+                        )}
                         {stopAfter && (
                           <View style={styles.stopPill}>
                             <MapPin size={12} color="#F97316" />
@@ -311,7 +350,7 @@ const makeStyles = () => StyleSheet.create({
     borderColor: C.border,
     padding: S.md,
   },
-  timelineHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: S.md },
+  timelineHeader: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: S.md },
   timelineTitle: { fontSize: 15, fontWeight: '700', color: C.text },
   legRow: { flexDirection: 'row', gap: S.md },
   legDotCol: { alignItems: 'center', width: 14 },
@@ -321,6 +360,11 @@ const makeStyles = () => StyleSheet.create({
   legTime: { fontSize: 12, color: C.textFaint, marginTop: 1 },
   legMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: S.md, marginTop: 4 },
   legMeta: { fontSize: 12, color: C.textMuted },
+  etaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  delayBadge: { fontSize: 11, fontWeight: '700', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, overflow: 'hidden' },
+  delayBad: { color: '#E11D48', backgroundColor: '#E11D4818' },
+  delayGood: { color: '#059669', backgroundColor: '#05966918' },
+  delayNeutral: { color: C.textMuted, backgroundColor: C.surfaceAlt },
   stopPill: {
     flexDirection: 'row',
     alignItems: 'center',

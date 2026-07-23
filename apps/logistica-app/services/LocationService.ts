@@ -17,9 +17,11 @@ let isFlushing = false;
 // Opciones del servicio de ubicación. Centralizadas para que el arranque manual
 // y la reanudación automática usen exactamente la misma configuración.
 const LOCATION_OPTIONS: Location.LocationTaskOptions = {
-    accuracy: Location.Accuracy.Balanced,
-    timeInterval: 5000,
-    distanceInterval: 10,
+    // Alta precisión con muestreo denso (~3 s / 5 m): puntos más juntos → distancia,
+    // paradas y tramos mucho más exactos. Balance razonable de batería para jornada.
+    accuracy: Location.Accuracy.High,
+    timeInterval: 3000,
+    distanceInterval: 5,
     // iOS: tipo de actividad de conducción → el sistema no suspende el GPS y no
     // pausa las actualizaciones cuando el vehículo se detiene brevemente.
     activityType: Location.ActivityType.AutomotiveNavigation,

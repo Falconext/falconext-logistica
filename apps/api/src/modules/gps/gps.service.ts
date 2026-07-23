@@ -283,6 +283,26 @@ export class GpsService {
         return deg * (Math.PI / 180);
     }
 
+    // ---- Enriquecimiento con Mapbox (calles reales + tiempo esperado) ----
+    private mapboxToken(): string {
+        return process.env.MAPBOX_TOKEN || '';
+    }
+
+    // Tiempo ESPERADO (min) manejando de A a B con tráfico típico. null si falla.
+    private async directionsEta(from: { lng: number; lat: number }, to: { lng: number; lat: number }): Promise<number | null> {
+        const token = this.mapboxToken();
+        if (!token) return null;
+        try {
+            const url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${from.lng},${from.lat};${to.lng},${to.lat}?overview=false&access_token=${token}`;
+            const res = await fetch(url);
+            const j: any = await res.json();
+            if (j.routes && j.routes.length) return j.routes[0].duration / 60;
+        } catch (e) {
+            console.warn('[Mapbox directions] falló:', (e as any)?.message);
+        }
+        return null;
+    }
+
     async createGeofence(data: { name: string, description?: string, latitude: number, longitude: number, radius: number, tenantId: string }) {
         return this.prisma.geofence.create({
             data: {
@@ -469,12 +489,12 @@ export class GpsService {
             return acc;
         };
 
-        // Tramos ("recorridos") entre hitos: Salida → Parada 1 → Parada 2 → … → Llegada.
-        // Cada tramo trae su duración (la demora punto a punto) y distancia.
+        // Tramos ("recorridos") entre hitos: Salida → Parada 1 → … → Llegada.
+        // Cada tramo trae su duración (la demora real) y distancia.
         const milestones = [
-            { label: 'Salida', arr: startTime, dep: startTime },
-            ...stops.map((s, idx) => ({ label: `Parada ${idx + 1}`, arr: s._tStart, dep: s._tEnd })),
-            { label: 'Llegada', arr: endTime, dep: endTime },
+            { label: 'Salida', arr: startTime, dep: startTime, lat: pts[0].lat, lng: pts[0].lng },
+            ...stops.map((s, idx) => ({ label: `Parada ${idx + 1}`, arr: s._tStart, dep: s._tEnd, lat: s.lat, lng: s.lng })),
+            { label: 'Llegada', arr: endTime, dep: endTime, lat: pts[pts.length - 1].lat, lng: pts[pts.length - 1].lng },
         ];
         const legs: any[] = [];
         for (let k = 0; k < milestones.length - 1; k++) {
@@ -491,8 +511,35 @@ export class GpsService {
                 durationMin: Math.round(legMs / 60000),
                 distanceKm: Math.round(legKm * 100) / 100,
                 avgSpeedKmh: legMs > 0 ? Math.round((legKm / (legMs / 3600000)) * 10) / 10 : 0,
+                expectedMin: null as number | null, // tiempo que "debería" tardar (Mapbox)
+                delayMin: null as number | null,    // real - esperado (+ = con demora)
+                _from: { lat: milestones[k].lat, lng: milestones[k].lng },
+                _to: { lat: milestones[k + 1].lat, lng: milestones[k + 1].lng },
             });
         }
+
+        // --- Estimación de tiempo con Mapbox (best-effort; si falla, se omite) ---
+        // Tiempo ESPERADO por tramo (Directions con tráfico) vs real → demora.
+        // (La distancia se mide del GPS denso: es el camino real, más fiable que
+        //  un match con submuestreo que "corta camino".)
+        let expectedMovingMin = 0;
+        let hasExpected = false;
+        let etaCalls = 0;
+        for (const leg of legs) {
+            if (leg.distanceKm < 0.2) continue;   // tramos triviales (ruido): no gastar llamada
+            if (etaCalls >= 20) break;            // cota de latencia
+            etaCalls++;
+            const eta = await this.directionsEta(leg._from, leg._to);
+            if (eta != null) {
+                leg.expectedMin = Math.round(eta);
+                leg.delayMin = Math.round(leg.durationMin - eta);
+                expectedMovingMin += eta;
+                hasExpected = true;
+            }
+        }
+        legs.forEach(l => { delete l._from; delete l._to; });
+
+        const avgSpeedKmhFinal = movingMs > 0 ? distanceKm / (movingMs / 3600000) : 0;
 
         // Quitar campos internos de las paradas.
         const cleanStops = stops.map(({ _tStart, _tEnd, ...rest }) => rest);
@@ -500,13 +547,17 @@ export class GpsService {
         return {
             points: pts.length,
             distanceKm: Math.round(distanceKm * 100) / 100,
+            distanceSource: 'gps',
             durationMin: Math.round(durationMs / 60000),
             movingMin: Math.round(movingMs / 60000),
             stoppedMin: Math.round(stoppedMs / 60000),
-            avgSpeedKmh: Math.round(avgSpeedKmh * 10) / 10,
+            expectedMovingMin: hasExpected ? Math.round(expectedMovingMin) : null,
+            delayMin: hasExpected ? Math.round(movingMs / 60000 - expectedMovingMin) : null,
+            avgSpeedKmh: Math.round(avgSpeedKmhFinal * 10) / 10,
             maxSpeedKmh: Math.round(maxSpeedKmh * 10) / 10,
             startTime: new Date(startTime).toISOString(),
             endTime: new Date(endTime).toISOString(),
+            matchedGeometry: null,
             stops: cleanStops,
             legs,
         };
