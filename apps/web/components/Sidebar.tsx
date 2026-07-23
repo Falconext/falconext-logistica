@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Truck, Map, Wrench, ShieldCheck, LogOut, Bell, CalendarDays, BarChart3, FileSpreadsheet, MessageSquare, PlayCircle, HelpCircle, Briefcase, ChevronsLeft, Receipt, Fuel, UserCog, KeyRound, Radio, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, Users, Truck, Map, Wrench, ShieldCheck, LogOut, Bell, CalendarDays, BarChart3, FileSpreadsheet, MessageSquare, PlayCircle, HelpCircle, Briefcase, ChevronsLeft, Receipt, Fuel, UserCog, KeyRound, Radio, Navigation, Sun, Moon } from 'lucide-react';
 import clsx from 'clsx';
 import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
@@ -23,6 +23,7 @@ const primaryItems = [
 
 const trackingItems = [
     { key: 'flota', name: 'Flota en Vivo', href: '/flota', icon: Radio },
+    { key: 'rastreo', name: 'Rastreo', href: '/rastreo', icon: Navigation },
     { key: 'alertas', name: 'Alertas', href: '/alertas', icon: Bell },
     { key: 'dispositivos', name: 'Dispositivos GPS', href: '/dispositivos', icon: ShieldCheck },
     { key: 'geocercas', name: 'Geocercas', href: '/geocercas', icon: Map },

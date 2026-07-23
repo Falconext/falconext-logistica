@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Radio, Wifi, Gauge, MapPin, Clock, User, Truck } from 'lucide-react-native';
 import {
@@ -12,13 +12,15 @@ import {
   EmptyState,
   Theme,
 } from '../../components/ui';
+import MapboxWebView from '../../components/MapboxWebView';
 import api from '../../services/api';
+import { useTheme } from '../../context/ThemeContext';
 
 const C = Theme.colors;
 const S = Theme.spacing;
 
 // Umbral de conexión: una posición más reciente que esto se considera "en línea".
-const ONLINE_MS = 5 * 60 * 1000;
+const ONLINE_MS = 10 * 60 * 1000; // "conectado" si reportó actividad hace <10 min (igual que Dispositivos)
 const REFRESH_MS = 12 * 1000;
 
 type Position = {
@@ -31,6 +33,7 @@ type Position = {
 type Device = {
   id: string;
   name?: string;
+  last_activity?: string | null;
   vehiculo?: { placa?: string } | null;
   trabajador?: { nombre_completo?: string } | null;
   positions?: Position[];
@@ -45,9 +48,14 @@ function lastPosition(d: Device): Position | undefined {
   );
 }
 
-function isOnline(p?: Position): boolean {
-  if (!p) return false;
-  return Date.now() - new Date(p.timestamp).getTime() < ONLINE_MS;
+// "Conectado" = el dispositivo reportó actividad hace poco. Se usa la MISMA
+// lógica y ventana que la pantalla de Dispositivos GPS (last_activity, 10 min)
+// para que el estado sea consistente entre ambas pantallas.
+function isConnected(d: Device): boolean {
+  if (!d.last_activity) return false;
+  const t = new Date(d.last_activity).getTime();
+  if (Number.isNaN(t)) return false;
+  return Date.now() - t <= ONLINE_MS;
 }
 
 // "hace X min" a partir de un timestamp.
@@ -80,12 +88,17 @@ function deviceTitle(d: Device): string {
 }
 
 export default function FlotaScreen() {
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const [items, setItems] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
   // Fuerza re-render periódico para actualizar "hace X min" y el estado en línea.
   const [, setTick] = useState(0);
+  // Punto al que centrar el mapa al tocar una tarjeta.
+  const [focus, setFocus] = useState<{ lng: number; lat: number; nonce: number } | undefined>();
+  const focusNonce = useRef(0);
 
   const load = useCallback(async () => {
     try {
@@ -131,15 +144,53 @@ export default function FlotaScreen() {
   }, [items, query]);
 
   const stats = useMemo(() => {
-    const online = items.filter((d) => isOnline(lastPosition(d))).length;
+    const online = items.filter((d) => isConnected(d)).length;
     return { total: items.length, online };
   }, [items]);
 
+  // Devices con posición válida para pintar en el mapa.
+  const located = useMemo(() => {
+    return items
+      .map((d) => ({ d, pos: lastPosition(d) }))
+      .filter(
+        (x): x is { d: Device; pos: Position } =>
+          !!x.pos &&
+          Number.isFinite(x.pos.latitude) &&
+          Number.isFinite(x.pos.longitude)
+      );
+  }, [items]);
+
+  // Región inicial: encuadra los marcadores (o Lima por defecto).
+  const initialRegion = useMemo(() => {
+    if (located.length === 0) {
+      return { latitude: -12.0464, longitude: -77.0428, latitudeDelta: 0.5, longitudeDelta: 0.5 };
+    }
+    const lats = located.map((x) => x.pos.latitude);
+    const lngs = located.map((x) => x.pos.longitude);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+    return {
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+      latitudeDelta: Math.max((maxLat - minLat) * 1.4, 0.02),
+      longitudeDelta: Math.max((maxLng - minLng) * 1.4, 0.02),
+    };
+  }, [located]);
+
   const renderCard = ({ item: d }: { item: Device }) => {
     const pos = lastPosition(d);
-    const online = isOnline(pos);
+    const online = isConnected(d);
+    const hasPos = !!pos && Number.isFinite(pos.latitude) && Number.isFinite(pos.longitude);
     return (
-      <View style={styles.card}>
+      <TouchableOpacity
+        activeOpacity={hasPos ? 0.7 : 1}
+        onPress={() => {
+          if (hasPos) setFocus({ lng: pos!.longitude, lat: pos!.latitude, nonce: focusNonce.current++ });
+        }}
+        style={styles.card}
+      >
         <View style={[styles.cardIcon, { backgroundColor: online ? C.successSoft : C.neutralSoft }]}>
           <Radio size={20} color={online ? C.success : C.neutral} />
         </View>
@@ -188,7 +239,7 @@ export default function FlotaScreen() {
             </Text>
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -201,6 +252,19 @@ export default function FlotaScreen() {
           <StatCard label="Dispositivos" value={stats.total} icon={Radio} color={C.primary} />
           <StatCard label="En línea" value={stats.online} icon={Wifi} color={C.success} />
         </View>
+
+        <MapboxWebView
+          style={styles.map}
+          fit
+          mapStyle="streets"
+          markers={located.map(({ d, pos }) => ({
+            lng: pos.longitude,
+            lat: pos.latitude,
+            color: isConnected(d) ? '#16A34A' : '#94A3B8',
+            popup: `<b>${deviceTitle(d)}</b><br/>${timeAgo(pos.timestamp)} · ${kmh(pos.speed)}`,
+          }))}
+          focus={focus}
+        />
 
         <View style={{ marginBottom: S.md }}>
           <SearchBar value={query} onChangeText={setQuery} placeholder="Buscar por chofer o placa" />
@@ -230,9 +294,16 @@ export default function FlotaScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   body: { flex: 1, paddingHorizontal: S.lg, paddingTop: S.md },
   statsRow: { flexDirection: 'row', gap: S.sm, marginBottom: S.md },
+  map: {
+    height: 280,
+    borderRadius: Theme.radius.lg,
+    marginBottom: S.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: C.border,
+  },
   card: {
     flexDirection: 'row',
     gap: S.md,

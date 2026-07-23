@@ -47,6 +47,7 @@ export class AuthService {
             role: user.role,
             tenantId: user.tenant_id,
             esAdmin: ef.esAdmin,
+            modulos: ef.modulos,
             trabajadorId: user.trabajador_id ?? null,
             trabajadorCodigo: user.trabajador_codigo ?? null,
             soloPropios: ef.soloPropios

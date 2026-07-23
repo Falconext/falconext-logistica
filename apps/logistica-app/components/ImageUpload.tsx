@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import { View, Text, TouchableOpacity, Image, ActivityIndicator, StyleSheet, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Camera, ImagePlus, X, FileText } from 'lucide-react-native';
@@ -21,6 +22,8 @@ interface Props {
  * y devuelve la URL. Equivalente móvil del FileUpload de la web.
  */
 export default function ImageUpload({ value, onChange, onClear, label = 'Subir foto', variant = 'wide' }: Props) {
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const [uploading, setUploading] = useState(false);
 
   const upload = async (uri: string) => {
@@ -116,7 +119,7 @@ export default function ImageUpload({ value, onChange, onClear, label = 'Subir f
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: C.surfaceAlt, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   avatarImg: { width: '100%', height: '100%' },
   link: { color: C.primary, fontWeight: '600', fontSize: 14 },

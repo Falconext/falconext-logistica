@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import {
@@ -31,6 +31,7 @@ import {
   Theme,
 } from '../../components/ui';
 import api from '../../services/api';
+import { useTheme } from '../../context/ThemeContext';
 
 const C = Theme.colors;
 const S = Theme.spacing;
@@ -88,6 +89,8 @@ function extractSpreadsheetId(val: string): string {
 }
 
 export default function AdminScreen() {
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [status, setStatus] = useState<SheetsStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -420,7 +423,7 @@ export default function AdminScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   body: { paddingHorizontal: S.lg, paddingTop: S.md },
   statsRow: { flexDirection: 'row', gap: S.sm, marginBottom: S.lg },
   sectionHead: {

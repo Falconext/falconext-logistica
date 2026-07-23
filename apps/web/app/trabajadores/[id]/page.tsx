@@ -2,12 +2,17 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import api from '../../../lib/api';
-import { Truck, FileText, Phone, Mail, MapPin, ArrowLeft, Fuel, Receipt, ChevronLeft, ChevronRight, Calendar, Navigation, X, Radio } from 'lucide-react';
+import { Truck, FileText, Phone, Mail, MapPin, ArrowLeft, Fuel, Receipt, ChevronLeft, ChevronRight, Calendar, Navigation, X, Radio, KeyRound, FolderArchive } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import clsx from 'clsx';
 import { useCurrency } from '../../../lib/useCurrency';
 import { MapboxLiveMap as LiveMapReal } from '../../../components/tracking/MapboxLiveMap';
+import UsuarioModal, { Usuario } from '../../admin/usuarios/UsuarioModal';
+import { useAuthStore } from '../../../lib/store';
+import { isAdmin } from '../../../lib/modules';
+import DocumentosPanel from '../../../components/DocumentosPanel';
+import { TRABAJADOR_DOCS } from '../../../components/documentTypes';
 
 interface WorkerLocation {
     device: { id: string; name: string; last_activity: string | null; vehiculo_placa: string | null } | null;
@@ -40,11 +45,30 @@ export default function TrabajadorDetailsPage() {
     const [worker, setWorker] = useState<any>(null);
     const [historial, setHistorial] = useState<HistorialData>({ rutas: [], peajes: [], combustible: [] });
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'rutas' | 'peajes' | 'combustible'>('rutas');
+    const [activeTab, setActiveTab] = useState<'documentos' | 'rutas' | 'peajes' | 'combustible'>('documentos');
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedMonth, setSelectedMonth] = useState<string>('all');
     const [location, setLocation] = useState<WorkerLocation | null>(null);
     const [showLocationMap, setShowLocationMap] = useState(false);
+
+    // Acceso a la app: usuario (login) vinculado a este trabajador
+    const { user: authUser } = useAuthStore();
+    const admin = isAdmin(authUser);
+    const [linkedUser, setLinkedUser] = useState<Usuario | null>(null);
+    const [showAccessModal, setShowAccessModal] = useState(false);
+    const [accessPreset, setAccessPreset] = useState<Usuario | null>(null);
+
+    const loadLinkedUser = async () => {
+        if (!admin || !id) return;
+        try {
+            const res = await api.get('/usuarios');
+            const found = (Array.isArray(res.data) ? res.data : []).find((u: any) => u.trabajador_id === id) || null;
+            setLinkedUser(found);
+        } catch {
+            setLinkedUser(null);
+        }
+    };
+    useEffect(() => { loadLinkedUser(); }, [id, admin]);
 
     useEffect(() => {
         if (!id) return;
@@ -91,7 +115,8 @@ export default function TrabajadorDetailsPage() {
     const currentData = useMemo(() => {
         if (activeTab === 'rutas') return historial.rutas || [];
         if (activeTab === 'peajes') return historial.peajes || [];
-        return historial.combustible || [];
+        if (activeTab === 'combustible') return historial.combustible || [];
+        return [];
     }, [activeTab, historial]);
 
     // Get month key from date
@@ -162,6 +187,7 @@ export default function TrabajadorDetailsPage() {
     }
 
     const tabs = [
+        { id: 'documentos', label: 'Documentos', icon: FolderArchive, count: null as number | null },
         { id: 'rutas', label: 'Rutas', icon: Truck, count: historial.rutas?.length || 0 },
         { id: 'peajes', label: 'Peajes / Multas', icon: Receipt, count: historial.peajes?.length || 0 },
         { id: 'combustible', label: 'Combustible', icon: Fuel, count: historial.combustible?.length || 0 },
@@ -219,6 +245,41 @@ export default function TrabajadorDetailsPage() {
                             </div>
                         </div>
                     </div>
+
+                    {/* Acceso a la app */}
+                    {admin && (
+                        <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+                            <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                                <KeyRound size={14} className="text-amber-500" /> Acceso a la app
+                            </h3>
+                            {linkedUser ? (
+                                <div className="text-xs space-y-2">
+                                    <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300 font-medium">
+                                        <Mail size={12} className="text-slate-400" /> {linkedUser.email}
+                                    </div>
+                                    <div className="text-slate-500">
+                                        Rol: {linkedUser.rol?.nombre || ((linkedUser.role || '').toUpperCase() === 'SUPERADMIN' ? 'Super Admin' : '—')}
+                                    </div>
+                                    <button
+                                        onClick={() => { setAccessPreset(linkedUser); setShowAccessModal(true); }}
+                                        className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-medium transition"
+                                    >
+                                        <KeyRound size={14} /> Gestionar acceso
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="text-xs space-y-2">
+                                    <p className="text-slate-500">Este trabajador no tiene cuenta para iniciar sesión.</p>
+                                    <button
+                                        onClick={() => { setAccessPreset({ nombre: worker.nombre_completo, trabajador_id: id } as unknown as Usuario); setShowAccessModal(true); }}
+                                        className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:hover:bg-amber-900/40 text-amber-700 dark:text-amber-400 text-sm font-medium transition"
+                                    >
+                                        <KeyRound size={14} /> Dar acceso a la app
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Ubicación en vivo */}
                     <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
@@ -295,8 +356,11 @@ export default function TrabajadorDetailsPage() {
                         </div>
                     </div>
 
-                    {/* Month Navigation */}
-                    <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex-1 overflow-y-auto">
+                    {/* Month Navigation (no aplica en la pestaña Documentos) */}
+                    <div className={clsx(
+                        "bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex-1 overflow-y-auto",
+                        activeTab === 'documentos' && 'hidden'
+                    )}>
                         <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
                             <Calendar size={14} className="text-purple-500" /> Navegación
                         </h3>
@@ -349,30 +413,39 @@ export default function TrabajadorDetailsPage() {
                             >
                                 <tab.icon size={16} />
                                 {tab.label}
-                                <span className={clsx(
-                                    "px-2 py-0.5 rounded-full text-xs font-bold",
-                                    activeTab === tab.id
-                                        ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
-                                        : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-                                )}>
-                                    {tab.count}
-                                </span>
+                                {tab.count !== null && (
+                                    <span className={clsx(
+                                        "px-2 py-0.5 rounded-full text-xs font-bold",
+                                        activeTab === tab.id
+                                            ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                                            : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                                    )}>
+                                        {tab.count}
+                                    </span>
+                                )}
                             </button>
                         ))}
                     </div>
 
-                    {/* Header with info */}
-                    <div className="px-6 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30 flex-shrink-0">
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm text-slate-500">
-                                Mostrando {paginatedData.length} de {filteredData.length} registros
-                                {selectedMonth !== 'all' && ` • ${formatMonthLabel(selectedMonth)}`}
-                            </span>
+                    {/* Header with info (solo para pestañas de historial) */}
+                    {activeTab !== 'documentos' && (
+                        <div className="px-6 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30 flex-shrink-0">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm text-slate-500">
+                                    Mostrando {paginatedData.length} de {filteredData.length} registros
+                                    {selectedMonth !== 'all' && ` • ${formatMonthLabel(selectedMonth)}`}
+                                </span>
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     {/* Table Content */}
                     <div className="flex-1 overflow-auto">
+                        {/* Documentos */}
+                        {activeTab === 'documentos' && (
+                            <DocumentosPanel entidad="TRABAJADOR" entidadId={id} docTypes={TRABAJADOR_DOCS} />
+                        )}
+
                         {/* Rutas Table */}
                         {activeTab === 'rutas' && (
                             <table className="w-full text-left text-sm text-slate-600 dark:text-slate-400">
@@ -569,6 +642,14 @@ export default function TrabajadorDetailsPage() {
                     </div>
                 </div>
             )}
+
+            {/* Modal: dar / gestionar acceso a la app (usuario vinculado) */}
+            <UsuarioModal
+                isOpen={showAccessModal}
+                onClose={() => setShowAccessModal(false)}
+                onSuccess={() => { setShowAccessModal(false); loadLinkedUser(); }}
+                initialData={accessPreset}
+            />
         </div>
     );
 }

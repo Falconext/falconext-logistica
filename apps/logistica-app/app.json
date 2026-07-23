@@ -46,6 +46,15 @@
     "plugins": [
       "expo-router",
       [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Necesitamos tu ubicación en segundo plano para rastrear la ruta incluso si la app está cerrada.",
+          "locationWhenInUsePermission": "Necesitamos tu ubicación para rastrear la ruta durante el servicio.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",

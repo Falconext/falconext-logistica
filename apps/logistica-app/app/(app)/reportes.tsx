@@ -28,6 +28,7 @@ import {
 } from '../../components/ui';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { formatMoney } from '../../constants/currency';
 
 const C = Theme.colors;
@@ -146,6 +147,8 @@ const shortDate = (iso: string) => {
 
 export default function ReportesScreen() {
   const { user } = useAuth();
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const [period, setPeriod] = useState<PeriodKey>('thisMonth');
   const [kpis, setKpis] = useState<ReportKpis>(EMPTY_KPIS);
   const [evolution, setEvolution] = useState<EvolutionPoint[]>([]);
@@ -517,7 +520,7 @@ export default function ReportesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   body: { padding: S.lg, paddingBottom: S.xxl },
   periodRow: { flexDirection: 'row', gap: S.sm, marginBottom: S.sm },
   periodChip: {

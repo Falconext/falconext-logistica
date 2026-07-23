@@ -1,7 +1,7 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
-import { useFocusEffect } from 'expo-router';
-import { Smartphone, Truck, Wifi, WifiOff, MapPin } from 'lucide-react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { Smartphone, Truck, Wifi, WifiOff, MapPin, History } from 'lucide-react-native';
 import {
   Screen,
   AppHeader,
@@ -17,7 +17,9 @@ import {
   InfoRow,
   Theme,
 } from '../../components/ui';
+import MapboxWebView from '../../components/MapboxWebView';
 import api from '../../services/api';
+import { useTheme } from '../../context/ThemeContext';
 
 const C = Theme.colors;
 const S = Theme.spacing;
@@ -69,6 +71,9 @@ function lastPosition(d: Device): DevicePosition | undefined {
 }
 
 export default function DispositivosScreen() {
+  const { themeKey } = useTheme();
+  const router = useRouter();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const [items, setItems] = useState<Device[]>([]);
   const [vehiculos, setVehiculos] = useState<VehiculoOpt[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,6 +81,9 @@ export default function DispositivosScreen() {
   const [query, setQuery] = useState('');
 
   const [detail, setDetail] = useState<Device | null>(null);
+  // Punto al que centrar el mapa al tocar una tarjeta.
+  const [focus, setFocus] = useState<{ lng: number; lat: number; nonce: number } | undefined>();
+  const focusNonce = useRef(0);
   const [formVisible, setFormVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [newName, setNewName] = useState('');
@@ -121,6 +129,38 @@ export default function DispositivosScreen() {
     return { total: items.length, conectados, sinVehiculo };
   }, [items]);
 
+  // Dispositivos con posición válida para el mapa.
+  const located = useMemo(() => {
+    return items
+      .map((d) => ({ d, pos: lastPosition(d) }))
+      .filter(
+        (x): x is { d: Device; pos: DevicePosition & { latitude: number; longitude: number } } =>
+          !!x.pos &&
+          typeof x.pos.latitude === 'number' &&
+          typeof x.pos.longitude === 'number' &&
+          Number.isFinite(x.pos.latitude) &&
+          Number.isFinite(x.pos.longitude)
+      );
+  }, [items]);
+
+  const initialRegion = useMemo(() => {
+    if (located.length === 0) {
+      return { latitude: -12.0464, longitude: -77.0428, latitudeDelta: 0.5, longitudeDelta: 0.5 };
+    }
+    const lats = located.map((x) => x.pos.latitude);
+    const lngs = located.map((x) => x.pos.longitude);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+    return {
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+      latitudeDelta: Math.max((maxLat - minLat) * 1.4, 0.02),
+      longitudeDelta: Math.max((maxLng - minLng) * 1.4, 0.02),
+    };
+  }, [located]);
+
   const openCreate = () => {
     setNewName('');
     setNewImei('');
@@ -155,8 +195,18 @@ export default function DispositivosScreen() {
 
   const renderCard = ({ item: d }: { item: Device }) => {
     const conectado = isConnected(d);
+    const pos = lastPosition(d);
+    const hasPos = !!pos && typeof pos.latitude === 'number' && typeof pos.longitude === 'number';
     return (
-      <TouchableOpacity activeOpacity={0.7} style={styles.card} onPress={() => setDetail(d)}>
+      <TouchableOpacity
+        activeOpacity={0.7}
+        style={styles.card}
+        onPress={() => {
+          // Centra el mapa en el dispositivo (si tiene ubicación) y abre su detalle.
+          if (hasPos) setFocus({ lng: pos!.longitude as number, lat: pos!.latitude as number, nonce: focusNonce.current++ });
+          setDetail(d);
+        }}
+      >
         <View style={styles.cardIcon}>
           <Smartphone size={20} color={C.primary} />
         </View>
@@ -194,6 +244,19 @@ export default function DispositivosScreen() {
           <StatCard label="Conectados" value={stats.conectados} icon={Wifi} color={C.success} />
           <StatCard label="Sin vehículo" value={stats.sinVehiculo} icon={WifiOff} color={C.warning} />
         </View>
+
+        <MapboxWebView
+          style={styles.map}
+          fit
+          mapStyle="streets"
+          markers={located.map(({ d, pos }) => ({
+            lng: pos.longitude,
+            lat: pos.latitude,
+            color: isConnected(d) ? '#16A34A' : '#94A3B8',
+            popup: `<b>${d.name}</b><br/>${d.vehiculo?.placa || d.imei}`,
+          }))}
+          focus={focus}
+        />
 
         <View style={{ marginBottom: S.md }}>
           <SearchBar value={query} onChangeText={setQuery} placeholder="Buscar por nombre, IMEI o placa" />
@@ -247,6 +310,22 @@ export default function DispositivosScreen() {
               </View>
               <Text style={styles.tokenValue} selectable>{detail.token}</Text>
             </View>
+
+            <View style={{ marginTop: S.md }}>
+              <Button
+                title="Ver historial de ruta"
+                variant="secondary"
+                icon={History}
+                onPress={() => {
+                  const d = detail;
+                  setDetail(null);
+                  router.push({
+                    pathname: '/(app)/historial',
+                    params: { deviceId: d.id, name: d.name, placa: d.vehiculo?.placa || '' },
+                  } as any);
+                }}
+              />
+            </View>
           </View>
         )}
       </FormModal>
@@ -299,9 +378,16 @@ export default function DispositivosScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   body: { flex: 1, paddingHorizontal: S.lg, paddingTop: S.md },
   statsRow: { flexDirection: 'row', gap: S.sm, marginBottom: S.md },
+  map: {
+    height: 280,
+    borderRadius: Theme.radius.lg,
+    marginBottom: S.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: C.border,
+  },
   card: {
     flexDirection: 'row',
     gap: S.md,

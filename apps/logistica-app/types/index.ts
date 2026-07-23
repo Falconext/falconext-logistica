@@ -38,6 +38,8 @@ export interface Trabajador {
   fecha_vencimiento_pasaporte?: string;
   licencia_conducir?: string;
   fecha_vencimiento_licencia?: string;
+  // Rastreo GPS: si comparte su ubicación desde la app (módulo Rastreo).
+  trackable?: boolean;
 }
 
 export interface Vehiculo {
@@ -131,4 +133,14 @@ export interface Tenant {
 
 export interface DashboardStats {
   [key: string]: number | string;
+}
+
+export interface Documento {
+  id: string;
+  entidad: 'VEHICULO' | 'TRABAJADOR' | 'MANTENIMIENTO';
+  entidad_id: string;
+  tipo: string;
+  nombre?: string;
+  url?: string | null;
+  fecha_vencimiento?: string | null;
 }

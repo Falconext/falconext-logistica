@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -14,6 +14,7 @@ import {
   Receipt,
   Fuel,
   Radio,
+  Navigation,
   UserCog,
   KeyRound,
   Sun,
@@ -45,6 +46,7 @@ const items: Item[] = [
   { key: 'calendario', label: 'Calendario', desc: 'Vista de programación', href: '/(app)/calendario', icon: CalendarDays, color: '#8B5CF6' },
   { key: 'reportes', label: 'Reportes', desc: 'Indicadores y KPIs', href: '/(app)/reportes', icon: BarChart3, color: '#F59E0B' },
   { key: 'flota', label: 'Flota en Vivo', desc: 'Choferes en el mapa', href: '/(app)/flota', icon: Radio, color: '#2563EB' },
+  { key: 'rastreo', label: 'Rastreo', desc: 'Comparte tu ubicación GPS', href: '/(app)/rastreo', icon: Navigation, color: '#4F46E5' },
   { key: 'alertas', label: 'Alertas', desc: 'Vencimientos de documentos', href: '/(app)/alertas', icon: Bell, color: '#DC2626' },
   { key: 'dispositivos', label: 'Dispositivos GPS', desc: 'Rastreadores de flota', href: '/(app)/dispositivos', icon: ShieldCheck, color: '#16A34A' },
   { key: 'geocercas', label: 'Geocercas', desc: 'Zonas y eventos', href: '/(app)/geocercas', icon: Map, color: '#0891B2' },
@@ -56,7 +58,8 @@ const items: Item[] = [
 export default function MasScreen() {
   const router = useRouter();
   const { user, logout } = useAuth();
-  const { isDark, toggle } = useTheme();
+  const { isDark, toggle, themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const isAdmin = isAdminUser(user);
 
   const confirmLogout = () => {
@@ -122,7 +125,7 @@ export default function MasScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   avatar: {
     width: 48,
     height: 48,

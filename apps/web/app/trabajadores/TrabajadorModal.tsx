@@ -36,6 +36,7 @@ const emptyForm = {
     fecha_vencimiento_pasaporte: '',
     sueldo_base: '' as string | number,
     url_foto: '',
+    trackable: false,
 };
 
 export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialData }: TrabajadorModalProps) {
@@ -86,6 +87,7 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                 fecha_vencimiento_pasaporte: toDateInput(initialData.fecha_vencimiento_pasaporte),
                 sueldo_base: initialData.sueldo_base ?? '',
                 url_foto: initialData.url_foto || '',
+                trackable: initialData.trackable ?? false,
             });
             fetchDocs();
         } else {
@@ -116,6 +118,7 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                 fecha_vencimiento_pasaporte: toIso(form.fecha_vencimiento_pasaporte) ?? null,
                 sueldo_base: form.sueldo_base === '' ? null : Number(form.sueldo_base),
                 url_foto: form.url_foto || null,
+                trackable: form.trackable,
             };
 
             if (isEdit) {
@@ -237,6 +240,17 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                                 {form.sueldo_base !== '' && !isNaN(Number(form.sueldo_base)) && (
                                     <p className="text-xs text-slate-400">{format(Number(form.sueldo_base))}</p>
                                 )}
+                            </div>
+                            <div className="sm:col-span-2">
+                                <label className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:border-slate-400 transition">
+                                    <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-[#1a1a1c]"
+                                        checked={form.trackable}
+                                        onChange={(e) => set('trackable', e.target.checked)} />
+                                    <span className="flex-1">
+                                        <span className="block text-sm font-semibold text-slate-800">Será rastreado</span>
+                                        <span className="block text-xs text-slate-400">El trabajador reportará su ubicación GPS desde la app.</span>
+                                    </span>
+                                </label>
                             </div>
                         </div>
                     </div>

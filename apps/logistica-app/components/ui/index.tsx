@@ -4,7 +4,7 @@
  * Mantener este archivo como única fuente de componentes base para lograr
  * una apariencia consistente en toda la app.
  */
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -21,10 +21,11 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets, initialWindowMetrics } from 'react-native-safe-area-context';
 import { LucideIcon, Search, X, Inbox, ChevronLeft, Bell, Plus } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { Theme } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 
 const C = Theme.colors;
 const S = Theme.spacing;
@@ -47,6 +48,7 @@ export function Screen({
   refreshControl?: React.ReactElement<any>;
   style?: StyleProp<ViewStyle>;
 }) {
+  const styles = useStyles();
   const inner = padded ? { padding: S.lg } : undefined;
   return (
     <SafeAreaView style={[styles.screen, style]} edges={['top', 'left', 'right']}>
@@ -83,6 +85,7 @@ export function AppHeader({
   showBell?: boolean;
   onBell?: () => void;
 }) {
+  const styles = useStyles();
   const router = useRouter();
   return (
     <View style={styles.header}>
@@ -119,6 +122,7 @@ export function Card({
   style?: StyleProp<ViewStyle>;
   onPress?: () => void;
 }) {
+  const styles = useStyles();
   const content = <View style={[styles.card, style]}>{children}</View>;
   if (onPress) {
     return (
@@ -146,6 +150,7 @@ export function StatCard({
   color?: string;
   style?: StyleProp<ViewStyle>;
 }) {
+  const styles = useStyles();
   return (
     <View style={[styles.statCard, style]}>
       {Icon && (
@@ -172,6 +177,7 @@ const badgeColors: Record<BadgeVariant, { bg: string; fg: string }> = {
 };
 
 export function Badge({ label, variant = 'neutral' }: { label: string; variant?: BadgeVariant }) {
+  const styles = useStyles();
   const c = badgeColors[variant];
   return (
     <View style={[styles.badge, { backgroundColor: c.bg }]}>
@@ -192,6 +198,7 @@ export function SearchBar({
   onChangeText: (t: string) => void;
   placeholder?: string;
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.searchBar}>
       <Search size={18} color={C.textFaint} />
@@ -232,6 +239,7 @@ export function Button({
   icon?: LucideIcon;
   style?: StyleProp<ViewStyle>;
 }) {
+  const styles = useStyles();
   const v = buttonVariants[variant];
   return (
     <TouchableOpacity
@@ -263,6 +271,7 @@ const buttonVariants = {
 // FloatingButton (FAB) para crear
 // ---------------------------------------------------------------------------
 export function Fab({ onPress, icon: Icon = Plus }: { onPress?: () => void; icon?: LucideIcon }) {
+  const styles = useStyles();
   return (
     <TouchableOpacity style={styles.fab} onPress={onPress} activeOpacity={0.85}>
       <Icon size={24} color="#fff" />
@@ -294,6 +303,7 @@ export function FormField({
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   style?: StyleProp<ViewStyle>;
 }) {
+  const styles = useStyles();
   return (
     <View style={[{ marginBottom: S.md }, style]}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -316,6 +326,7 @@ export function FormField({
 // EmptyState / LoadingState / ErrorState
 // ---------------------------------------------------------------------------
 export function LoadingState({ text = 'Cargando...' }: { text?: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.centered}>
       <ActivityIndicator size="large" color={C.primary} />
@@ -333,6 +344,7 @@ export function EmptyState({
   subtitle?: string;
   icon?: LucideIcon;
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.centered}>
       <View style={styles.emptyIcon}>
@@ -345,6 +357,7 @@ export function EmptyState({
 }
 
 export function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => void }) {
+  const styles = useStyles();
   return (
     <View style={styles.centered}>
       <Text style={styles.emptyTitle}>Ocurrió un error</Text>
@@ -370,6 +383,11 @@ export function FormModal({
   children: React.ReactNode;
   footer?: React.ReactNode;
 }) {
+  const styles = useStyles();
+  const insets = useSafeAreaInsets();
+  // Dentro de RNModal los insets suelen venir en 0 (jerarquía de vista aparte),
+  // por eso usamos también initialWindowMetrics para respetar el home indicator.
+  const safeBottom = Math.max(insets.bottom, initialWindowMetrics?.insets?.bottom ?? 0, S.lg);
   return (
     <RNModal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={styles.modalOverlay} onPress={onClose} />
@@ -384,10 +402,12 @@ export function FormModal({
             <X size={22} color={C.textMuted} />
           </TouchableOpacity>
         </View>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: S.lg }}>
+        {/* flexShrink:1 -> en formularios largos el scroll se ajusta al maxHeight
+            del sheet y el footer queda fijo abajo (antes se empujaba fuera). */}
+        <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: footer ? S.lg : safeBottom }}>
           {children}
         </ScrollView>
-        {footer && <View style={styles.modalFooter}>{footer}</View>}
+        {footer && <View style={[styles.modalFooter, { paddingBottom: safeBottom }]}>{footer}</View>}
       </KeyboardAvoidingView>
     </RNModal>
   );
@@ -397,6 +417,7 @@ export function FormModal({
 // InfoRow: fila etiqueta/valor para detalles.
 // ---------------------------------------------------------------------------
 export function InfoRow({ label, value }: { label: string; value?: string | number | null }) {
+  const styles = useStyles();
   return (
     <View style={styles.infoRow}>
       <Text style={styles.infoLabel}>{label}</Text>
@@ -406,13 +427,14 @@ export function InfoRow({ label, value }: { label: string; value?: string | numb
 }
 
 export function SectionTitle({ children, style }: { children: React.ReactNode; style?: StyleProp<TextStyle> }) {
+  const styles = useStyles();
   return <Text style={[styles.sectionTitle, style]}>{children}</Text>;
 }
 
 // Re-export de iconos comunes para conveniencia de los módulos.
 export { Theme } from '../../constants/theme';
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.background },
   header: {
     flexDirection: 'row',
@@ -532,7 +554,10 @@ const styles = StyleSheet.create({
     backgroundColor: C.surface,
     borderTopLeftRadius: R.xl,
     borderTopRightRadius: R.xl,
-    padding: S.lg,
+    // El padding inferior lo maneja el footer / scroll (safe-area), no el sheet,
+    // porque KeyboardAvoidingView pisa el paddingBottom del contenedor.
+    paddingHorizontal: S.lg,
+    paddingTop: S.lg,
   },
   modalHandle: {
     alignSelf: 'center',
@@ -558,3 +583,8 @@ const styles = StyleSheet.create({
   infoValue: { fontSize: F.size.md, color: C.text, fontWeight: F.weight.medium, flexShrink: 1, textAlign: 'right' },
   sectionTitle: { fontSize: F.size.lg, fontWeight: F.weight.bold, color: C.text, marginBottom: S.md },
 });
+
+function useStyles() {
+  const { themeKey } = useTheme();
+  return useMemo(() => makeStyles(), [themeKey]);
+}

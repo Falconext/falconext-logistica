@@ -3,20 +3,16 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import api from '../../../lib/api';
-import { Vehiculo, Documento } from '../../../types';
+import { Vehiculo } from '../../../types';
 import { Truck, Calendar, FileText, Shield, Wrench, ArrowLeft, Clock, DollarSign, MapPin, AlertTriangle, CheckCircle2, Edit2, X, Save, Camera, Trash2, Loader2, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import clsx from 'clsx';
 import { toast } from 'sonner';
 import { useCurrency } from '../../../lib/useCurrency';
 import FileUpload from '../../../components/FileUpload';
+import DocumentosPanel from '../../../components/DocumentosPanel';
+import { VEHICULO_DOCS } from '../../../components/documentTypes';
 import VehiculoModal from '../VehiculoModal';
-
-const DOC_TIPOS: { tipo: string; label: string }[] = [
-    { tipo: 'SEGURO', label: 'Póliza de seguro' },
-    { tipo: 'TARJETA_CIRCULACION', label: 'Tarjeta de circulación' },
-    { tipo: 'REVISION_TECNICA', label: 'Revisión técnica' },
-];
 
 interface Mantenimiento {
     id: string;
@@ -50,19 +46,6 @@ export default function VehiculoDetailPage() {
     // Foto
     const [savingFoto, setSavingFoto] = useState(false);
 
-    // Documentos
-    const [documentos, setDocumentos] = useState<Documento[]>([]);
-    const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
-
-    const fetchDocumentos = async (vid: string) => {
-        try {
-            const res = await api.get('/documentos', { params: { entidad: 'VEHICULO', entidad_id: vid } });
-            setDocumentos(res.data);
-        } catch (error) {
-            console.error('Error fetching documentos:', error);
-        }
-    };
-
     const handleFotoChange = async (url: string) => {
         if (!vehiculo) return;
         setSavingFoto(true);
@@ -74,36 +57,6 @@ export default function VehiculoDetailPage() {
             toast.error('Error al guardar la foto');
         } finally {
             setSavingFoto(false);
-        }
-    };
-
-    const handleDocUpload = async (tipo: string, label: string, url: string) => {
-        if (!vehiculo) return;
-        try {
-            const res = await api.post('/documentos', {
-                entidad: 'VEHICULO',
-                entidad_id: vehiculo.id,
-                tipo,
-                nombre: label,
-                url,
-            });
-            setDocumentos(prev => [res.data, ...prev]);
-            toast.success('Documento guardado');
-        } catch (error) {
-            toast.error('Error al guardar el documento');
-        }
-    };
-
-    const handleDocDelete = async (id: string) => {
-        setDeletingDocId(id);
-        try {
-            await api.delete(`/documentos/${id}`);
-            setDocumentos(prev => prev.filter(d => d.id !== id));
-            toast.success('Documento eliminado');
-        } catch (error) {
-            toast.error('Error al eliminar el documento');
-        } finally {
-            setDeletingDocId(null);
         }
     };
 
@@ -156,7 +109,6 @@ export default function VehiculoDetailPage() {
                 ]);
                 setVehiculo(vehiculoRes.data);
                 setMantenimientos(mantenimientoRes.data);
-                fetchDocumentos(vehiculoId);
             } catch (error) {
                 console.error('Error fetching vehicle data:', error);
             } finally {
@@ -577,81 +529,12 @@ export default function VehiculoDetailPage() {
                         </div>
                     </div>
 
-                    {/* Escaneos de documentos */}
-                    <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
-                        <h3 className="font-bold text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-2 mb-4 flex items-center gap-2">
-                            <FileText size={18} className="text-purple-500" /> Escaneos de documentos
+                    {/* Documentos del vehículo (subir/previsualizar PDFs + vencimientos) */}
+                    <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                        <h3 className="font-bold text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-800 px-6 pt-5 pb-3 flex items-center gap-2">
+                            <FileText size={18} className="text-purple-500" /> Documentos del vehículo
                         </h3>
-                        <p className="text-sm text-slate-500 mb-5">
-                            Sube el escaneo (imagen o PDF) de cada documento. Se guardan directamente en el sistema.
-                        </p>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                            {DOC_TIPOS.map(({ tipo, label }) => (
-                                <div key={tipo} className="space-y-2">
-                                    <label className="text-xs font-bold text-slate-500 uppercase">{label}</label>
-                                    <FileUpload
-                                        variant="wide"
-                                        accept="image/*,application/pdf"
-                                        label={`Subir ${label.toLowerCase()}`}
-                                        value={null}
-                                        onChange={(url) => handleDocUpload(tipo, label, url)}
-                                    />
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Lista de documentos */}
-                        {documentos.length === 0 ? (
-                            <div className="text-center py-8 text-sm text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
-                                Aún no hay documentos cargados.
-                            </div>
-                        ) : (
-                            <div className="space-y-2">
-                                {documentos.map((doc) => {
-                                    const isPdf = doc.url.toLowerCase().includes('.pdf');
-                                    const tipoLabel = DOC_TIPOS.find(t => t.tipo === doc.tipo)?.label || doc.nombre || doc.tipo;
-                                    return (
-                                        <div
-                                            key={doc.id}
-                                            className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40"
-                                        >
-                                            {isPdf ? (
-                                                <div className="w-11 h-11 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 shrink-0">
-                                                    <FileText size={18} />
-                                                </div>
-                                            ) : (
-                                                // eslint-disable-next-line @next/next/no-img-element
-                                                <img src={doc.url} alt={tipoLabel} className="w-11 h-11 rounded-lg object-cover shrink-0" />
-                                            )}
-                                            <div className="min-w-0 flex-1">
-                                                <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{tipoLabel}</p>
-                                                <p className="text-xs text-slate-400">
-                                                    {new Date((doc as any).creado_en || Date.now()).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                                </p>
-                                            </div>
-                                            <a
-                                                href={doc.url}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="w-9 h-9 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500 transition"
-                                                title="Ver documento"
-                                            >
-                                                <ExternalLink size={15} />
-                                            </a>
-                                            <button
-                                                onClick={() => handleDocDelete(doc.id)}
-                                                disabled={deletingDocId === doc.id}
-                                                className="w-9 h-9 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-red-50 hover:border-red-200 hover:text-red-500 flex items-center justify-center text-slate-500 transition disabled:opacity-50"
-                                                title="Eliminar documento"
-                                            >
-                                                {deletingDocId === doc.id ? <Loader2 className="animate-spin" size={15} /> : <Trash2 size={15} />}
-                                            </button>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
+                        <DocumentosPanel entidad="VEHICULO" entidadId={vehiculo.id} docTypes={VEHICULO_DOCS} />
                     </div>
                 </div>
             )}

@@ -52,7 +52,7 @@ export default function HistoryPage() {
             </div>
 
             {/* Map Container */}
-            <div className="flex-1 p-2 sm:p-4 overflow-hidden">
+            <div className="flex-1 p-2 sm:p-4 overflow-y-auto">
                 <HistoryMap
                     deviceId={deviceId}
                     apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}

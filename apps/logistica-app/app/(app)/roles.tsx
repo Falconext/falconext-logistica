@@ -18,6 +18,7 @@ import {
 } from '../../components/ui';
 import api from '../../services/api';
 import { MODULES } from '../../constants/modules';
+import { useTheme } from '../../context/ThemeContext';
 
 const C = Theme.colors;
 const S = Theme.spacing;
@@ -55,6 +56,8 @@ function tipoBadge(r: Rol): { label: string; variant: 'warning' | 'info' | 'neut
 }
 
 export default function RolesScreen() {
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const [items, setItems] = useState<Rol[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -355,7 +358,7 @@ export default function RolesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   body: { flex: 1, paddingHorizontal: S.lg, paddingTop: S.md },
   statsRow: { flexDirection: 'row', gap: S.sm, marginBottom: S.md },
   card: {

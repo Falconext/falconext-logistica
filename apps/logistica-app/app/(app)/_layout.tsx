@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { LayoutDashboard, Map, Truck, Users, LayoutGrid } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Theme } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
 import { canAccessModule } from '../../constants/modules';
@@ -8,8 +9,13 @@ const C = Theme.colors;
 
 export default function AppTabsLayout() {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   // href:null oculta la pestaña de la barra si el usuario no tiene el módulo.
   const gate = (key: string) => (canAccessModule(user, key) ? undefined : null);
+
+  // En Android (edge-to-edge) la barra del sistema tapa los tabs si no
+  // sumamos el inset inferior. Mínimo 8 para que respire en iOS sin notch.
+  const bottomInset = Math.max(insets.bottom, 8);
 
   return (
     <Tabs
@@ -20,8 +26,8 @@ export default function AppTabsLayout() {
         tabBarStyle: {
           backgroundColor: C.surface,
           borderTopColor: C.border,
-          height: 62,
-          paddingBottom: 8,
+          height: 58 + bottomInset,
+          paddingBottom: bottomInset,
           paddingTop: 6,
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
@@ -41,7 +47,9 @@ export default function AppTabsLayout() {
       <Tabs.Screen name="reportes" options={{ href: null }} />
       <Tabs.Screen name="alertas" options={{ href: null }} />
       <Tabs.Screen name="flota" options={{ href: null }} />
+      <Tabs.Screen name="rastreo" options={{ href: null }} />
       <Tabs.Screen name="dispositivos" options={{ href: null }} />
+      <Tabs.Screen name="historial" options={{ href: null }} />
       <Tabs.Screen name="geocercas" options={{ href: null }} />
       <Tabs.Screen name="admin" options={{ href: null }} />
       <Tabs.Screen name="usuarios" options={{ href: null }} />

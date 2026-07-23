@@ -22,6 +22,7 @@ import Select from '../../components/Select';
 import api from '../../services/api';
 import { formatMoney } from '../../constants/currency';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import type { Trabajador, Vehiculo } from '../../types';
 
 const C = Theme.colors;
@@ -85,6 +86,8 @@ const emptyForm: FormState = {
 
 export default function CombustibleScreen() {
   const { user } = useAuth();
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const moneda = user?.moneda;
 
   const [items, setItems] = useState<Combustible[]>([]);
@@ -235,7 +238,7 @@ export default function CombustibleScreen() {
           {c.metodo ? <Text style={styles.meta}>· {c.metodo}</Text> : null}
         </View>
       </View>
-      <Text style={styles.cost}>{formatMoney(c.monto, moneda)}</Text>
+      <Text style={styles.cost} numberOfLines={1}>{formatMoney(c.monto, moneda)}</Text>
     </TouchableOpacity>
   );
 
@@ -365,7 +368,7 @@ export default function CombustibleScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   body: { flex: 1, paddingHorizontal: S.lg, paddingTop: S.md },
   statsRow: { flexDirection: 'row', gap: S.sm, marginBottom: S.md },
   card: {

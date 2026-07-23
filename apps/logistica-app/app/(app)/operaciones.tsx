@@ -38,7 +38,9 @@ import {
 } from '../../components/ui';
 import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
+import MapboxWebView from '../../components/MapboxWebView';
 import api from '../../services/api';
+import { useTheme } from '../../context/ThemeContext';
 import type { Programacion, Vehiculo, Trabajador } from '../../types';
 
 const C = Theme.colors;
@@ -94,7 +96,11 @@ const emptyForm = (): FormState => ({
 });
 
 export default function OperacionesScreen() {
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const [items, setItems] = useState<Programacion[]>([]);
+  const [total, setTotal] = useState(0);
+  const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
@@ -110,8 +116,18 @@ export default function OperacionesScreen() {
 
   const load = useCallback(async () => {
     try {
-      const res = await api.get('/programacion');
-      setItems(Array.isArray(res.data) ? res.data : []);
+      // /programacion devuelve { items, total, counts } (paginado, 60 más recientes).
+      const res = await api.get('/programacion', { params: { take: 100 } });
+      const data = res.data;
+      if (Array.isArray(data)) {
+        setItems(data);
+        setTotal(data.length);
+        setCounts({});
+      } else {
+        setItems(data?.items ?? []);
+        setTotal(data?.total ?? data?.items?.length ?? 0);
+        setCounts(data?.counts ?? {});
+      }
     } catch (e) {
       console.error('Error cargando operaciones', e);
     } finally {
@@ -158,12 +174,23 @@ export default function OperacionesScreen() {
   }, [items, query]);
 
   const stats = useMemo(() => {
-    const total = items.length;
-    const pendientes = items.filter((r) => (r.estado || 'PENDIENTE') === 'PENDIENTE').length;
-    const enRuta = items.filter((r) => r.estado === 'RETIRADO').length;
-    const entregados = items.filter((r) => r.estado === 'ENTREGADO').length;
-    return { total, pendientes, enRuta, entregados };
-  }, [items]);
+    // Los totales vienen del servidor (counts/total), no solo de la página cargada.
+    const hasCounts = Object.keys(counts).length > 0;
+    if (hasCounts) {
+      return {
+        total,
+        pendientes: counts.PENDIENTE ?? 0,
+        enRuta: counts.RETIRADO ?? 0,
+        entregados: counts.ENTREGADO ?? 0,
+      };
+    }
+    return {
+      total: items.length,
+      pendientes: items.filter((r) => (r.estado || 'PENDIENTE') === 'PENDIENTE').length,
+      enRuta: items.filter((r) => r.estado === 'RETIRADO').length,
+      entregados: items.filter((r) => r.estado === 'ENTREGADO').length,
+    };
+  }, [items, counts, total]);
 
   const openCreate = () => {
     setEditing(null);
@@ -287,7 +314,7 @@ export default function OperacionesScreen() {
 
   return (
     <Screen>
-      <AppHeader title="Operaciones" subtitle={`${items.length} operaciones programadas`} />
+      <AppHeader title="Operaciones" subtitle={`${total} operaciones programadas`} />
 
       <View style={styles.body}>
         <View style={styles.statsRow}>
@@ -337,6 +364,12 @@ export default function OperacionesScreen() {
       >
         {detail && (
           <View>
+            {!!(detail.lugar_retiro && detail.lugar_entrega) && (
+              <MapboxWebView
+                style={styles.mapBox}
+                route={{ originAddress: detail.lugar_retiro, destinationAddress: detail.lugar_entrega }}
+              />
+            )}
             <View style={{ marginBottom: S.md }}>
               <Badge label={estadoMeta(detail.estado).label} variant={estadoMeta(detail.estado).variant} />
             </View>
@@ -467,8 +500,16 @@ export default function OperacionesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   body: { flex: 1, paddingHorizontal: S.lg, paddingTop: S.md },
+  mapBox: {
+    height: 200,
+    borderRadius: Theme.radius.lg,
+    overflow: 'hidden',
+    marginBottom: S.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: C.border,
+  },
   statsRow: { flexDirection: 'row', gap: S.sm, marginBottom: S.md },
   card: {
     backgroundColor: C.surface,

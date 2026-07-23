@@ -26,10 +26,13 @@ model Trabajador {
   nombre_completo  String
   cargo            String
   estado_laboral   String  @default("Activo") // 'Activo', 'Inactivo'
-  trackable        Boolean @default(false) // Rastreo GPS: auto-provisiona Device del trabajador
   nacionalidad     String?
   fecha_nacimiento DateTime?
   url_foto         String?
+
+  // Rastreo GPS: si el trabajador reporta su ubicación desde la app.
+  // Al activarse se auto-provisiona un Device con token para este trabajador.
+  trackable        Boolean @default(false)
 
   // Documentación Personal
   numero_pasaporte            String?
@@ -239,7 +242,8 @@ model Documento {
   entidad_id  String  // id del registro dueño
   tipo        String  // 'LICENCIA' | 'SEGURO' | 'TARJETA_CIRCULACION' | 'PASAPORTE' | 'REVISION_TECNICA' | 'OTRO'
   nombre      String?
-  url         String  // URL de Cloudinary (imagen o PDF)
+  url         String? // URL de Cloudinary (imagen o PDF). Opcional: se puede
+                      // registrar solo la fecha de vencimiento antes de subir el escaneo.
   fecha_vencimiento DateTime?
 
   creado_en      DateTime @default(now())

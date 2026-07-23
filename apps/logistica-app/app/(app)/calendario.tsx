@@ -16,6 +16,7 @@ import {
   Theme,
 } from '../../components/ui';
 import api from '../../services/api';
+import { useTheme } from '../../context/ThemeContext';
 import type { Programacion } from '../../types';
 
 const C = Theme.colors;
@@ -61,6 +62,8 @@ function estadoVariant(estado?: string): 'success' | 'warning' | 'danger' | 'inf
 type Section = { title: string; key: string; data: Programacion[] };
 
 export default function CalendarioScreen() {
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const [items, setItems] = useState<Programacion[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -71,8 +74,9 @@ export default function CalendarioScreen() {
   const load = useCallback(async () => {
     try {
       setError(null);
-      const res = await api.get('/programacion');
-      setItems(Array.isArray(res.data) ? res.data : []);
+      // /programacion pagina como { items, total, counts } (no es un array).
+      const res = await api.get('/programacion', { params: { take: 1000 } });
+      setItems(Array.isArray(res.data) ? res.data : (res.data?.items ?? []));
     } catch (e: any) {
       setError(e?.response?.data?.message || 'No se pudo cargar el calendario.');
     } finally {
@@ -249,7 +253,7 @@ export default function CalendarioScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   body: { flex: 1, paddingHorizontal: S.lg, paddingTop: S.md },
   statsRow: { flexDirection: 'row', gap: S.sm, marginBottom: S.md },
   sectionHeader: {

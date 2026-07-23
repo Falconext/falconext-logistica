@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { Truck, Crosshair, Trash2, Pencil, ShieldAlert, Car, CheckCircle2 } from 'lucide-react-native';
+import { Truck, Crosshair, Trash2, Pencil, ShieldAlert, Car, CheckCircle2, FolderArchive } from 'lucide-react-native';
 import {
   Screen,
   AppHeader,
@@ -20,8 +20,11 @@ import {
 import ImageUpload from '../../components/ImageUpload';
 import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
+import DocumentosPanel from '../../components/DocumentosPanel';
+import { VEHICULO_DOCS } from '../../components/documentTypes';
 import api from '../../services/api';
 import type { Vehiculo } from '../../types';
+import { useTheme } from '../../context/ThemeContext';
 
 const C = Theme.colors;
 const S = Theme.spacing;
@@ -31,7 +34,7 @@ const empty: Partial<Vehiculo> = {
   marca_modelo: '',
   tipo_unidad: '',
   anio_fabricacion: undefined,
-  estado_vehiculo: 'ACTIVO',
+  estado_vehiculo: 'DISPONIBLE',
   poliza_seguro: '',
   fecha_vencimiento_seguro: '',
   revision_tecnica: '',
@@ -40,6 +43,8 @@ const empty: Partial<Vehiculo> = {
 };
 
 export default function VehiculosScreen() {
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const [items, setItems] = useState<Vehiculo[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -47,6 +52,7 @@ export default function VehiculosScreen() {
 
   const [formVisible, setFormVisible] = useState(false);
   const [detail, setDetail] = useState<Vehiculo | null>(null);
+  const [docsFor, setDocsFor] = useState<Vehiculo | null>(null);
   const [editing, setEditing] = useState<Vehiculo | null>(null);
   const [form, setForm] = useState<Partial<Vehiculo>>(empty);
   const [saving, setSaving] = useState(false);
@@ -81,7 +87,7 @@ export default function VehiculosScreen() {
   );
 
   const stats = useMemo(() => {
-    const activos = items.filter((v) => v.estado_vehiculo === 'ACTIVO').length;
+    const activos = items.filter((v) => v.estado_vehiculo === 'DISPONIBLE').length;
     const sinSeguro = items.filter((v) => !v.poliza_seguro).length;
     return { total: items.length, activos, sinSeguro };
   }, [items]);
@@ -145,7 +151,7 @@ export default function VehiculosScreen() {
   };
 
   const renderCard = ({ item: v }: { item: Vehiculo }) => {
-    const activo = v.estado_vehiculo === 'ACTIVO';
+    const activo = v.estado_vehiculo === 'DISPONIBLE';
     return (
       <TouchableOpacity activeOpacity={0.7} style={styles.card} onPress={() => setDetail(v)}>
         <View style={styles.cardIcon}>
@@ -212,9 +218,12 @@ export default function VehiculosScreen() {
         title={detail?.placa || 'Detalle'}
         footer={
           detail && (
-            <View style={{ flexDirection: 'row', gap: S.sm }}>
-              <Button title="Editar" icon={Pencil} variant="secondary" style={{ flex: 1 }} onPress={() => detail && openEdit(detail)} />
-              <Button title="Eliminar" icon={Trash2} variant="danger" style={{ flex: 1 }} onPress={() => detail && remove(detail)} />
+            <View style={{ gap: S.sm }}>
+              <Button title="Documentos (PDFs)" icon={FolderArchive} onPress={() => { const v = detail; setDetail(null); setDocsFor(v); }} />
+              <View style={{ flexDirection: 'row', gap: S.sm }}>
+                <Button title="Editar" icon={Pencil} variant="secondary" style={{ flex: 1 }} onPress={() => detail && openEdit(detail)} />
+                <Button title="Eliminar" icon={Trash2} variant="danger" style={{ flex: 1 }} onPress={() => detail && remove(detail)} />
+              </View>
             </View>
           )
         }
@@ -234,6 +243,18 @@ export default function VehiculosScreen() {
           </View>
         )}
       </FormModal>
+
+      {/* Documentos del vehículo (subir/previsualizar PDFs + vencimientos) */}
+      {docsFor && (
+        <DocumentosPanel
+          visible={!!docsFor}
+          onClose={() => setDocsFor(null)}
+          entidad="VEHICULO"
+          entidadId={docsFor.id}
+          docTypes={VEHICULO_DOCS}
+          nombre={docsFor.placa}
+        />
+      )}
 
       {/* Crear / editar */}
       <FormModal
@@ -262,8 +283,9 @@ export default function VehiculosScreen() {
           placeholder="Selecciona el estado"
           searchable={false}
           options={[
-            { value: 'ACTIVO', label: 'ACTIVO' },
-            { value: 'INACTIVO', label: 'INACTIVO' },
+            { value: 'DISPONIBLE', label: 'DISPONIBLE' },
+            { value: 'NO DISPONIBLE', label: 'NO DISPONIBLE' },
+            { value: 'EN MANTENIMIENTO', label: 'EN MANTENIMIENTO' },
           ]}
         />
         <FormField label="Póliza de seguro" value={form.poliza_seguro || ''} onChangeText={(t) => setForm({ ...form, poliza_seguro: t })} placeholder="N° de póliza" />
@@ -280,7 +302,7 @@ export default function VehiculosScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   body: { flex: 1, paddingHorizontal: S.lg, paddingTop: S.md },
   statsRow: { flexDirection: 'row', gap: S.sm, marginBottom: S.md },
   card: {

@@ -18,6 +18,7 @@ export const MODULES: ModuleDef[] = [
   { key: 'reportes', name: 'Reportes', href: '/reportes' },
   { key: 'alertas', name: 'Alertas', href: '/alertas' },
   { key: 'flota', name: 'Flota en Vivo', href: '/flota' },
+  { key: 'rastreo', name: 'Rastreo', href: '/rastreo' },
   { key: 'dispositivos', name: 'Dispositivos GPS', href: '/dispositivos' },
   { key: 'geocercas', name: 'Geocercas', href: '/geocercas' },
   { key: 'peajes', name: 'Peajes / Multas', href: '/peajes' },
@@ -48,6 +49,9 @@ export function isAdmin(user: UserLike | null | undefined): boolean {
 /** Los admins ven todos los módulos; el resto solo los asignados por su rol. */
 export function canAccessModule(user: UserLike | null | undefined, key: string): boolean {
   if (!user) return false;
+  // Rastreo (compartir tu propia ubicación GPS) queda disponible para CUALQUIER
+  // rol: no se gatea por módulo, cualquier usuario logueado puede activarlo.
+  if (key === 'rastreo') return true;
   if (isAdmin(user)) return true;
   return Array.isArray(user.modulos) && user.modulos.includes(key);
 }
