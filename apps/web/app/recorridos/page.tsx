@@ -85,6 +85,20 @@ export default function RecorridosPage() {
     const [view, setView] = useState<'activos' | 'historial'>('activos');
     const [historial, setHistorial] = useState<RecorridoHistorial[]>([]);
     const [loadingHist, setLoadingHist] = useState(false);
+    const [trazaId, setTrazaId] = useState<string | null>(null);
+    const [traza, setTraza] = useState<any | null>(null);
+    const [loadingTraza, setLoadingTraza] = useState(false);
+
+    useEffect(() => {
+        if (!trazaId) { setTraza(null); return; }
+        let cancel = false;
+        setLoadingTraza(true);
+        api.get(`/recorridos/${trazaId}/traza`)
+            .then((res) => { if (!cancel) setTraza(res.data); })
+            .catch((e) => console.error(e))
+            .finally(() => { if (!cancel) setLoadingTraza(false); });
+        return () => { cancel = true; };
+    }, [trazaId]);
 
     const loadHistorial = useCallback(async () => {
         setLoadingHist(true);
@@ -324,15 +338,16 @@ export default function RecorridosPage() {
             )}
             </>}
 
-            {view === 'historial' && <HistorialSection items={historial} loading={loadingHist} />}
+            {view === 'historial' && <HistorialSection items={historial} loading={loadingHist} onOpen={setTrazaId} />}
 
             {mapRec && <RecorridoMapModal rec={mapRec} onClose={() => setMapRec(null)} />}
+            {trazaId && <TrazaModal data={traza} loading={loadingTraza} onClose={() => setTrazaId(null)} />}
         </div>
     );
 }
 
 /* ---------- Historial: recorridos cerrados con esperado vs real ---------- */
-function HistorialSection({ items, loading }: { items: RecorridoHistorial[]; loading: boolean }) {
+function HistorialSection({ items, loading, onOpen }: { items: RecorridoHistorial[]; loading: boolean; onOpen: (id: string) => void }) {
     if (loading) {
         return (
             <div className="flex items-center justify-center py-16 text-slate-400 gap-2">
@@ -367,7 +382,7 @@ function HistorialSection({ items, loading }: { items: RecorridoHistorial[]; loa
                     </thead>
                     <tbody className="divide-y divide-slate-50 dark:divide-slate-800/60">
                         {items.map((r) => (
-                            <tr key={r.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition">
+                            <tr key={r.id} onClick={() => onOpen(r.id)} title="Ver traza del recorrido" className="cursor-pointer hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition">
                                 <td className="px-4 py-3">
                                     <p className="font-medium text-slate-800 dark:text-slate-100 truncate max-w-[160px]">{r.trabajador}</p>
                                     <p className="text-[11px] text-slate-400 truncate max-w-[160px]">{r.placa || (r.cliente || '—')}</p>
@@ -485,6 +500,94 @@ function RecorridoMapModal({ rec, onClose }: { rec: RecorridoActivo; onClose: ()
                     <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-600" /> Posición actual</span>
                 </div>
             </div>
+        </div>
+    );
+}
+
+/* ---------- Modal de traza detallada (ruta GPS real + análisis) ---------- */
+function TrazaModal({ data, loading, onClose }: { data: any | null; loading: boolean; onClose: () => void }) {
+    const { isLoaded } = useGoogleMaps();
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const mapRef = useRef<google.maps.Map | null>(null);
+
+    const rec = data?.recorrido;
+    const path: { lat: number; lng: number }[] = data?.path || [];
+    const an = data?.analisis;
+
+    useEffect(() => {
+        if (!isLoaded || !containerRef.current || mapRef.current || !rec) return;
+        const map = new google.maps.Map(containerRef.current, {
+            center: { lat: 41.9, lng: 12.5 }, zoom: 6,
+            disableDefaultUI: true, zoomControl: true, clickableIcons: false, styles: stylesFor('day'),
+        });
+        mapRef.current = map;
+        const bounds = new google.maps.LatLngBounds();
+        const marker = (lat: number, lng: number, color: string, title: string, scale = 8) => {
+            new google.maps.Marker({ position: { lat, lng }, map, title, icon: { path: google.maps.SymbolPath.CIRCLE, scale, fillColor: color, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2.5 } });
+            bounds.extend({ lat, lng });
+        };
+        // Trayecto real
+        if (path.length > 1) {
+            new google.maps.Polyline({ path, map, geodesic: true, strokeColor: '#2563EB', strokeOpacity: 0.85, strokeWeight: 4 });
+            path.forEach((p) => bounds.extend(p));
+            marker(path[0].lat, path[0].lng, '#16A34A', 'Inicio real', 7);
+            marker(path[path.length - 1].lat, path[path.length - 1].lng, '#DC2626', 'Fin real', 7);
+        }
+        // Origen/destino planificados (si no hay trayecto, al menos esto)
+        if (rec.origen_lat != null && rec.origen_lng != null) marker(rec.origen_lat, rec.origen_lng, '#16A34A', 'Origen');
+        if (rec.destino_lat != null && rec.destino_lng != null) marker(rec.destino_lat, rec.destino_lng, '#1a1a1c', 'Destino');
+        if (!bounds.isEmpty()) map.fitBounds(bounds, 60);
+    }, [isLoaded, rec, path]);
+
+    const hasPath = path.length > 1;
+    const stops = an?.stops?.length ?? 0;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+            <div className="w-full max-w-4xl rounded-2xl overflow-hidden bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                    <div className="min-w-0">
+                        <p className="text-sm font-bold text-slate-900 dark:text-white truncate">Traza del recorrido</p>
+                        <p className="text-xs text-slate-400 truncate">{rec ? `${rec.origen || '—'} → ${rec.destino || '—'}` : ''}</p>
+                    </div>
+                    <button onClick={onClose} className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition shrink-0"><X size={16} /></button>
+                </div>
+
+                {loading || !rec ? (
+                    <div className="h-[420px] flex items-center justify-center text-slate-400 gap-2"><Loader2 className="animate-spin" size={18} /> Cargando traza...</div>
+                ) : (
+                    <>
+                        <div className="h-[360px] relative">
+                            <div ref={containerRef} className="h-full w-full" />
+                            {!hasPath && (
+                                <div className="absolute inset-x-0 bottom-3 flex justify-center pointer-events-none">
+                                    <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/90 dark:bg-slate-900/90 backdrop-blur border border-slate-200 dark:border-slate-700 text-xs text-slate-500 shadow-sm">
+                                        <WifiOff size={13} /> Sin trayecto GPS registrado (se muestran origen y destino)
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                        {/* Resumen */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-px bg-slate-100 dark:bg-slate-800 border-t border-slate-100 dark:border-slate-800">
+                            <TrazaStat label="Distancia real" value={an?.distanceKm ? `${an.distanceKm} km` : rec.ida_km != null ? `${rec.ida_km} km` : '—'} />
+                            <TrazaStat label="Tiempo ida" value={fmtMin(rec.ida_min)} />
+                            <TrazaStat label="Esperado" value={rec.esperado_ida_min != null ? fmtMin(Math.round(rec.esperado_ida_min)) : '—'} />
+                            <TrazaStat label="Paradas" value={`${stops}`} />
+                            <TrazaStat label="Vel. máx" value={an?.maxSpeedKmh ? `${Math.round(an.maxSpeedKmh)} km/h` : '—'} />
+                            <TrazaStat label="Descanso" value={rec.descanso_min ? fmtMin(rec.descanso_min) : '—'} />
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
+
+function TrazaStat({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="bg-white dark:bg-slate-900 px-3 py-2.5">
+            <p className="text-[10px] uppercase text-slate-400">{label}</p>
+            <p className="text-sm font-bold text-slate-900 dark:text-white tabular-nums">{value}</p>
         </div>
     );
 }

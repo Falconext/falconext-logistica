@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
+import { GpsService } from '../gps/gps.service';
 
 // Estados que cuentan como recorrido "en curso".
 const ACTIVOS = ['EN_RUTA_IDA', 'EN_DESTINO', 'EN_RUTA_VUELTA'];
@@ -8,7 +9,7 @@ type LatLng = { lat: number; lng: number };
 
 @Injectable()
 export class RecorridosService {
-    constructor(private prisma: PrismaService) { }
+    constructor(private prisma: PrismaService, private gps: GpsService) { }
 
     private token() {
         return process.env.MAPBOX_TOKEN || '';
@@ -364,6 +365,39 @@ export class RecorridosService {
 
     async detalle(tenantId: string, id: string) {
         return this.getOwned(tenantId, id);
+    }
+
+    /** Traza detallada de un recorrido: recorrido + ruta GPS real + análisis (distancia,
+     *  tiempos, paradas) reusando getTripAnalysis sobre la ventana del recorrido. */
+    async traza(tenantId: string, id: string) {
+        const r = await this.getOwned(tenantId, id);
+        const hasta = r.finalizado_en ?? new Date();
+        let path: { lat: number; lng: number; t: string }[] = [];
+        let analisis: any = null;
+        if (r.device_id) {
+            const positions = await this.prisma.position.findMany({
+                where: { device_id: r.device_id, timestamp: { gte: r.iniciado_en, lte: hasta } },
+                orderBy: { timestamp: 'asc' },
+                select: { latitude: true, longitude: true, timestamp: true },
+            });
+            path = positions
+                .map((p) => ({ lat: Number(p.latitude), lng: Number(p.longitude), t: p.timestamp.toISOString() }))
+                .filter((p) => !isNaN(p.lat) && !isNaN(p.lng));
+            analisis = await this.gps.getTripAnalysis(r.device_id, r.iniciado_en, hasta);
+        }
+        return {
+            recorrido: {
+                id: r.id, estado: r.estado,
+                origen: r.origen_label, destino: r.destino_label,
+                origen_lat: r.origen_lat, origen_lng: r.origen_lng,
+                destino_lat: r.destino_lat, destino_lng: r.destino_lng,
+                iniciado_en: r.iniciado_en, finalizado_en: r.finalizado_en,
+                ida_km: r.ida_km, ida_min: r.ida_min, vuelta_km: r.vuelta_km, vuelta_min: r.vuelta_min,
+                descanso_min: Math.round(r.descanso_min || 0), esperado_ida_min: r.esperado_ida_min,
+            },
+            path,
+            analisis,
+        };
     }
 
     /** Historial de recorridos cerrados con comparativa esperado vs real. */

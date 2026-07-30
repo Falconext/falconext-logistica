@@ -6,5 +6,6 @@ import { PrismaService } from '../../prisma.service';
 @Module({
     controllers: [GpsController],
     providers: [GpsService, PrismaService],
+    exports: [GpsService],
 })
 export class GpsModule { }
