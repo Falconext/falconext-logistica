@@ -9,6 +9,7 @@ export interface ModuleDef {
 
 export const MODULES: ModuleDef[] = [
   { key: 'dashboard', name: 'Inicio', route: '/(app)/dashboard' },
+  { key: 'panel', name: 'Panel de Control', route: '/(app)/panel' },
   { key: 'operaciones', name: 'Operaciones', route: '/(app)/operaciones' },
   { key: 'trabajadores', name: 'Trabajadores', route: '/(app)/trabajadores' },
   { key: 'vehiculos', name: 'Vehículos', route: '/(app)/vehiculos' },
@@ -18,7 +19,7 @@ export const MODULES: ModuleDef[] = [
   { key: 'calendario', name: 'Calendario', route: '/(app)/calendario' },
   { key: 'reportes', name: 'Reportes', route: '/(app)/reportes' },
   { key: 'alertas', name: 'Alertas', route: '/(app)/alertas' },
-  { key: 'flota', name: 'Flota en Vivo', route: '/(app)/flota' },
+  { key: 'recorridos', name: 'Recorridos', route: '/(app)/recorridos' },
   { key: 'rastreo', name: 'Rastreo', route: '/(app)/rastreo' },
   { key: 'dispositivos', name: 'Dispositivos GPS', route: '/(app)/dispositivos' },
   { key: 'geocercas', name: 'Geocercas', route: '/(app)/geocercas' },

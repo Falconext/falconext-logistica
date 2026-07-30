@@ -40,6 +40,8 @@ export default function AppTabsLayout() {
       <Tabs.Screen name="mas" options={{ title: 'Más', tabBarIcon: ({ color, size }) => <LayoutGrid color={color} size={size} /> }} />
 
       {/* Módulos accesibles desde "Más" — ocultos de la barra inferior */}
+      <Tabs.Screen name="panel" options={{ href: null }} />
+      <Tabs.Screen name="recorridos" options={{ href: null }} />
       <Tabs.Screen name="mantenimiento" options={{ href: null }} />
       <Tabs.Screen name="peajes" options={{ href: null }} />
       <Tabs.Screen name="combustible" options={{ href: null }} />

@@ -15,6 +15,8 @@ import {
   Fuel,
   Radio,
   Navigation,
+  Boxes,
+  Route,
   UserCog,
   KeyRound,
   Sun,
@@ -40,13 +42,14 @@ interface Item {
 }
 
 const items: Item[] = [
+  { key: 'panel', label: 'Panel de Control', desc: 'Torre operativa: disponibilidad y entregas', href: '/(app)/panel', icon: Boxes, color: '#F5A800' },
+  { key: 'recorridos', label: 'Recorridos', desc: 'Traslados en curso de tus choferes', href: '/(app)/recorridos', icon: Route, color: '#4F46E5' },
   { key: 'mantenimiento', label: 'Mantenimiento', desc: 'Servicios y reparaciones', href: '/(app)/mantenimiento', icon: Wrench, color: '#0EA5E9' },
   { key: 'peajes', label: 'Peajes / Multas', desc: 'Peajes y multas de la flota', href: '/(app)/peajes', icon: Receipt, color: '#EA580C' },
   { key: 'combustible', label: 'Combustible', desc: 'Cargas de combustible', href: '/(app)/combustible', icon: Fuel, color: '#0D9488' },
   { key: 'calendario', label: 'Calendario', desc: 'Vista de programación', href: '/(app)/calendario', icon: CalendarDays, color: '#8B5CF6' },
   { key: 'reportes', label: 'Reportes', desc: 'Indicadores y KPIs', href: '/(app)/reportes', icon: BarChart3, color: '#F59E0B' },
   { key: 'mi-ruta', label: 'Mi Ruta', desc: 'Inicia y controla tu traslado', href: '/(app)/mi-ruta', icon: Navigation, color: '#4F46E5' },
-  { key: 'flota', label: 'Flota en Vivo', desc: 'Choferes en el mapa', href: '/(app)/flota', icon: Radio, color: '#2563EB' },
   { key: 'rastreo', label: 'Rastreo', desc: 'Comparte tu ubicación GPS', href: '/(app)/rastreo', icon: Navigation, color: '#4F46E5' },
   { key: 'alertas', label: 'Alertas', desc: 'Vencimientos de documentos', href: '/(app)/alertas', icon: Bell, color: '#DC2626' },
   { key: 'dispositivos', label: 'Dispositivos GPS', desc: 'Rastreadores de flota', href: '/(app)/dispositivos', icon: ShieldCheck, color: '#16A34A' },
