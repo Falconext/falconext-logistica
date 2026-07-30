@@ -47,8 +47,26 @@ export class PeajesService {
                 { comentarios: { contains: q } },
             ];
         }
+        // Los estados en BD son texto libre (PAGADO, NO PAGADO, PAGADO POR AUTISTA,
+        // PAGO BONIFICO, VENCIDO, OBSERVACIÓN, …). Los agrupamos en 3 buckets para
+        // que las pestañas Pendiente/Pagado/Anulado sumen bien. Desconocido → Pendiente.
+        const PAGADO_VALS = ['PAGADO', 'PAGADO POR AUTISTA', 'PAGO BONIFICO'];
+        const ANULADO_VALS = ['ANULADO'];
+        const bucketOf = (e?: string | null): 'PAGADO' | 'ANULADO' | 'PENDIENTE' => {
+            const v = (e || '').trim().toUpperCase();
+            if (PAGADO_VALS.includes(v)) return 'PAGADO';
+            if (ANULADO_VALS.includes(v)) return 'ANULADO';
+            return 'PENDIENTE';
+        };
+
         const itemsWhere: Prisma.PeajeWhereInput = { ...baseWhere };
-        if (estado && estado !== 'Todos') itemsWhere.estado = estado;
+        if (estado === 'PAGADO') itemsWhere.estado = { in: PAGADO_VALS };
+        else if (estado === 'ANULADO') itemsWhere.estado = { in: ANULADO_VALS };
+        else if (estado === 'PENDIENTE') {
+            // Pendiente = todo lo que no es pagado ni anulado (incluye null).
+            // Vía AND para no pisar el OR de búsqueda que pueda venir en baseWhere.
+            itemsWhere.AND = [{ OR: [{ estado: { notIn: [...PAGADO_VALS, ...ANULADO_VALS] } }, { estado: null }] }];
+        }
 
         const [items, total] = await this.prisma.$transaction([
             this.prisma.peaje.findMany({ where: itemsWhere, orderBy: { fecha: 'desc' }, skip, take }),
@@ -65,7 +83,7 @@ export class PeajesService {
         const counts: Record<string, number> = { Todos: 0, PENDIENTE: 0, PAGADO: 0, ANULADO: 0 };
         grouped.forEach((g) => {
             counts.Todos += g._count._all;
-            if (g.estado && counts[g.estado] !== undefined) counts[g.estado] = g._count._all;
+            counts[bucketOf(g.estado)] += g._count._all;
         });
 
         return { items, total, counts };
