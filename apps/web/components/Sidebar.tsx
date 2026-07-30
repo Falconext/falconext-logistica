@@ -8,32 +8,35 @@ import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
 import { useAuthStore } from '../lib/store';
 import { canAccessModule, isAdmin as isAdminUser } from '../lib/modules';
+import { useI18n } from '../lib/i18n';
+import { LanguageSwitcher } from './LanguageSwitcher';
 
+// El nombre visible se resuelve por clave con t('nav.<key>'); aquí solo el icono.
 const primaryItems = [
-    { key: 'dashboard', name: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { key: 'panel', name: 'Panel de Control', href: '/panel', icon: Boxes },
-    { key: 'operaciones', name: 'Operaciones', href: '/operaciones', icon: Map },
-    { key: 'trabajadores', name: 'Trabajadores', href: '/trabajadores', icon: Users },
-    { key: 'vehiculos', name: 'Vehículos', href: '/vehiculos', icon: Truck },
-    { key: 'mantenimiento', name: 'Mantenimiento', href: '/mantenimiento', icon: Wrench },
-    { key: 'peajes', name: 'Peajes/Multas', href: '/peajes', icon: Receipt },
-    { key: 'combustible', name: 'Combustible', href: '/combustible', icon: Fuel },
-    { key: 'calendario', name: 'Calendario', href: '/calendario', icon: CalendarDays },
-    { key: 'reportes', name: 'Reportes', href: '/reportes', icon: BarChart3 },
+    { key: 'dashboard', href: '/', icon: LayoutDashboard },
+    { key: 'panel', href: '/panel', icon: Boxes },
+    { key: 'operaciones', href: '/operaciones', icon: Map },
+    { key: 'trabajadores', href: '/trabajadores', icon: Users },
+    { key: 'vehiculos', href: '/vehiculos', icon: Truck },
+    { key: 'mantenimiento', href: '/mantenimiento', icon: Wrench },
+    { key: 'peajes', href: '/peajes', icon: Receipt },
+    { key: 'combustible', href: '/combustible', icon: Fuel },
+    { key: 'calendario', href: '/calendario', icon: CalendarDays },
+    { key: 'reportes', href: '/reportes', icon: BarChart3 },
 ];
 
 const trackingItems = [
-    { key: 'flota', name: 'Flota en Vivo', href: '/flota', icon: Radio },
-    { key: 'rastreo', name: 'Rastreo', href: '/rastreo', icon: Navigation },
-    { key: 'alertas', name: 'Alertas', href: '/alertas', icon: Bell },
-    { key: 'dispositivos', name: 'Dispositivos GPS', href: '/dispositivos', icon: ShieldCheck },
-    { key: 'geocercas', name: 'Geocercas', href: '/geocercas', icon: Map },
+    { key: 'rastreo', href: '/rastreo', icon: Navigation },
+    { key: 'alertas', href: '/alertas', icon: Bell },
+    { key: 'dispositivos', href: '/dispositivos', icon: ShieldCheck },
+    { key: 'geocercas', href: '/geocercas', icon: Map },
 ];
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
     const pathname = usePathname();
     const [mounted, setMounted] = useState(false);
     const { user } = useAuthStore();
+    const { t } = useI18n();
     const { theme, setTheme } = useTheme();
     const isDark = theme === 'dark';
 
@@ -81,7 +84,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                     </div>
                     <div className="flex-1 min-w-0">
                         <h1 className="text-[15px] font-bold tracking-tight text-white leading-tight truncate">Logistica</h1>
-                        <span className="text-xs text-zinc-500">Company</span>
+                        <span className="text-xs text-zinc-500">{t('nav.company')}</span>
                     </div>
                     <ChevronsLeft size={18} className="text-zinc-500" />
                 </div>
@@ -92,7 +95,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                 {visiblePrimary.length > 0 && (
                     <div className="space-y-1">
                         {visiblePrimary.map((item) => (
-                            <NavLink key={item.href} href={item.href} name={item.name} Icon={item.icon} />
+                            <NavLink key={item.href} href={item.href} name={t(`nav.${item.key}`)} Icon={item.icon} />
                         ))}
                     </div>
                 )}
@@ -102,7 +105,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                         <SectionDivider />
                         <div className="space-y-1">
                             {visibleTracking.map((item) => (
-                                <NavLink key={item.href} href={item.href} name={item.name} Icon={item.icon} />
+                                <NavLink key={item.href} href={item.href} name={t(`nav.${item.key}`)} Icon={item.icon} />
                             ))}
                         </div>
                     </>
@@ -112,14 +115,19 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                     <>
                         <SectionDivider />
                         <div className="space-y-1">
-                            <NavLink href="/admin/usuarios" name="Usuarios" Icon={UserCog} />
-                            <NavLink href="/admin/roles" name="Roles" Icon={KeyRound} />
-                            {isAdmin && <NavLink href="/admin/tenants" name="Admin Empresas" Icon={Briefcase} />}
-                            <NavLink href="/admin/sheets" name="Integración Sheets" Icon={FileSpreadsheet} />
+                            <NavLink href="/admin/usuarios" name={t('nav.usuarios')} Icon={UserCog} />
+                            <NavLink href="/admin/roles" name={t('nav.roles')} Icon={KeyRound} />
+                            {isAdmin && <NavLink href="/admin/tenants" name={t('nav.adminEmpresas')} Icon={Briefcase} />}
+                            <NavLink href="/admin/sheets" name={t('nav.integracionSheets')} Icon={FileSpreadsheet} />
                         </div>
                     </>
                 )}
             </nav>
+
+            {/* Selector de idioma (es / it) */}
+            <div className="px-3 pb-1">
+                <LanguageSwitcher />
+            </div>
 
             {/* Toggle de tema (claro / oscuro) */}
             {mounted && (
@@ -127,10 +135,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                     <button
                         onClick={() => setTheme(isDark ? 'light' : 'dark')}
                         className="w-full flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm text-zinc-400 hover:bg-white/[0.06] hover:text-white transition-colors"
-                        title={isDark ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
+                        title={isDark ? t('theme.switchToLight') : t('theme.switchToDark')}
                     >
                         {isDark ? <Sun size={18} /> : <Moon size={18} />}
-                        <span className="flex-1 text-left">{isDark ? 'Tema claro' : 'Tema oscuro'}</span>
+                        <span className="flex-1 text-left">{isDark ? t('theme.toLight') : t('theme.toDark')}</span>
                     </button>
                 </div>
             )}
@@ -144,11 +152,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                         </div>
                         <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-white truncate">{user.email.split('@')[0]}</p>
-                            <p className="text-xs text-zinc-500 truncate capitalize">{user.role ? user.role.toLowerCase() : 'Usuario'}</p>
+                            <p className="text-xs text-zinc-500 truncate capitalize">{user.role ? user.role.toLowerCase() : t('user.role')}</p>
                         </div>
                         <button
                             onClick={useAuthStore.getState().logout}
-                            title="Cerrar Sesión"
+                            title={t('user.logout')}
                             className="p-1.5 text-zinc-500 hover:text-white transition-colors"
                         >
                             <LogOut size={17} />

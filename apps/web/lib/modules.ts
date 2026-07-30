@@ -18,7 +18,6 @@ export const MODULES: ModuleDef[] = [
   { key: 'calendario', name: 'Calendario', href: '/calendario' },
   { key: 'reportes', name: 'Reportes', href: '/reportes' },
   { key: 'alertas', name: 'Alertas', href: '/alertas' },
-  { key: 'flota', name: 'Flota en Vivo', href: '/flota' },
   { key: 'rastreo', name: 'Rastreo', href: '/rastreo' },
   { key: 'dispositivos', name: 'Dispositivos GPS', href: '/dispositivos' },
   { key: 'geocercas', name: 'Geocercas', href: '/geocercas' },
