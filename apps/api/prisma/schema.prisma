@@ -200,10 +200,6 @@ model Tenant {
   creado_en      DateTime @default(now())
   actualizado_en DateTime @updatedAt
 
-  // Google Sheets Integration
-  google_sheet_id String?
-  last_synced     DateTime?
-
   users          User[]
   trabajadores   Trabajador[]
   vehiculos      Vehiculo[]

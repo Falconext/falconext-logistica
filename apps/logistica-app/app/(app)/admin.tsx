@@ -7,12 +7,7 @@ import {
   Users,
   Truck,
   Plus,
-  RefreshCw,
   CheckCircle2,
-  FileSpreadsheet,
-  Save,
-  Server,
-  Clock,
 } from 'lucide-react-native';
 import {
   Screen,
@@ -42,13 +37,6 @@ interface TenantRow {
   slug?: string;
   plan?: string;
   _count?: { users?: number; vehiculos?: number };
-}
-
-interface SheetsStatus {
-  connected?: boolean;
-  spreadsheetId?: string;
-  serviceEmail?: string;
-  lastSynced?: string;
 }
 
 interface TenantForm {
@@ -82,17 +70,10 @@ function planVariant(plan?: string): 'success' | 'info' | 'warning' | 'neutral' 
   }
 }
 
-// Extrae el ID de una URL de Google Sheets, o devuelve el valor tal cual.
-function extractSpreadsheetId(val: string): string {
-  const match = val.match(/\/d\/([a-zA-Z0-9-_]+)/);
-  return match ? match[1] : val;
-}
-
 export default function AdminScreen() {
   const { themeKey } = useTheme();
   const styles = useMemo(() => makeStyles(), [themeKey]);
   const [tenants, setTenants] = useState<TenantRow[]>([]);
-  const [status, setStatus] = useState<SheetsStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -101,25 +82,10 @@ export default function AdminScreen() {
   const [form, setForm] = useState<TenantForm>(emptyTenant);
   const [saving, setSaving] = useState(false);
 
-  // Integración Sheets
-  const [spreadsheetId, setSpreadsheetId] = useState('');
-  const [savingConfig, setSavingConfig] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-
   const load = useCallback(async () => {
     try {
-      const [tRes, sRes] = await Promise.allSettled([
-        api.get('/tenants'),
-        api.get('/sheets/status'),
-      ]);
-      if (tRes.status === 'fulfilled') {
-        setTenants(Array.isArray(tRes.value.data) ? tRes.value.data : []);
-      }
-      if (sRes.status === 'fulfilled') {
-        const data: SheetsStatus = sRes.value.data || {};
-        setStatus(data);
-        if (data.spreadsheetId) setSpreadsheetId(data.spreadsheetId);
-      }
+      const tRes = await api.get('/tenants');
+      setTenants(Array.isArray(tRes.data) ? tRes.data : []);
     } catch (e) {
       console.error('Error cargando administración', e);
     } finally {
@@ -166,48 +132,13 @@ export default function AdminScreen() {
     }
   };
 
-  const saveConfig = async () => {
-    if (!spreadsheetId.trim()) {
-      Alert.alert('Falta el ID', 'Ingresa el ID de la hoja de cálculo.');
-      return;
-    }
-    setSavingConfig(true);
-    try {
-      await api.post('/sheets/config', { spreadsheetId: spreadsheetId.trim() });
-      Alert.alert('Listo', 'Configuración guardada.');
-      load();
-    } catch (e: any) {
-      Alert.alert('Error', e?.response?.data?.message || 'No se pudo guardar la configuración.');
-    } finally {
-      setSavingConfig(false);
-    }
-  };
-
-  const sync = async () => {
-    setSyncing(true);
-    try {
-      const res = await api.post('/sheets/sync');
-      const count = res.data?.count;
-      Alert.alert(
-        'Sincronización exitosa',
-        count != null ? `${count} filas procesadas.` : 'Datos sincronizados.'
-      );
-      load();
-    } catch (e: any) {
-      Alert.alert('Error', e?.response?.data?.message || 'Error al sincronizar. Verifica permisos.');
-    } finally {
-      setSyncing(false);
-    }
-  };
-
   const totalUsuarios = tenants.reduce((acc, t) => acc + (t._count?.users || 0), 0);
   const totalVehiculos = tenants.reduce((acc, t) => acc + (t._count?.vehiculos || 0), 0);
-  const connected = !!status?.connected;
 
   if (loading) {
     return (
       <Screen>
-        <AppHeader title="Administración" subtitle="Empresas e integraciones" />
+        <AppHeader title="Administración" subtitle="Empresas" />
         <LoadingState text="Cargando administración..." />
       </Screen>
     );
@@ -218,7 +149,7 @@ export default function AdminScreen() {
       scroll
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}
     >
-      <AppHeader title="Administración" subtitle="Empresas e integraciones" />
+      <AppHeader title="Administración" subtitle="Empresas" />
 
       <View style={styles.body}>
         {/* KPIs */}
@@ -275,92 +206,6 @@ export default function AdminScreen() {
           ))
         )}
 
-        {/* ------- Sección Integración Sheets ------- */}
-        <View style={[styles.sectionTitleRow, { marginTop: S.xl, marginBottom: S.md }]}>
-          <FileSpreadsheet size={18} color={C.primary} />
-          <SectionTitle style={{ marginBottom: 0 }}>Integración Google Sheets</SectionTitle>
-        </View>
-
-        {/* Estado */}
-        <Card style={{ marginBottom: S.md }}>
-          <View style={styles.statusHead}>
-            <View style={styles.sectionTitleRow}>
-              <RefreshCw size={18} color={connected ? C.success : C.warning} />
-              <Text style={styles.cardTitle}>Estado y acciones</Text>
-            </View>
-            <Badge
-              label={connected ? 'Conectado' : 'No configurado'}
-              variant={connected ? 'success' : 'warning'}
-            />
-          </View>
-
-          <InfoRow label="Conexión" value={connected ? 'Conectado' : 'No configurado'} />
-          <InfoRow
-            label="Última sincronización"
-            value={status?.lastSynced ? new Date(status.lastSynced).toLocaleString() : 'Nunca'}
-          />
-
-          <Button
-            title={syncing ? 'Sincronizando...' : 'Sincronizar ahora'}
-            icon={RefreshCw}
-            loading={syncing}
-            disabled={!connected}
-            onPress={sync}
-            style={{ marginTop: S.md }}
-          />
-          {!connected && (
-            <Text style={styles.hint}>
-              Configura y guarda el ID de la hoja antes de sincronizar.
-            </Text>
-          )}
-        </Card>
-
-        {/* Configuración */}
-        <Card>
-          <View style={styles.sectionTitleRow}>
-            <FileSpreadsheet size={18} color={C.primary} />
-            <Text style={styles.cardTitle}>Configuración</Text>
-          </View>
-
-          <FormField
-            label="Spreadsheet ID"
-            value={spreadsheetId}
-            onChangeText={(t) => setSpreadsheetId(extractSpreadsheetId(t))}
-            placeholder="Pega la URL o el ID de la hoja"
-            autoCapitalize="none"
-            style={{ marginTop: S.md }}
-          />
-          <Text style={styles.hint}>Copia el ID desde la URL de tu Google Sheet.</Text>
-
-          <Button
-            title="Guardar configuración"
-            icon={Save}
-            variant="secondary"
-            loading={savingConfig}
-            onPress={saveConfig}
-            style={{ marginTop: S.sm }}
-          />
-
-          <View style={styles.serviceBox}>
-            <View style={styles.sectionTitleRow}>
-              <Server size={15} color={C.textMuted} />
-              <Text style={styles.serviceLabel}>Email de servicio (dar acceso Editor)</Text>
-            </View>
-            <Text style={styles.serviceEmail} selectable>
-              {status?.serviceEmail || 'No disponible'}
-            </Text>
-            <Text style={styles.hint}>
-              Comparte tu hoja con este correo como Editor para permitir la sincronización.
-            </Text>
-          </View>
-
-          {!!status?.spreadsheetId && (
-            <View style={styles.currentBox}>
-              <Clock size={14} color={C.textMuted} />
-              <Text style={styles.currentText}>Hoja actual: {status.spreadsheetId}</Text>
-            </View>
-          )}
-        </Card>
       </View>
 
       <Fab onPress={openCreate} />

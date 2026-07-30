@@ -119,7 +119,6 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                             <NavLink href="/admin/usuarios" name={t('nav.usuarios')} Icon={UserCog} />
                             <NavLink href="/admin/roles" name={t('nav.roles')} Icon={KeyRound} />
                             {isAdmin && <NavLink href="/admin/tenants" name={t('nav.adminEmpresas')} Icon={Briefcase} />}
-                            <NavLink href="/admin/sheets" name={t('nav.integracionSheets')} Icon={FileSpreadsheet} />
                         </div>
                     </>
                 )}

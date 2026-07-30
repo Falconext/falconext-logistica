@@ -1,4 +1,3 @@
-import { SheetsModule } from './modules/sheets/sheets.module';
 import { Module } from '@nestjs/common';
 import { TrabajadoresModule } from './modules/trabajadores/trabajadores.module';
 import { VehiculosModule } from './modules/vehiculos/vehiculos.module';
@@ -35,7 +34,6 @@ import { RecorridosModule } from './modules/recorridos/recorridos.module';
         PeajesModule,
         CombustibleModule,
         AlertsModule, // Kept existing modules
-        SheetsModule,
         UsuariosModule,
         RolesModule,
         PanelModule,
