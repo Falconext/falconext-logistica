@@ -19,7 +19,8 @@
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Necesitamos tu ubicación en segundo plano para rastrear la ruta incluso si la app está cerrada.",
         "NSLocationAlwaysUsageDescription": "Necesitamos tu ubicación en segundo plano para rastrear la ruta incluso si la app está cerrada."
       },
-      "bundleIdentifier": "com.logistica.app"
+      "bundleIdentifier": "com.logistica.app",
+      "buildNumber": "1"
     },
     "android": {
       "adaptiveIcon": {
@@ -37,7 +38,8 @@
         "FOREGROUND_SERVICE",
         "FOREGROUND_SERVICE_LOCATION"
       ],
-      "package": "com.logistica.app"
+      "package": "com.logistica.app",
+      "versionCode": 1
     },
     "web": {
       "output": "static",
