@@ -96,6 +96,8 @@ export class RecorridosService {
 
     /** Operaciones asignadas al chofer que aún puede iniciar (pendientes/reprogramadas). */
     async operacionesDisponibles(tenantId: string, trabajadorId: string) {
+        // Usuario sin trabajador vinculado (p.ej. admin): no es chofer → nada que iniciar.
+        if (!trabajadorId) return [];
         // El trabajador puede estar referenciado por su id o por su código id_trabajador.
         const trab = await this.prisma.trabajador.findFirst({
             where: { id: trabajadorId, tenant_id: tenantId },
@@ -121,6 +123,7 @@ export class RecorridosService {
 
     /** Recorrido activo del chofer (para restaurar el estado de la UI móvil). */
     async activoDeTrabajador(tenantId: string, trabajadorId: string) {
+        if (!trabajadorId) return null; // usuario sin trabajador → sin recorrido activo
         return this.prisma.recorrido.findFirst({
             where: { tenant_id: tenantId, trabajador_id: trabajadorId, estado: { in: ACTIVOS } },
             orderBy: { iniciado_en: 'desc' },
