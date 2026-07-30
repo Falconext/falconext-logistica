@@ -432,3 +432,46 @@ model Combustible {
   @@index([targa])
   @@map("combustible")
 }
+
+// Recorrido / viaje del chofer: ciclo Iniciar ruta → Llegué → (Regresar) → Finalizar.
+// Vinculado a una Programación (operación). Se apoya en las posiciones GPS del
+// Device para métricas y ETA. IDs escalares (sin relaciones Prisma) a propósito.
+model Recorrido {
+  id              String   @id @default(uuid())
+
+  tenant_id       String
+  trabajador_id   String
+  device_id       String?
+  vehiculo_id     String?  // Vehiculo.id real (del device), para disponibilidad
+  programacion_id String?
+
+  // Origen/destino: etiqueta (de la operación) + coords geocodificadas al iniciar.
+  origen_label    String?
+  destino_label   String?
+  origen_lat      Float?
+  origen_lng      Float?
+  destino_lat     Float?
+  destino_lng     Float?
+
+  // EN_RUTA_IDA | EN_DESTINO | EN_RUTA_VUELTA | COMPLETADO | CANCELADO
+  estado          String   @default("EN_RUTA_IDA")
+
+  // Hitos del ciclo.
+  iniciado_en     DateTime @default(now())
+  llegada_en      DateTime?
+  retorno_en      DateTime?
+  finalizado_en   DateTime?
+
+  // Métricas por tramo (km / minutos), calculadas al cerrar cada tramo.
+  ida_km          Float?
+  ida_min         Float?
+  vuelta_km       Float?
+  vuelta_min      Float?
+
+  creado_en       DateTime @default(now())
+  actualizado_en  DateTime @updatedAt
+
+  @@index([tenant_id, estado])
+  @@index([trabajador_id, estado])
+  @@map("recorridos")
+}

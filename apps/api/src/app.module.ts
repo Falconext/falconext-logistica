@@ -17,6 +17,7 @@ import { CombustibleModule } from './modules/combustible/combustible.module';
 import { UsuariosModule } from './modules/usuarios/usuarios.module';
 import { RolesModule } from './modules/roles/roles.module';
 import { PanelModule } from './modules/panel/panel.module';
+import { RecorridosModule } from './modules/recorridos/recorridos.module';
 
 @Module({
     imports: [
@@ -38,6 +39,7 @@ import { PanelModule } from './modules/panel/panel.module';
         UsuariosModule,
         RolesModule,
         PanelModule,
+        RecorridosModule,
     ],
     controllers: [],
     providers: [],

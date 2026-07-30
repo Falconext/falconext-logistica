@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Truck, Map, Wrench, ShieldCheck, LogOut, Bell, CalendarDays, BarChart3, FileSpreadsheet, MessageSquare, PlayCircle, HelpCircle, Briefcase, ChevronsLeft, Receipt, Fuel, UserCog, KeyRound, Radio, Navigation, Sun, Moon, Boxes } from 'lucide-react';
+import { LayoutDashboard, Users, Truck, Map, Wrench, ShieldCheck, LogOut, Bell, CalendarDays, BarChart3, FileSpreadsheet, MessageSquare, PlayCircle, HelpCircle, Briefcase, ChevronsLeft, Receipt, Fuel, UserCog, KeyRound, Radio, Navigation, Sun, Moon, Boxes, Route } from 'lucide-react';
 import clsx from 'clsx';
 import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
@@ -26,6 +26,7 @@ const primaryItems = [
 ];
 
 const trackingItems = [
+    { key: 'recorridos', href: '/recorridos', icon: Route },
     { key: 'rastreo', href: '/rastreo', icon: Navigation },
     { key: 'alertas', href: '/alertas', icon: Bell },
     { key: 'dispositivos', href: '/dispositivos', icon: ShieldCheck },
