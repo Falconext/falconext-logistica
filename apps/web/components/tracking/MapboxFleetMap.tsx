@@ -1,14 +1,10 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
 import { Truck, Search, Circle } from 'lucide-react';
 import api from '../../lib/api';
-import { STANDARD_STYLE, applyFadedTheme, MapThemeToggle, MapPreset } from './mapTheme';
-
-const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
-if (TOKEN) mapboxgl.accessToken = TOKEN;
+import { useGoogleMaps, GOOGLE_MAPS_KEY } from './googleMaps';
+import { stylesFor, MapThemeToggle, MapPreset } from './mapTheme';
 
 const ONLINE_MS = 5 * 60 * 1000;
 
@@ -26,9 +22,11 @@ function timeAgo(ts: string): string {
 }
 
 export function MapboxFleetMap() {
-  const mapRef = useRef<mapboxgl.Map | null>(null);
+  const { isLoaded } = useGoogleMaps();
+  const mapRef = useRef<google.maps.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const markersRef = useRef<Record<string, mapboxgl.Marker>>({});
+  const markersRef = useRef<Record<string, google.maps.Marker>>({});
+  const infoRef = useRef<google.maps.InfoWindow | null>(null);
   const fitDone = useRef(false);
   const [devices, setDevices] = useState<Device[]>([]);
   const [query, setQuery] = useState('');
@@ -63,24 +61,24 @@ export function MapboxFleetMap() {
 
   // Inicializar el mapa.
   useEffect(() => {
-    if (!containerRef.current || mapRef.current || !TOKEN) return;
-    const map = new mapboxgl.Map({
-      container: containerRef.current,
-      style: STANDARD_STYLE,
-      center: [-77.0428, -12.0464],
+    if (!isLoaded || !containerRef.current || mapRef.current) return;
+    const map = new google.maps.Map(containerRef.current, {
+      center: { lat: -12.0464, lng: -77.0428 },
       zoom: 5,
-      attributionControl: false,
+      disableDefaultUI: true,
+      zoomControl: true,
+      clickableIcons: false,
+      styles: stylesFor('day'),
     });
-    map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right');
-    map.on('load', () => setReady(true));
+    infoRef.current = new google.maps.InfoWindow();
     mapRef.current = map;
-    return () => { map.remove(); mapRef.current = null; };
-  }, []);
+    setReady(true);
+  }, [isLoaded]);
 
-  // Tema Faded + preset Día/Noche (los marcadores persisten al cambiar solo la luz).
+  // Preset Día/Noche (los marcadores persisten al cambiar solo la luz).
   useEffect(() => {
-    if (ready && mapRef.current) applyFadedTheme(mapRef.current, preset);
-  }, [preset, ready]);
+    mapRef.current?.setOptions({ styles: stylesFor(preset) });
+  }, [preset]);
 
   // Datos: cargar + refrescar cada 12s.
   useEffect(() => {
@@ -104,43 +102,53 @@ export function MapboxFleetMap() {
     located.forEach((l) => {
       seen.add(l.device.id);
       const color = l.online ? '#16A34A' : '#94A3B8';
+      const html = `<div style="font-family:system-ui;font-size:12px"><b>${label(l)}</b><br/>${((l.p.speed ?? 0) * 3.6).toFixed(0)} km/h · ${timeAgo(l.p.timestamp)}<br/><span style="color:${color}">${l.online ? '● En línea' : '○ Desconectado'}</span></div>`;
       let m = markersRef.current[l.device.id];
       if (!m) {
-        const el = document.createElement('div');
-        el.style.cssText = `width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.4);cursor:pointer;background:${color}`;
-        m = new mapboxgl.Marker({ element: el })
-          .setLngLat([l.lng, l.lat])
-          .setPopup(new mapboxgl.Popup({ offset: 14, closeButton: false }))
-          .addTo(map);
+        m = new google.maps.Marker({
+          position: { lat: l.lat, lng: l.lng },
+          map,
+          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 8, fillColor: color, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 3 },
+        });
+        m.addListener('click', () => {
+          infoRef.current?.setContent(html);
+          infoRef.current?.open({ map, anchor: m! });
+        });
         markersRef.current[l.device.id] = m;
       } else {
-        m.setLngLat([l.lng, l.lat]);
-        (m.getElement() as HTMLElement).style.background = color;
+        m.setPosition({ lat: l.lat, lng: l.lng });
+        m.setIcon({ path: google.maps.SymbolPath.CIRCLE, scale: 8, fillColor: color, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 3 });
       }
-      m.getPopup()?.setHTML(
-        `<div style="font-family:system-ui;font-size:12px"><b>${label(l)}</b><br/>${((l.p.speed ?? 0) * 3.6).toFixed(0)} km/h · ${timeAgo(l.p.timestamp)}<br/><span style="color:${color}">${l.online ? '● En línea' : '○ Desconectado'}</span></div>`
-      );
     });
     // eliminar marcadores de dispositivos que ya no están
     Object.keys(markersRef.current).forEach((id) => {
-      if (!seen.has(id)) { markersRef.current[id].remove(); delete markersRef.current[id]; }
+      if (!seen.has(id)) { markersRef.current[id].setMap(null); delete markersRef.current[id]; }
     });
     // encuadrar la primera vez
     if (!fitDone.current && located.length > 0) {
-      const b = new mapboxgl.LngLatBounds();
-      located.forEach((l) => b.extend([l.lng, l.lat]));
-      map.fitBounds(b, { padding: 80, maxZoom: 15, duration: 0 });
+      const bounds = new google.maps.LatLngBounds();
+      located.forEach((l) => bounds.extend({ lat: l.lat, lng: l.lng }));
+      map.fitBounds(bounds, 80);
       fitDone.current = true;
     }
   }, [located, ready]);
 
   const focus = (l: (typeof located)[number]) => {
-    mapRef.current?.flyTo({ center: [l.lng, l.lat], zoom: 15 });
-    markersRef.current[l.device.id]?.togglePopup();
+    const map = mapRef.current;
+    if (!map) return;
+    map.panTo({ lat: l.lat, lng: l.lng });
+    map.setZoom(15);
+    const m = markersRef.current[l.device.id];
+    if (m) {
+      const color = l.online ? '#16A34A' : '#94A3B8';
+      const html = `<div style="font-family:system-ui;font-size:12px"><b>${label(l)}</b><br/>${((l.p.speed ?? 0) * 3.6).toFixed(0)} km/h · ${timeAgo(l.p.timestamp)}<br/><span style="color:${color}">${l.online ? '● En línea' : '○ Desconectado'}</span></div>`;
+      infoRef.current?.setContent(html);
+      infoRef.current?.open({ map, anchor: m });
+    }
   };
 
-  if (!TOKEN) {
-    return <div className="h-full flex items-center justify-center text-slate-400">Configura NEXT_PUBLIC_MAPBOX_TOKEN para ver el mapa.</div>;
+  if (!GOOGLE_MAPS_KEY) {
+    return <div className="h-full flex items-center justify-center text-slate-400">Configura NEXT_PUBLIC_GOOGLE_MAPS_API_KEY para ver el mapa.</div>;
   }
 
   return (

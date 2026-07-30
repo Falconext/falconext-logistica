@@ -5,6 +5,10 @@ import { Env } from '../constants/Env';
 import { Theme } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 
+// NOTA: el componente conserva el nombre `MapboxWebView` y su interfaz de props por
+// compatibilidad con las pantallas que ya lo importan, pero por dentro ahora usa
+// **Google Maps JS API** (no Mapbox) dentro de un WebView.
+
 type Preset = 'day' | 'night';
 
 export interface MapMarker {
@@ -43,66 +47,81 @@ export interface MapboxWebViewProps {
   style?: ViewStyle;
 }
 
-const STYLE_MAP: Record<string, string> = {
-  dark: 'mapbox://styles/mapbox/dark-v11',
-  satellite: 'mapbox://styles/mapbox/satellite-streets-v12',
-  streets: 'mapbox://styles/mapbox/standard',
-};
-
 function buildHtml(config: any): string {
   const CFG = JSON.stringify(config);
   return `<!DOCTYPE html><html><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<link href="https://api.mapbox.com/mapbox-gl-js/v3.9.0/mapbox-gl.css" rel="stylesheet">
-<script src="https://api.mapbox.com/mapbox-gl-js/v3.9.0/mapbox-gl.js"></script>
 <style>html,body,#map{margin:0;padding:0;height:100%;width:100%;background:${config.preset === 'night' ? '#0f1522' : '#e8eef5'}}</style>
 </head><body><div id="map"></div><script>
 var CFG=${CFG};
 function post(o){try{if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify(o));}catch(e){}}
-function circle(lng,lat,r){var c=[];var dx=r/(111320*Math.cos(lat*Math.PI/180));var dy=r/110540;for(var i=0;i<=64;i++){var t=i/64*2*Math.PI;c.push([lng+dx*Math.cos(t),lat+dy*Math.sin(t)]);}return{type:'Feature',geometry:{type:'Polygon',coordinates:[c]}};}
-function geocode(a){return fetch('https://api.mapbox.com/geocoding/v5/mapbox.places/'+encodeURIComponent(a)+'.json?limit=1&access_token='+CFG.token).then(function(r){return r.json();}).then(function(j){return (j.features&&j.features[0])?j.features[0].center:null;}).catch(function(){return null;});}
-try{
-mapboxgl.accessToken=CFG.token;
-var styleMap={dark:'mapbox://styles/mapbox/dark-v11',satellite:'mapbox://styles/mapbox/satellite-streets-v12',streets:'mapbox://styles/mapbox/standard'};
-var map=new mapboxgl.Map({container:'map',style:styleMap[CFG.mapStyle]||styleMap.streets,center:CFG.center||[-77.04,-12.04],zoom:CFG.zoom||11,attributionControl:false});
-map.addControl(new mapboxgl.NavigationControl({showCompass:false}),'top-right');
-// Dentro de un modal/scrollview el contenedor puede iniciar en 0x0 (mapa en blanco);
-// re-dimensionamos el mapa cuando el contenedor cambia de tamaño.
-try{if(window.ResizeObserver){new ResizeObserver(function(){try{map.resize();}catch(e){}}).observe(document.getElementById('map'));}}catch(e){}
-setTimeout(function(){try{map.resize();}catch(e){}},350);
+// Reenviar errores de Google Maps (RefererNotAllowed, ApiNotActivated, InvalidKey, billing)
+// a los logs de la app para diagnosticarlos sin abrir la consola del WebView.
+var _ce=console.error;console.error=function(){try{post({type:'gmerror',message:Array.prototype.join.call(arguments,' ')});}catch(e){}try{_ce.apply(console,arguments);}catch(e){}};
+window.gm_authFailure=function(){post({type:'gmerror',message:'gm_authFailure: key invalida / referrer no permitido / API no habilitada / billing sin activar'});};
+// Estilos día/noche (equivalentes a los de la web).
+var DAY_STYLE=[{featureType:'poi',elementType:'labels',stylers:[{visibility:'off'}]},{featureType:'poi.business',stylers:[{visibility:'off'}]},{featureType:'transit',elementType:'labels.icon',stylers:[{visibility:'off'}]},{featureType:'road',elementType:'labels.icon',stylers:[{visibility:'off'}]},{featureType:'water',elementType:'geometry',stylers:[{color:'#c7dcf0'}]},{featureType:'landscape',elementType:'geometry',stylers:[{color:'#f3f4f6'}]}];
+var NIGHT_STYLE=[{elementType:'geometry',stylers:[{color:'#1d2331'}]},{elementType:'labels.text.stroke',stylers:[{color:'#1d2331'}]},{elementType:'labels.text.fill',stylers:[{color:'#8ea0bf'}]},{featureType:'poi',elementType:'labels',stylers:[{visibility:'off'}]},{featureType:'poi.business',stylers:[{visibility:'off'}]},{featureType:'road',elementType:'geometry',stylers:[{color:'#2a3244'}]},{featureType:'road',elementType:'labels.icon',stylers:[{visibility:'off'}]},{featureType:'road.highway',elementType:'geometry',stylers:[{color:'#3a4256'}]},{featureType:'transit',stylers:[{visibility:'off'}]},{featureType:'water',elementType:'geometry',stylers:[{color:'#0f1522'}]},{featureType:'landscape',elementType:'geometry',stylers:[{color:'#232a3a'}]}];
+function stylesFor(p){return p==='night'?NIGHT_STYLE:DAY_STYLE;}
+function LL(lng,lat){return {lat:lat,lng:lng};}
+function dot(color){return {path:google.maps.SymbolPath.CIRCLE,scale:8,fillColor:color||'#2563EB',fillOpacity:1,strokeColor:'#fff',strokeWeight:3};}
 window.__markers=[];
-window.__focus=function(lng,lat){try{if(!map)return;map.flyTo({center:[lng,lat],zoom:15,duration:900,essential:true});var best=null,bd=1e9;window.__markers.forEach(function(o){var dd=Math.abs(o.lng-lng)+Math.abs(o.lat-lat);if(dd<bd){bd=dd;best=o;}});if(best&&best.mk.getPopup&&best.mk.getPopup()&&!best.mk.getPopup().isOpen())best.mk.togglePopup();}catch(e){}};
-var isStandard=(CFG.mapStyle||'streets')==='streets';
-function applyTheme(p){try{if(isStandard){map.setConfigProperty('basemap','theme','faded');map.setConfigProperty('basemap','lightPreset',p);}}catch(e){}}
-window.__setPreset=function(p){applyTheme(p);};
-map.on('style.load',function(){applyTheme(CFG.preset||'day');});
-map.on('load',function(){
-  var bounds=new mapboxgl.LngLatBounds();var has=false;
-  (CFG.markers||[]).forEach(function(m){var mk=new mapboxgl.Marker({color:m.color||'#2563EB'}).setLngLat([m.lng,m.lat]);if(m.popup)mk.setPopup(new mapboxgl.Popup({offset:14,closeButton:false}).setHTML(m.popup));mk.addTo(map);window.__markers.push({lng:m.lng,lat:m.lat,mk:mk});bounds.extend([m.lng,m.lat]);has=true;});
-  (CFG.circles||[]).forEach(function(c,i){var poly=circle(c.lng,c.lat,c.radius);map.addSource('c'+i,{type:'geojson',data:poly});map.addLayer({id:'cf'+i,type:'fill',source:'c'+i,paint:{'fill-color':c.color||'#3B82F6','fill-opacity':0.2}});map.addLayer({id:'cl'+i,type:'line',source:'c'+i,paint:{'line-color':c.color||'#2563EB','line-width':2}});bounds.extend([c.lng,c.lat]);has=true;});
-  if(CFG.draggableCenter){var dc=CFG.draggableCenter;var dm=new mapboxgl.Marker({color:'#2563EB',draggable:true}).setLngLat([dc.lng,dc.lat]).addTo(map);dm.on('dragend',function(){var ll=dm.getLngLat();post({type:'center',lng:ll.lng,lat:ll.lat});});map.on('click',function(e){dm.setLngLat(e.lngLat);post({type:'center',lng:e.lngLat.lng,lat:e.lngLat.lat});});bounds.extend([dc.lng,dc.lat]);has=true;}
-  if(CFG.route){drawRoute(CFG.route);return;}
-  if(CFG.fit&&has){try{map.fitBounds(bounds,{padding:60,maxZoom:15,duration:0});}catch(e){}}
-});
-function drawRoute(route){
-  var done=function(coords){
-    map.addSource('route',{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',coordinates:coords}}});
-    map.addLayer({id:'route',type:'line',source:'route',layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':'#FFC933','line-width':5,'line-opacity':0.9}});
-    var b=new mapboxgl.LngLatBounds();coords.forEach(function(c){b.extend(c);});try{map.fitBounds(b,{padding:50,duration:0});}catch(e){}
+window.initMap=function(){try{
+  var isSat=(CFG.mapStyle||'streets')==='satellite';
+  var center=CFG.center?LL(CFG.center[0],CFG.center[1]):LL(-77.04,-12.04);
+  var map=new google.maps.Map(document.getElementById('map'),{center:center,zoom:CFG.zoom||11,disableDefaultUI:true,zoomControl:true,clickableIcons:false,mapTypeId:isSat?'satellite':'roadmap',styles:isSat?[]:stylesFor(CFG.preset||'day'),gestureHandling:'greedy'});
+  window.__map=map;window.__center=center;
+  // Reajuste de tamaño (dentro de modales/scroll el contenedor puede iniciar en 0x0).
+  try{if(window.ResizeObserver){new ResizeObserver(function(){try{google.maps.event.trigger(map,'resize');map.setCenter(window.__center);}catch(e){}}).observe(document.getElementById('map'));}}catch(e){}
+  setTimeout(function(){try{google.maps.event.trigger(map,'resize');map.setCenter(window.__center);}catch(e){}},350);
+  window.__setPreset=function(p){try{if(!isSat)map.setOptions({styles:stylesFor(p)});}catch(e){}};
+  window.__focus=function(lng,lat){try{map.panTo(LL(lng,lat));map.setZoom(15);var best=null,bd=1e9;window.__markers.forEach(function(o){var dd=Math.abs(o.lng-lng)+Math.abs(o.lat-lat);if(dd<bd){bd=dd;best=o;}});if(best&&best.info){window.__markers.forEach(function(o){o.info&&o.info.close();});best.info.open({map:map,anchor:best.mk});}}catch(e){}};
+
+  var bounds=new google.maps.LatLngBounds();var has=false;
+  (CFG.markers||[]).forEach(function(m){
+    var mk=new google.maps.Marker({position:LL(m.lng,m.lat),map:map,icon:dot(m.color)});
+    var info=null;
+    if(m.popup){info=new google.maps.InfoWindow({content:m.popup});mk.addListener('click',function(){window.__markers.forEach(function(o){o.info&&o.info.close();});info.open({map:map,anchor:mk});});}
+    window.__markers.push({lng:m.lng,lat:m.lat,mk:mk,info:info});
+    bounds.extend(LL(m.lng,m.lat));has=true;
+  });
+  (CFG.circles||[]).forEach(function(c){
+    new google.maps.Circle({center:LL(c.lng,c.lat),radius:c.radius,map:map,fillColor:c.color||'#3B82F6',fillOpacity:0.2,strokeColor:c.color||'#2563EB',strokeWeight:2});
+    bounds.extend(LL(c.lng,c.lat));has=true;
+  });
+  if(CFG.draggableCenter){
+    var dc=CFG.draggableCenter;
+    var dm=new google.maps.Marker({position:LL(dc.lng,dc.lat),map:map,draggable:true,icon:dot('#2563EB')});
+    dm.addListener('dragend',function(){var p=dm.getPosition();post({type:'center',lng:p.lng(),lat:p.lat()});});
+    map.addListener('click',function(e){dm.setPosition(e.latLng);post({type:'center',lng:e.latLng.lng(),lat:e.latLng.lat()});});
+    bounds.extend(LL(dc.lng,dc.lat));has=true;
+  }
+  if(CFG.route){drawRoute(map,CFG.route);return;}
+  if(CFG.fit&&has){try{map.fitBounds(bounds,60);}catch(e){}}
+}catch(err){post({type:'error',message:String(err)});}};
+
+function drawRoute(map,route){
+  var done=function(path){
+    new google.maps.Polyline({path:path,map:map,strokeColor:'#FFC933',strokeWeight:5,strokeOpacity:0.9});
+    var b=new google.maps.LatLngBounds();path.forEach(function(p){b.extend(p);});try{map.fitBounds(b,50);}catch(e){}
   };
-  if(route.coordinates){done(route.coordinates);return;}
-  Promise.all([geocode(route.originAddress),geocode(route.destinationAddress)]).then(function(res){
-    var o=res[0],d=res[1];if(!o||!d){post({type:'routeError'});return;}
-    new mapboxgl.Marker({color:'#16A34A'}).setLngLat(o).addTo(map);
-    new mapboxgl.Marker({color:'#DC2626'}).setLngLat(d).addTo(map);
-    fetch('https://api.mapbox.com/directions/v5/mapbox/driving/'+o[0]+','+o[1]+';'+d[0]+','+d[1]+'?geometries=geojson&overview=full&access_token='+CFG.token).then(function(r){return r.json();}).then(function(j){
-      if(j.routes&&j.routes[0]){post({type:'route',eta:Math.round(j.routes[0].duration/60),dist:(j.routes[0].distance/1000).toFixed(1)});done(j.routes[0].geometry.coordinates);}
+  if(route.coordinates){done(route.coordinates.map(function(c){return LL(c[0],c[1]);}));return;}
+  var geo=new google.maps.Geocoder();
+  var g=function(addr){return new Promise(function(res){if(!addr){res(null);return;}geo.geocode({address:addr},function(r,st){res(st==='OK'&&r[0]?r[0].geometry.location:null);});});};
+  Promise.all([g(route.originAddress),g(route.destinationAddress)]).then(function(rr){
+    var o=rr[0],d=rr[1];if(!o||!d){post({type:'routeError'});return;}
+    new google.maps.Marker({position:o,map:map,icon:dot('#16A34A')});
+    new google.maps.Marker({position:d,map:map,icon:dot('#DC2626')});
+    var ds=new google.maps.DirectionsService();
+    ds.route({origin:o,destination:d,travelMode:google.maps.TravelMode.DRIVING},function(res,st){
+      if(st==='OK'&&res.routes&&res.routes[0]){var rt=res.routes[0];var leg=rt.legs&&rt.legs[0];if(leg)post({type:'route',eta:Math.round(leg.duration.value/60),dist:(leg.distance.value/1000).toFixed(1)});done(rt.overview_path);}
       else{done([o,d]);}
-    }).catch(function(){done([o,d]);});
+    });
   });
 }
-}catch(err){post({type:'error',message:String(err)});}
-</script></body></html>`;
+</script>
+<script async src="https://maps.googleapis.com/maps/api/js?key=${config.key}&libraries=geometry&callback=initMap"></script>
+</body></html>`;
 }
 
 export default function MapboxWebView(props: MapboxWebViewProps) {
@@ -137,7 +156,7 @@ export default function MapboxWebView(props: MapboxWebViewProps) {
 
   const config = useMemo(
     () => ({
-      token: Env.MAPBOX_TOKEN,
+      key: Env.GOOGLE_MAPS_KEY,
       center: props.center,
       zoom: props.zoom,
       mapStyle: props.mapStyle || 'streets',
@@ -169,9 +188,10 @@ export default function MapboxWebView(props: MapboxWebViewProps) {
       const msg = JSON.parse(e.nativeEvent.data);
       if (msg.type === 'center' && onCenterChange) onCenterChange(msg.lng, msg.lat);
       if (msg.type === 'route' && onRouteInfo) onRouteInfo({ eta: msg.eta, dist: msg.dist });
-      if (msg.type === 'error') console.warn('[MapboxWebView] JS error en el mapa:', msg.message);
-      if (msg.type === 'routeError') console.warn('[MapboxWebView] no se pudo geocodificar la ruta');
-      if (msg.type === 'log') console.warn('[MapboxWebView] ', msg.message);
+      if (msg.type === 'gmerror') console.warn('[MapWebView] GMAPS:', msg.message);
+      if (msg.type === 'error') console.warn('[MapWebView] JS error en el mapa:', msg.message);
+      if (msg.type === 'routeError') console.warn('[MapWebView] no se pudo geocodificar la ruta');
+      if (msg.type === 'log') console.warn('[MapWebView] ', msg.message);
     } catch {}
   };
 
@@ -183,7 +203,10 @@ export default function MapboxWebView(props: MapboxWebViewProps) {
         <WebView
           ref={webRef}
           originWhitelist={['*']}
-          source={{ html }}
+          // baseUrl da al documento un origen/referrer real: necesario para que una
+          // API key de Google Maps con restricción de referrer acepte el mapa dentro
+          // del WebView. Este dominio DEBE estar en el allowlist de referrers de la key.
+          source={{ html, baseUrl: 'https://falconext-logistica-web.vercel.app' }}
           onMessage={onMessage}
           style={[styles.web, { opacity: 0.99 }]}
           scrollEnabled={false}
@@ -191,9 +214,9 @@ export default function MapboxWebView(props: MapboxWebViewProps) {
           domStorageEnabled
           androidLayerType="hardware"
           setBuiltInZoomControls={false}
-          onError={(e: any) => console.warn('[MapboxWebView] onError:', e?.nativeEvent?.description)}
-          onHttpError={(e: any) => console.warn('[MapboxWebView] onHttpError:', e?.nativeEvent?.statusCode, e?.nativeEvent?.url)}
-          onContentProcessDidTerminate={() => console.warn('[MapboxWebView] contentProcess terminado')}
+          onError={(e: any) => console.warn('[MapWebView] onError:', e?.nativeEvent?.description)}
+          onHttpError={(e: any) => console.warn('[MapWebView] onHttpError:', e?.nativeEvent?.statusCode, e?.nativeEvent?.url)}
+          onContentProcessDidTerminate={() => console.warn('[MapWebView] contentProcess terminado')}
           injectedJavaScriptBeforeContentLoaded={`window.onerror=function(m,s,l){window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({type:'error',message:m+' @'+l}));};true;`}
         />
       )}

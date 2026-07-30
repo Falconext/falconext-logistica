@@ -1,19 +1,15 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
 import { Play, Pause, FastForward, Calendar as CalendarIcon, RotateCcw, Route, Clock, Gauge, TrendingUp, MapPin, Timer, Navigation } from 'lucide-react';
 import api from '../../lib/api';
 import { toast } from 'sonner';
-import { STANDARD_STYLE, applyFadedTheme, MapThemeToggle, MapPreset } from './mapTheme';
-
-const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
-if (TOKEN) mapboxgl.accessToken = TOKEN;
+import { useGoogleMaps, GOOGLE_MAPS_KEY } from './googleMaps';
+import { stylesFor, MapThemeToggle, MapPreset } from './mapTheme';
 
 interface HistoryMapProps {
     deviceId: string;
-    apiKey?: string; // ignorado: se usa NEXT_PUBLIC_MAPBOX_TOKEN
+    apiKey?: string; // ignorado: se usa NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
     deviceName?: string;
     vehiclePlate?: string;
 }
@@ -79,14 +75,15 @@ function fmtHora(iso: string | null): string {
 }
 
 export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: HistoryMapProps) {
+    const { isLoaded } = useGoogleMaps();
     const containerRef = useRef<HTMLDivElement | null>(null);
-    const mapRef = useRef<mapboxgl.Map | null>(null);
-    const cursorRef = useRef<mapboxgl.Marker | null>(null);
-    const startRef = useRef<mapboxgl.Marker | null>(null);
-    const endRef = useRef<mapboxgl.Marker | null>(null);
-    const stopMarkersRef = useRef<mapboxgl.Marker[]>([]);
+    const mapRef = useRef<google.maps.Map | null>(null);
+    const routeLineRef = useRef<google.maps.Polyline | null>(null);
+    const cursorRef = useRef<google.maps.Marker | null>(null);
+    const startRef = useRef<google.maps.Marker | null>(null);
+    const endRef = useRef<google.maps.Marker | null>(null);
+    const stopMarkersRef = useRef<google.maps.Marker[]>([]);
     const playbackTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const [ready, setReady] = useState(false);
 
     const [history, setHistory] = useState<Position[]>([]);
     const [trip, setTrip] = useState<Trip | null>(null);
@@ -98,24 +95,21 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
 
     // Inicializar el mapa.
     useEffect(() => {
-        if (!containerRef.current || mapRef.current || !TOKEN) return;
-        const map = new mapboxgl.Map({
-            container: containerRef.current,
-            style: STANDARD_STYLE,
-            center: [-77.0428, -12.0464],
+        if (!isLoaded || !containerRef.current || mapRef.current) return;
+        mapRef.current = new google.maps.Map(containerRef.current, {
+            center: { lat: -12.0464, lng: -77.0428 },
             zoom: 11,
-            attributionControl: false,
+            disableDefaultUI: true,
+            zoomControl: true,
+            clickableIcons: false,
+            styles: stylesFor('day'),
         });
-        map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-left');
-        map.on('load', () => setReady(true));
-        mapRef.current = map;
-        return () => { map.remove(); mapRef.current = null; };
-    }, []);
+    }, [isLoaded]);
 
-    // Tema Faded + preset Día/Noche (las capas de la ruta persisten al cambiar solo la luz).
+    // Preset Día/Noche (se aplica al cambiar el toggle).
     useEffect(() => {
-        if (ready && mapRef.current) applyFadedTheme(mapRef.current, preset);
-    }, [preset, ready]);
+        mapRef.current?.setOptions({ styles: stylesFor(preset) });
+    }, [preset]);
 
     // Cargar historial + análisis cuando cambia fecha o dispositivo.
     useEffect(() => {
@@ -157,68 +151,97 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
     // Dibujar la ruta + marcadores A/B + paradas numeradas + encuadrar.
     useEffect(() => {
         const map = mapRef.current;
-        if (!map || !ready) return;
+        if (!map || !isLoaded) return;
 
         // Ruta pegada a las calles (Map Matching) si el backend la devolvió; si no, los puntos crudos.
-        const routeCoords = trip?.matchedGeometry?.coordinates?.length
-            ? trip.matchedGeometry.coordinates
-            : history.map(p => [p.lng, p.lat]);
-        const line = { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: routeCoords } } as any;
-        const draw = () => {
-            if (!map.getSource('hist')) {
-                map.addSource('hist', { type: 'geojson', data: line });
-                map.addLayer({ id: 'hist', type: 'line', source: 'hist', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#3B82F6', 'line-width': 4, 'line-opacity': 0.85 } });
-            } else {
-                (map.getSource('hist') as mapboxgl.GeoJSONSource).setData(line);
-            }
-        };
-        if (map.isStyleLoaded()) draw(); else map.once('idle', draw);
+        // matchedGeometry.coordinates[i] = [lng, lat]; history[i] = { lng, lat }. En Google todo es { lat, lng }.
+        const routePath: google.maps.LatLngLiteral[] = trip?.matchedGeometry?.coordinates?.length
+            ? trip.matchedGeometry.coordinates.map(([lng, lat]) => ({ lat, lng }))
+            : history.map(p => ({ lat: p.lat, lng: p.lng }));
+        if (!routeLineRef.current) {
+            routeLineRef.current = new google.maps.Polyline({
+                path: routePath,
+                strokeColor: '#3B82F6',
+                strokeWeight: 4,
+                strokeOpacity: 0.85,
+                map,
+            });
+        } else {
+            routeLineRef.current.setPath(routePath);
+        }
 
         // Marcadores inicio (A) / fin (B)
-        startRef.current?.remove(); endRef.current?.remove(); startRef.current = null; endRef.current = null;
+        startRef.current?.setMap(null); endRef.current?.setMap(null); startRef.current = null; endRef.current = null;
         if (history.length > 0) {
-            const mk = (text: string, color: string) => {
-                const el = document.createElement('div');
-                el.style.cssText = `width:24px;height:24px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${color};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center`;
-                el.innerHTML = `<span style="transform:rotate(45deg);color:#fff;font-size:11px;font-weight:700;font-family:system-ui">${text}</span>`;
-                return el;
-            };
-            startRef.current = new mapboxgl.Marker({ element: mk('A', '#16A34A'), anchor: 'bottom' }).setLngLat([history[0].lng, history[0].lat]).addTo(map);
-            endRef.current = new mapboxgl.Marker({ element: mk('B', '#DC2626'), anchor: 'bottom' }).setLngLat([history[history.length - 1].lng, history[history.length - 1].lat]).addTo(map);
+            const mk = (text: string, color: string, pos: google.maps.LatLngLiteral) => new google.maps.Marker({
+                position: pos,
+                map,
+                label: { text, color: '#fff', fontWeight: '700', fontSize: '11px' },
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 11,
+                    fillColor: color,
+                    fillOpacity: 1,
+                    strokeColor: '#fff',
+                    strokeWeight: 2,
+                },
+            });
+            startRef.current = mk('A', '#16A34A', { lat: history[0].lat, lng: history[0].lng });
+            endRef.current = mk('B', '#DC2626', { lat: history[history.length - 1].lat, lng: history[history.length - 1].lng });
 
-            const b = new mapboxgl.LngLatBounds();
-            history.forEach(p => b.extend([p.lng, p.lat]));
-            map.fitBounds(b, { padding: 60, maxZoom: 16, duration: 0 });
+            const bounds = new google.maps.LatLngBounds();
+            history.forEach(p => bounds.extend({ lat: p.lat, lng: p.lng }));
+            map.fitBounds(bounds, 60);
         }
 
         // Marcadores de paradas (numerados, naranja).
-        stopMarkersRef.current.forEach(m => m.remove());
+        stopMarkersRef.current.forEach(m => m.setMap(null));
         stopMarkersRef.current = [];
         (trip?.stops || []).forEach((s, idx) => {
-            const el = document.createElement('div');
-            el.style.cssText = 'width:26px;height:26px;border-radius:50%;background:#F97316;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;cursor:pointer';
-            el.innerHTML = `<span style="color:#fff;font-size:12px;font-weight:800;font-family:system-ui">${idx + 1}</span>`;
-            const popup = new mapboxgl.Popup({ offset: 16, closeButton: false }).setHTML(
-                `<div style="font-family:system-ui;font-size:12px"><b>Parada ${idx + 1}</b><br/>${fmtHora(s.startTime)} – ${fmtHora(s.endTime)}<br/>Detenido: <b>${fmtDur(s.durationMin)}</b></div>`
-            );
-            const m = new mapboxgl.Marker({ element: el, anchor: 'center' }).setLngLat([s.lng, s.lat]).setPopup(popup).addTo(map);
-            stopMarkersRef.current.push(m);
+            const marker = new google.maps.Marker({
+                position: { lat: s.lat, lng: s.lng },
+                map,
+                label: { text: String(idx + 1), color: '#fff', fontWeight: '800' },
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 12,
+                    fillColor: '#F97316',
+                    fillOpacity: 1,
+                    strokeColor: '#fff',
+                    strokeWeight: 3,
+                },
+            });
+            const infoWindow = new google.maps.InfoWindow({
+                content: `<div style="font-family:system-ui;font-size:12px"><b>Parada ${idx + 1}</b><br/>${fmtHora(s.startTime)} – ${fmtHora(s.endTime)}<br/>Detenido: <b>${fmtDur(s.durationMin)}</b></div>`,
+            });
+            marker.addListener('click', () => infoWindow.open({ map, anchor: marker }));
+            stopMarkersRef.current.push(marker);
         });
-    }, [history, trip, ready]);
+    }, [history, trip, isLoaded]);
 
     // Mover el cursor de reproducción.
     useEffect(() => {
         const map = mapRef.current;
         const pos = history[currentIndex];
-        if (!map || !ready || !pos) return;
+        if (!map || !isLoaded || !pos) return;
         if (!cursorRef.current) {
-            const el = document.createElement('div');
-            el.style.cssText = 'width:18px;height:18px;border-radius:50%;background:#FFC933;border:3px solid #1a1a1c;box-shadow:0 0 0 3px rgba(255,201,51,.4)';
-            cursorRef.current = new mapboxgl.Marker({ element: el }).setLngLat([pos.lng, pos.lat]).addTo(map);
+            cursorRef.current = new google.maps.Marker({
+                position: { lat: pos.lat, lng: pos.lng },
+                map,
+                zIndex: 999,
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 7,
+                    fillColor: '#FFC933',
+                    fillOpacity: 1,
+                    strokeColor: '#1a1a1c',
+                    strokeWeight: 3,
+                },
+            });
         } else {
-            cursorRef.current.setLngLat([pos.lng, pos.lat]);
+            cursorRef.current.setPosition({ lat: pos.lat, lng: pos.lng });
         }
-    }, [currentIndex, history, ready]);
+    }, [currentIndex, history, isLoaded]);
 
     // Bucle de reproducción.
     useEffect(() => {
@@ -238,7 +261,7 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
     const toggleSpeed = () => setPlaybackSpeed(prev => (prev === 1 ? 5 : prev === 5 ? 10 : 1));
     const currentPos = history[currentIndex];
 
-    if (!TOKEN) return <div className="h-full flex items-center justify-center text-slate-400">Configura NEXT_PUBLIC_MAPBOX_TOKEN.</div>;
+    if (!GOOGLE_MAPS_KEY) return <div className="h-full flex items-center justify-center text-slate-400">Configura NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.</div>;
 
     const stats = [
         { icon: Route, label: 'Distancia', value: `${trip?.distanceKm ?? 0} km`, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-100 dark:bg-blue-900/30' },

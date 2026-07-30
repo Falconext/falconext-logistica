@@ -1,13 +1,9 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
 import { MapPin, Clock, Navigation } from 'lucide-react';
-import { STANDARD_STYLE, applyFadedTheme } from './mapTheme';
-
-const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
-if (TOKEN) mapboxgl.accessToken = TOKEN;
+import { useGoogleMaps, GOOGLE_MAPS_KEY } from './googleMaps';
+import { stylesFor } from './mapTheme';
 
 interface Props {
   originAddress: string;
@@ -16,99 +12,137 @@ interface Props {
   statusText?: string;
 }
 
-const geoCache = new Map<string, [number, number] | null>();
+const geoCache = new Map<string, google.maps.LatLng | null>();
 
-async function geocode(addr: string): Promise<[number, number] | null> {
+let geocoderInstance: google.maps.Geocoder | null = null;
+function getGeocoder() {
+  if (!geocoderInstance) geocoderInstance = new google.maps.Geocoder();
+  return geocoderInstance;
+}
+
+async function geocode(addr: string): Promise<google.maps.LatLng | null> {
   if (!addr) return null;
   if (geoCache.has(addr)) return geoCache.get(addr)!;
   try {
-    const r = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(addr)}.json?limit=1&access_token=${TOKEN}`);
-    const j = await r.json();
-    const c = j.features?.[0]?.center as [number, number] | undefined;
-    const val = c ?? null;
-    geoCache.set(addr, val);
-    return val;
+    const { results } = await getGeocoder().geocode({ address: addr });
+    const loc = results?.[0]?.geometry?.location ?? null;
+    geoCache.set(addr, loc);
+    return loc;
   } catch {
+    geoCache.set(addr, null);
     return null;
   }
 }
 
 export function MapboxRouteMap({ originAddress, destinationAddress, mapType = 'roadmap', statusText = 'En Tránsito' }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<mapboxgl.Map | null>(null);
-  const [ready, setReady] = useState(false);
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const polylineRef = useRef<google.maps.Polyline | null>(null);
+  const markersRef = useRef<google.maps.Marker[]>([]);
   const [eta, setEta] = useState('');
   const [dist, setDist] = useState('');
   const [err, setErr] = useState(false);
 
+  const { isLoaded } = useGoogleMaps();
   const isSat = mapType === 'satellite';
-  const style = isSat ? 'mapbox://styles/mapbox/satellite-streets-v12' : STANDARD_STYLE;
 
+  // Crear el mapa una sola vez cuando el SDK esté cargado.
   useEffect(() => {
-    if (!containerRef.current || mapRef.current || !TOKEN) return;
-    const map = new mapboxgl.Map({ container: containerRef.current, style, center: [12.4964, 41.9028], zoom: 9, attributionControl: false });
-    map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right');
-    map.on('load', () => { setReady(true); if (!isSat) applyFadedTheme(map, 'day'); });
-    mapRef.current = map;
-    return () => { map.remove(); mapRef.current = null; };
-  }, []);
+    if (!isLoaded || !containerRef.current || mapRef.current) return;
+    mapRef.current = new google.maps.Map(containerRef.current, {
+      center: { lat: -12.0464, lng: -77.0428 },
+      zoom: 11,
+      disableDefaultUI: true,
+      zoomControl: true,
+      clickableIcons: false,
+      mapTypeId: isSat ? 'satellite' : 'roadmap',
+      styles: isSat ? [] : stylesFor('day'),
+    });
+  }, [isLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Cambiar de estilo (mapa/satélite) sin recrear el mapa; re-aplica el tema Faded en "mapa".
+  // Cambiar entre mapa/satélite sin recrear el mapa.
   useEffect(() => {
-    if (!ready) return;
     const map = mapRef.current;
     if (!map) return;
-    map.setStyle(style);
-    if (!isSat) map.once('style.load', () => applyFadedTheme(map, 'day'));
-  }, [style]); // eslint-disable-line react-hooks/exhaustive-deps
+    map.setMapTypeId(isSat ? 'satellite' : 'roadmap');
+    map.setOptions({ styles: isSat ? [] : stylesFor('day') });
+  }, [mapType]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Geocodificar, trazar ruta y marcadores.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready || !originAddress || !destinationAddress) return;
+    if (!map || !isLoaded || !originAddress || !destinationAddress) return;
     let cancelled = false;
+
+    const clear = () => {
+      if (polylineRef.current) { polylineRef.current.setMap(null); polylineRef.current = null; }
+      markersRef.current.forEach((m) => m.setMap(null));
+      markersRef.current = [];
+    };
 
     (async () => {
       setErr(false);
+      setEta('');
+      setDist('');
       const [o, d] = await Promise.all([geocode(originAddress), geocode(destinationAddress)]);
       if (cancelled) return;
       if (!o || !d) { setErr(true); return; }
 
-      let geometry: any = { type: 'LineString', coordinates: [o, d] };
+      clear();
+
+      let path: google.maps.LatLng[] = [o, d];
       try {
-        const r = await fetch(`https://api.mapbox.com/directions/v5/mapbox/driving/${o[0]},${o[1]};${d[0]},${d[1]}?geometries=geojson&overview=full&access_token=${TOKEN}`);
-        const j = await r.json();
-        const route = j.routes?.[0];
+        const svc = new google.maps.DirectionsService();
+        const result = await svc.route({ origin: o, destination: d, travelMode: google.maps.TravelMode.DRIVING });
+        const route = result.routes?.[0];
         if (route) {
-          geometry = route.geometry;
-          setEta(`${Math.round(route.duration / 60)} min`);
-          setDist(`${(route.distance / 1000).toFixed(1)} km`);
+          path = route.overview_path;
+          setEta(route.legs?.[0]?.duration?.text ?? '');
+          setDist(route.legs?.[0]?.distance?.text ?? '');
         }
-      } catch { /* usa línea recta */ }
+      } catch { /* usa línea recta origen→destino */ }
       if (cancelled) return;
 
-      const draw = () => {
-        if (!map.getSource('route')) {
-          map.addSource('route', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry } as any });
-          map.addLayer({ id: 'route', type: 'line', source: 'route', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#FFC933', 'line-width': 5, 'line-opacity': 0.9 } });
-        } else {
-          (map.getSource('route') as mapboxgl.GeoJSONSource).setData({ type: 'Feature', properties: {}, geometry } as any);
-        }
+      polylineRef.current = new google.maps.Polyline({
+        path,
+        strokeColor: '#FFC933',
+        strokeWeight: 5,
+        strokeOpacity: 0.9,
+        map,
+      });
+
+      // Marcadores origen/destino con InfoWindow al hacer click.
+      const makeMarker = (pos: google.maps.LatLng, color: string, label: string) => {
+        const marker = new google.maps.Marker({
+          position: pos,
+          map,
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 7,
+            fillColor: color,
+            fillOpacity: 1,
+            strokeColor: '#ffffff',
+            strokeWeight: 2,
+          },
+        });
+        const info = new google.maps.InfoWindow({ content: label });
+        marker.addListener('click', () => info.open({ map, anchor: marker }));
+        return marker;
       };
-      if (map.isStyleLoaded()) draw(); else map.once('idle', draw);
+      markersRef.current = [
+        makeMarker(o, '#16A34A', 'Origen'),
+        makeMarker(d, '#DC2626', 'Destino'),
+      ];
 
-      // Marcadores origen/destino
-      new mapboxgl.Marker({ color: '#16A34A' }).setLngLat(o).setPopup(new mapboxgl.Popup({ offset: 12, closeButton: false }).setText('Origen')).addTo(map);
-      new mapboxgl.Marker({ color: '#DC2626' }).setLngLat(d).setPopup(new mapboxgl.Popup({ offset: 12, closeButton: false }).setText('Destino')).addTo(map);
-
-      const b = new mapboxgl.LngLatBounds();
-      (geometry.coordinates as [number, number][]).forEach((c) => b.extend(c));
-      map.fitBounds(b, { padding: 70, duration: 0 });
+      const bounds = new google.maps.LatLngBounds();
+      path.forEach((p) => bounds.extend(p));
+      map.fitBounds(bounds, 70);
     })();
 
     return () => { cancelled = true; };
-  }, [originAddress, destinationAddress, ready]);
+  }, [originAddress, destinationAddress, isLoaded]);
 
-  if (!TOKEN) return <div className="h-full flex items-center justify-center text-slate-400">Configura NEXT_PUBLIC_MAPBOX_TOKEN.</div>;
+  if (!GOOGLE_MAPS_KEY) return <div className="h-full flex items-center justify-center text-slate-400">Configura NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.</div>;
 
   return (
     <div className="relative h-full w-full">

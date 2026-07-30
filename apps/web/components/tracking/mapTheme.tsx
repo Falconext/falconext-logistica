@@ -1,25 +1,38 @@
 'use client';
 
 import React from 'react';
-import type mapboxgl from 'mapbox-gl';
-
-// Estilo base "Standard" de Mapbox. Con el tema "faded" queda colorido pero suave,
-// parecido a Google Maps. Soporta presets de luz (día/noche) sin recargar el estilo.
-export const STANDARD_STYLE = 'mapbox://styles/mapbox/standard';
 
 export type MapPreset = 'day' | 'night';
 
-// Aplica el tema "faded" + el preset de luz. Debe llamarse cuando el estilo ya cargó
-// (p.ej. dentro de map.on('style.load', ...)). El try/catch evita errores si aún no está listo.
-export function applyFadedTheme(map: mapboxgl.Map, preset: MapPreset) {
-    try {
-        // @ts-ignore - setConfigProperty existe en mapbox-gl v3 (Standard style)
-        map.setConfigProperty('basemap', 'theme', 'faded');
-        // @ts-ignore
-        map.setConfigProperty('basemap', 'lightPreset', preset);
-    } catch {
-        /* el estilo todavía no está listo */
-    }
+// Estilos Google Maps por preset de luz. "day" = look suave/limpio (POIs atenuados,
+// parecido al 'faded' anterior); "night" = modo oscuro clásico de Google.
+export const DAY_STYLE: google.maps.MapTypeStyle[] = [
+    { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+    { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
+    { featureType: 'transit', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+    { featureType: 'road', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#c7dcf0' }] },
+    { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#f3f4f6' }] },
+];
+
+export const NIGHT_STYLE: google.maps.MapTypeStyle[] = [
+    { elementType: 'geometry', stylers: [{ color: '#1d2331' }] },
+    { elementType: 'labels.text.stroke', stylers: [{ color: '#1d2331' }] },
+    { elementType: 'labels.text.fill', stylers: [{ color: '#8ea0bf' }] },
+    { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+    { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
+    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2a3244' }] },
+    { featureType: 'road', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+    { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#3a4256' }] },
+    { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0f1522' }] },
+    { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#232a3a' }] },
+];
+
+// Devuelve el array de estilos para el preset. Aplícalo con
+// map.setOptions({ styles: stylesFor(preset) }).
+export function stylesFor(preset: MapPreset): google.maps.MapTypeStyle[] {
+    return preset === 'night' ? NIGHT_STYLE : DAY_STYLE;
 }
 
 // Toggle Día / Noche reutilizable, con el mismo look en toda la app.
