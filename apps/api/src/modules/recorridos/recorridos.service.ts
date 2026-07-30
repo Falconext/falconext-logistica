@@ -289,6 +289,8 @@ export class RecorridosService {
                     estado: r.estado,
                     origen: r.origen_label,
                     destino: r.destino_label,
+                    origen_lat: r.origen_lat, origen_lng: r.origen_lng,
+                    destino_lat: r.destino_lat, destino_lng: r.destino_lng,
                     programacion_id: r.programacion_id,
                     iniciado_en: r.iniciado_en,
                     // Minutos en el tramo actual.

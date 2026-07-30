@@ -1,12 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Navigation, MapPin, CornerUpLeft, Clock, Timer, RefreshCw, Loader2, Route as RouteIcon, User
+    Navigation, MapPin, CornerUpLeft, Clock, Timer, RefreshCw, Loader2, Route as RouteIcon, User, X, MapPinned
 } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../../lib/api';
+import { useGoogleMaps, GOOGLE_MAPS_KEY } from '../../components/tracking/googleMaps';
+import { stylesFor } from '../../components/tracking/mapTheme';
 
 interface RecorridoActivo {
     id: string;
@@ -16,6 +17,10 @@ interface RecorridoActivo {
     estado: 'EN_RUTA_IDA' | 'EN_DESTINO' | 'EN_RUTA_VUELTA';
     origen: string | null;
     destino: string | null;
+    origen_lat: number | null;
+    origen_lng: number | null;
+    destino_lat: number | null;
+    destino_lng: number | null;
     programacion_id: string | null;
     iniciado_en: string;
     enTramoMin: number;
@@ -49,6 +54,7 @@ export default function RecorridosPage() {
     const [refreshing, setRefreshing] = useState(false);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
     const [, setTick] = useState(0);
+    const [mapRec, setMapRec] = useState<RecorridoActivo | null>(null);
 
     const load = useCallback(async (silent = false) => {
         if (silent) setRefreshing(true); else setLoading(true);
@@ -202,14 +208,92 @@ export default function RecorridosPage() {
                                     </div>
                                 </div>
 
-                                <Link href="/rastreo" className="block px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 text-center text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
-                                    Ver en el mapa →
-                                </Link>
+                                <button onClick={() => setMapRec(r)} className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+                                    <MapPinned size={13} /> Ver en el mapa
+                                </button>
                             </div>
                         );
                     })}
                 </div>
             )}
+
+            {mapRec && <RecorridoMapModal rec={mapRec} onClose={() => setMapRec(null)} />}
+        </div>
+    );
+}
+
+/* ---------- Modal con el mapa del recorrido (origen → destino + posición viva) ---------- */
+function RecorridoMapModal({ rec, onClose }: { rec: RecorridoActivo; onClose: () => void }) {
+    const { isLoaded } = useGoogleMaps();
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const mapRef = useRef<google.maps.Map | null>(null);
+
+    useEffect(() => {
+        if (!isLoaded || !containerRef.current || mapRef.current) return;
+        const map = new google.maps.Map(containerRef.current, {
+            center: { lat: 41.9, lng: 12.5 },
+            zoom: 6,
+            disableDefaultUI: true,
+            zoomControl: true,
+            clickableIcons: false,
+            styles: stylesFor('day'),
+        });
+        mapRef.current = map;
+
+        const bounds = new google.maps.LatLngBounds();
+        const marker = (lat: number, lng: number, color: string, title: string, scale = 8) => {
+            new google.maps.Marker({
+                position: { lat, lng }, map, title,
+                icon: { path: google.maps.SymbolPath.CIRCLE, scale, fillColor: color, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 3 },
+            });
+            bounds.extend({ lat, lng });
+        };
+
+        const hasO = rec.origen_lat != null && rec.origen_lng != null;
+        const hasD = rec.destino_lat != null && rec.destino_lng != null;
+        if (hasO) marker(rec.origen_lat!, rec.origen_lng!, '#16A34A', `Origen: ${rec.origen ?? ''}`);
+        if (hasD) marker(rec.destino_lat!, rec.destino_lng!, '#1a1a1c', `Destino: ${rec.destino ?? ''}`);
+        if (hasO && hasD) {
+            new google.maps.Polyline({
+                path: [{ lat: rec.origen_lat!, lng: rec.origen_lng! }, { lat: rec.destino_lat!, lng: rec.destino_lng! }],
+                map, geodesic: true, strokeColor: '#6366F1', strokeOpacity: 0.7, strokeWeight: 3,
+            });
+        }
+        if (rec.posicion) marker(rec.posicion.lat, rec.posicion.lng, '#2563EB', 'Posición actual', 9);
+
+        if (!bounds.isEmpty()) {
+            map.fitBounds(bounds, 60);
+            if (hasO && !hasD && !rec.posicion) map.setZoom(13);
+        }
+    }, [isLoaded, rec]);
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+            <div className="w-full max-w-3xl rounded-2xl overflow-hidden bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                    <div className="min-w-0">
+                        <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{rec.trabajador}</p>
+                        <p className="text-xs text-slate-400 truncate">{rec.origen || '—'} → {rec.destino || '—'}</p>
+                    </div>
+                    <button onClick={onClose} className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition shrink-0">
+                        <X size={16} />
+                    </button>
+                </div>
+                <div className="h-[420px] relative">
+                    {!GOOGLE_MAPS_KEY ? (
+                        <div className="h-full flex items-center justify-center text-sm text-slate-400 px-6 text-center">Configura NEXT_PUBLIC_GOOGLE_MAPS_API_KEY para ver el mapa.</div>
+                    ) : (rec.origen_lat == null && rec.destino_lat == null && !rec.posicion) ? (
+                        <div className="h-full flex items-center justify-center text-sm text-slate-400 px-6 text-center">Sin coordenadas: no se pudo geocodificar el origen/destino ni hay posición GPS todavía.</div>
+                    ) : (
+                        <div ref={containerRef} className="h-full w-full" />
+                    )}
+                </div>
+                <div className="flex items-center gap-4 px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500">
+                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Origen</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-slate-900 dark:bg-white" /> Destino</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-600" /> Posición actual</span>
+                </div>
+            </div>
         </div>
     );
 }
