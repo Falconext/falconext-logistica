@@ -101,6 +101,12 @@ export class GpsController {
     }
 
     @UseGuards(JwtAuthGuard)
+    @Get('geofence-events')
+    async getGeofenceEvents(@Req() req, @Query('limit') limit?: string) {
+        return this.gpsService.getGeofenceEvents(req.user.tenantId, limit ? parseInt(limit, 10) : 20);
+    }
+
+    @UseGuards(JwtAuthGuard)
     @Patch('geofences/:id')
     async updateGeofence(@Param('id') id: string, @Body() body: any, @Req() req) {
         return this.gpsService.updateGeofence(id, req.user.tenantId, body);

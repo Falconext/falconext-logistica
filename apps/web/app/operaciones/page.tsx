@@ -196,9 +196,23 @@ export default function OperacionesPage() {
         if (el.scrollHeight - el.scrollTop - el.clientHeight < 300) loadMore();
     }, [loadMore]);
 
-    // Auto-select first route
+    // Deep-link ?op=<id> desde el Panel de Control: carga esa operación puntual
+    // (puede estar fuera de la primera página/ventana) y la selecciona.
+    const deepLinkOp = useRef<string | null>(
+        typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('op') : null
+    );
     useEffect(() => {
-        if (!selected && rutas.length > 0) setSelected(rutas[0]);
+        const op = deepLinkOp.current;
+        if (!op) return;
+        api.get(`/programacion/${op}`)
+            .then((res) => { if (res.data) setSelected(res.data); })
+            .catch((err) => console.error(err));
+    }, []);
+
+    // Auto-select primera ruta (salvo que haya un deep-link resolviéndose o ya haya selección).
+    useEffect(() => {
+        if (selected || rutas.length === 0 || deepLinkOp.current) return;
+        setSelected(rutas[0]);
     }, [rutas, selected]);
 
     const toggleEstado = (e: string) => {

@@ -323,6 +323,32 @@ export class GpsService {
         });
     }
 
+    // Últimos eventos de entrada/salida de geocercas del tenant (para el Panel de Control).
+    async getGeofenceEvents(tenantId: string, limit = 20) {
+        const events = await this.prisma.geofenceEvent.findMany({
+            where: { geofence: { tenant_id: tenantId } },
+            orderBy: { timestamp: 'desc' },
+            take: Math.min(Math.max(limit, 1), 100),
+            include: {
+                geofence: { select: { name: true } },
+                device: {
+                    select: {
+                        name: true,
+                        vehiculo: { select: { placa: true } },
+                        trabajador: { select: { nombre_completo: true } },
+                    },
+                },
+            },
+        });
+        return events.map((e) => ({
+            id: e.id,
+            event_type: e.event_type,
+            timestamp: e.timestamp,
+            geofence: e.geofence?.name || 'Geocerca',
+            label: e.device?.trabajador?.nombre_completo || e.device?.vehiculo?.placa || e.device?.name || 'Dispositivo',
+        }));
+    }
+
     async updateGeofence(id: string, tenantId: string, data: { name?: string, description?: string, latitude?: number, longitude?: number, radius?: number }) {
         // Ensure the geofence belongs to this tenant before updating
         const geofence = await this.prisma.geofence.findFirst({
