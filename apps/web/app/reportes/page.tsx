@@ -19,9 +19,11 @@ import { es } from 'date-fns/locale';
 import api from '../../lib/api'; // Correct path to API client
 import { toast } from 'sonner';
 import { useCurrency } from '../../lib/useCurrency';
+import { useT } from '../../lib/i18n';
 import CostosReport from './CostosReport';
 
 export default function ReportesPage() {
+    const t = useT();
     const { format } = useCurrency();
     const [dateRange, setDateRange] = useState<DateRangePickerValue>({
         from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
@@ -58,7 +60,7 @@ export default function ReportesPage() {
             setCharts(response.data.charts);
         } catch (error) {
             console.error('Error fetching reports:', error);
-            toast.error('Error al cargar reportes');
+            toast.error(t('reportes.toastErrorCargar'));
         } finally {
             setLoading(false);
         }
@@ -70,7 +72,7 @@ export default function ReportesPage() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2">
                 <div>
                     <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-400 bg-clip-text text-transparent">
-                        Dashboard General
+                        {t('reportes.titulo')}
                     </h1>
                 </div>
                 <div className="flex gap-2 w-full md:w-auto">
@@ -79,8 +81,8 @@ export default function ReportesPage() {
                         value={dateRange}
                         onValueChange={setDateRange}
                         locale={es}
-                        placeholder="Seleccionar rango"
-                        selectPlaceholder="Seleccionar"
+                        placeholder={t('reportes.seleccionarRango')}
+                        selectPlaceholder={t('reportes.seleccionar')}
                     />
                 </div>
             </div>
@@ -93,7 +95,7 @@ export default function ReportesPage() {
                             <Receipt size={24} />
                         </div>
                         <div>
-                            <Text>Rutas Totales</Text>
+                            <Text>{t('reportes.kpiRutasTotales')}</Text>
                             <Metric>{kpis.total_routes}</Metric>
                         </div>
                     </Flex>
@@ -104,7 +106,7 @@ export default function ReportesPage() {
                             <Users size={24} />
                         </div>
                         <div>
-                            <Text>Clientes Activos</Text>
+                            <Text>{t('reportes.kpiClientesActivos')}</Text>
                             <Metric>{kpis.active_clients}</Metric>
                         </div>
                     </Flex>
@@ -115,7 +117,7 @@ export default function ReportesPage() {
                             <Package size={24} />
                         </div>
                         <div>
-                            <Text>Entregas Exitosas</Text>
+                            <Text>{t('reportes.kpiEntregasExitosas')}</Text>
                             <Metric>{kpis.completed}</Metric>
                         </div>
                     </Flex>
@@ -126,7 +128,7 @@ export default function ReportesPage() {
                             <Calendar size={24} />
                         </div>
                         <div>
-                            <Text>Ingresos Estimados</Text>
+                            <Text>{t('reportes.kpiIngresosEstimados')}</Text>
                             <Metric>{format(kpis.income)}</Metric>
                         </div>
                     </Flex>
@@ -137,15 +139,15 @@ export default function ReportesPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Evolution Chart */}
                 <Card>
-                    <Title>Evolución de Entregas</Title>
-                    <Subtitle>Entregas realizadas vs fallidas en el periodo</Subtitle>
+                    <Title>{t('reportes.evolucionTitulo')}</Title>
+                    <Subtitle>{t('reportes.evolucionSubtitulo')}</Subtitle>
                     <AreaChart
                         className="h-72 mt-4"
                         data={charts.evolution}
                         index="date"
                         categories={["Entregas Realizadas", "Entregas Fallidas"]}
                         colors={["blue", "rose"]}
-                        valueFormatter={(number) => `${number} u`}
+                        valueFormatter={(number) => t('reportes.unidadesFormato', { n: number })}
                         yAxisWidth={40}
                         showAnimation={true}
                     />
@@ -153,8 +155,8 @@ export default function ReportesPage() {
 
                 {/* Vertical Bar Chart (Workers) */}
                 <Card>
-                    <Title>Ranking de Conductores</Title>
-                    <Subtitle>Top conductores por entregas completadas</Subtitle>
+                    <Title>{t('reportes.rankingTitulo')}</Title>
+                    <Subtitle>{t('reportes.rankingSubtitulo')}</Subtitle>
                     <BarChart
                         className="h-72 mt-4"
                         data={charts.workers}
@@ -162,7 +164,7 @@ export default function ReportesPage() {
                         categories={["Entregas"]}
                         colors={["blue"]}
                         valueFormatter={(number) => `${number}`}
-                        yAxisWidth={40}
+                        yAxisWidth={110}
                         layout="vertical"
                         showLegend={false}
                         showAnimation={true}
@@ -172,15 +174,15 @@ export default function ReportesPage() {
 
             {/* Bottom Section */}
             <Card>
-                <Title>Uso de Flota</Title>
-                <Subtitle>Vehículos con mayor actividad (Rutas asignadas)</Subtitle>
+                <Title>{t('reportes.flotaTitulo')}</Title>
+                <Subtitle>{t('reportes.flotaSubtitulo')}</Subtitle>
                 <BarChart
                     className="h-80 mt-6"
                     data={charts.vehicles}
                     index="name"
                     categories={["Viajes"]}
                     colors={["emerald"]}
-                    valueFormatter={(number) => `${number} viajes`}
+                    valueFormatter={(number) => t('reportes.viajesFormato', { n: number })}
                     yAxisWidth={60}
                     showAnimation={true}
                 />

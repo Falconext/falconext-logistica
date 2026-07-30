@@ -7,6 +7,7 @@ import api from "../lib/api";
 import { useAuthStore } from "../lib/store";
 import { canAccessModule, moduleForPath } from "../lib/modules";
 import { useCurrency } from "../lib/useCurrency";
+import { useT } from "../lib/i18n";
 
 interface DashboardStats {
     workers: { active: number; total: number; percentage: number };
@@ -34,6 +35,7 @@ export default function Home() {
     const [loading, setLoading] = useState(true);
     const { user } = useAuthStore();
     const { format } = useCurrency();
+    const t = useT();
 
     useEffect(() => {
         Promise.all([
@@ -50,15 +52,15 @@ export default function Home() {
 
     const expiredCount = alerts.filter(a => a.status === 'VENCIDO').length;
     const warningCount = alerts.filter(a => a.status === 'POR_VENCER').length;
-    const name = user?.email ? user.email.split('@')[0] : 'Usuario';
+    const name = user?.email ? user.email.split('@')[0] : t('dashboard.defaultUserName');
 
     // Solo enlazar a módulos que el usuario tenga permitidos (los admins ven todo).
     const canGo = (href: string) => canAccessModule(user, moduleForPath(href) || '');
     const accesos = [
-        { href: '/trabajadores', icon: <Users size={16} />, label: 'Personal' },
-        { href: '/vehiculos', icon: <Truck size={16} />, label: 'Flota' },
-        { href: '/mantenimiento', icon: <Wrench size={16} />, label: 'Mantenimiento' },
-        { href: '/alertas', icon: <Bell size={16} />, label: 'Alertas' },
+        { href: '/trabajadores', icon: <Users size={16} />, label: t('dashboard.accesoPersonal') },
+        { href: '/vehiculos', icon: <Truck size={16} />, label: t('dashboard.accesoFlota') },
+        { href: '/mantenimiento', icon: <Wrench size={16} />, label: t('dashboard.accesoMantenimiento') },
+        { href: '/alertas', icon: <Bell size={16} />, label: t('dashboard.accesoAlertas') },
     ].filter(a => canGo(a.href));
 
     if (loading) {
@@ -73,15 +75,15 @@ export default function Home() {
         <div className="max-w-[1400px] mx-auto animate-in fade-in duration-500">
             {/* Welcome */}
             <div className="mb-6 sm:mb-7">
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 capitalize">Bienvenido, {name}</h1>
-                <p className="text-slate-500 mt-1">La plataforma para gestionar y rastrear tu operación logística.</p>
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 capitalize">{t('dashboard.welcomeTitle', { name })}</h1>
+                <p className="text-slate-500 mt-1">{t('dashboard.subtitle')}</p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 {/* Left column */}
                 <div className="space-y-5">
                     {/* Costos del mes */}
-                    <Card icon={<DollarSign size={17} />} title="Costos del mes" href="/reportes" actionLabel="Ver reportes">
+                    <Card icon={<DollarSign size={17} />} title={t('dashboard.costsTitle')} href="/reportes" actionLabel={t('dashboard.verReportes')}>
                         <div className="flex items-baseline gap-3 flex-wrap">
                             <span className="text-3xl sm:text-4xl font-bold text-slate-900 tabular-nums">{format(stats?.costs?.total ?? 0)}</span>
                             {stats?.costs?.changePct != null && (
@@ -95,7 +97,7 @@ export default function Home() {
                                         <span className={`flex items-center gap-1 text-sm font-semibold ${cls}`}>
                                             {Icon && <Icon size={15} />}
                                             {up ? '+' : ''}{pct.toFixed(1)}%
-                                            <span className="text-slate-400 font-normal">vs mes anterior</span>
+                                            <span className="text-slate-400 font-normal">{t('dashboard.vsMesAnterior')}</span>
                                         </span>
                                     );
                                 })()
@@ -103,62 +105,62 @@ export default function Home() {
                         </div>
 
                         <div className="mt-4 space-y-2.5">
-                            <CostRow icon={<Fuel size={15} />} label="Combustible" value={format(stats?.costs?.fuel ?? 0)} />
-                            <CostRow icon={<Receipt size={15} />} label="Peajes / Multas" value={format(stats?.costs?.tolls ?? 0)} />
-                            <CostRow icon={<Wrench size={15} />} label="Mantenimiento" value={format(stats?.costs?.maintenance ?? 0)} />
+                            <CostRow icon={<Fuel size={15} />} label={t('dashboard.costFuel')} value={format(stats?.costs?.fuel ?? 0)} />
+                            <CostRow icon={<Receipt size={15} />} label={t('dashboard.costTolls')} value={format(stats?.costs?.tolls ?? 0)} />
+                            <CostRow icon={<Wrench size={15} />} label={t('dashboard.costMaintenance')} value={format(stats?.costs?.maintenance ?? 0)} />
                         </div>
 
                         {stats && stats.costs && stats.costs.income > 0 ? (
                             <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-sm">
-                                <span className="text-slate-500">Margen</span>
+                                <span className="text-slate-500">{t('dashboard.margen')}</span>
                                 <span className={`font-bold tabular-nums ${stats.costs.margin >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
                                     {format(stats.costs.margin)}
                                 </span>
                             </div>
                         ) : (
                             <p className="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-400">
-                                Sin ingresos registrados (configúralos en Operaciones)
+                                {t('dashboard.sinIngresos')}
                             </p>
                         )}
                     </Card>
 
                     {/* Operaciones (funds-like) */}
-                    <Card icon={<DollarSign size={17} />} title="Operaciones del mes" href={canGo('/operaciones') ? '/operaciones' : undefined} actionLabel="Ver detalles">
+                    <Card icon={<DollarSign size={17} />} title={t('dashboard.operacionesTitle')} href={canGo('/operaciones') ? '/operaciones' : undefined} actionLabel={t('dashboard.verDetalles')}>
                         <div className="space-y-2.5">
-                            <Row label="Entregas completadas" value={`${stats?.deliveries?.completed ?? 0}`} />
-                            <Row label="Entregas pendientes" value={`${stats?.deliveries?.pending ?? 0}`} />
+                            <Row label={t('dashboard.entregasCompletadas')} value={`${stats?.deliveries?.completed ?? 0}`} />
+                            <Row label={t('dashboard.entregasPendientes')} value={`${stats?.deliveries?.pending ?? 0}`} />
                         </div>
                         <div className="mt-4 flex items-baseline gap-2">
                             <span className="text-3xl font-bold text-emerald-500 tabular-nums">{stats?.deliveries?.successRate ?? 0}%</span>
-                            <span className="text-sm text-slate-400">tasa de éxito</span>
+                            <span className="text-sm text-slate-400">{t('dashboard.tasaExito')}</span>
                         </div>
                     </Card>
 
                     {/* Personal & Flota */}
-                    <Card icon={<Users size={17} />} title="Personal y flota" href={canGo('/trabajadores') ? '/trabajadores' : undefined} actionLabel="Ver detalles">
+                    <Card icon={<Users size={17} />} title={t('dashboard.personalFlotaTitle')} href={canGo('/trabajadores') ? '/trabajadores' : undefined} actionLabel={t('dashboard.verDetalles')}>
                         <div className="grid grid-cols-2 gap-4">
-                            <MiniStat icon={<Users size={15} />} label="Personal activo" value={`${stats?.workers.active ?? 0}`} sub={`de ${stats?.workers.total ?? 0}`} pct={stats?.workers.percentage} />
-                            <MiniStat icon={<Truck size={15} />} label="Flota operativa" value={`${stats?.vehicles.active ?? 0}`} sub={`de ${stats?.vehicles.total ?? 0}`} pct={stats?.vehicles.percentage} />
+                            <MiniStat icon={<Users size={15} />} label={t('dashboard.personalActivo')} value={`${stats?.workers.active ?? 0}`} sub={t('dashboard.deTotal', { total: stats?.workers.total ?? 0 })} pct={stats?.workers.percentage} />
+                            <MiniStat icon={<Truck size={15} />} label={t('dashboard.flotaOperativa')} value={`${stats?.vehicles.active ?? 0}`} sub={t('dashboard.deTotal', { total: stats?.vehicles.total ?? 0 })} pct={stats?.vehicles.percentage} />
                         </div>
                     </Card>
 
                     {/* Mantenimiento + rutas quick row */}
                     <div className="grid grid-cols-2 gap-5">
-                        <QuickCard icon={<Wrench size={16} />} label="Mant. este mes" value={stats?.maintenance.thisMonth ?? 0} href={canGo('/mantenimiento') ? '/mantenimiento' : undefined} />
-                        <QuickCard icon={<Map size={16} />} label="Rutas hoy" value={stats?.routes.today ?? 0} href={canGo('/operaciones') ? '/operaciones' : undefined} />
+                        <QuickCard icon={<Wrench size={16} />} label={t('dashboard.mantEsteMes')} value={stats?.maintenance.thisMonth ?? 0} href={canGo('/mantenimiento') ? '/mantenimiento' : undefined} />
+                        <QuickCard icon={<Map size={16} />} label={t('dashboard.rutasHoy')} value={stats?.routes.today ?? 0} href={canGo('/operaciones') ? '/operaciones' : undefined} />
                     </div>
                 </div>
 
                 {/* Right column */}
                 <div className="space-y-5">
                     {/* Alerts */}
-                    <Card icon={<Bell size={17} />} title="Próximos vencimientos" href={canGo('/alertas') ? '/alertas' : undefined} actionLabel="Ver todos" badge={expiredCount > 0 ? `${expiredCount} vencidos` : undefined}>
+                    <Card icon={<Bell size={17} />} title={t('dashboard.vencimientosTitle')} href={canGo('/alertas') ? '/alertas' : undefined} actionLabel={t('dashboard.verTodos')} badge={expiredCount > 0 ? t('dashboard.badgeVencidos', { count: expiredCount }) : undefined}>
                         {alerts.length === 0 ? (
                             <div className="text-center py-8">
                                 <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-emerald-50 mb-3">
                                     <TrendingUp className="text-emerald-500" size={20} />
                                 </div>
-                                <p className="text-sm text-slate-500">¡Todo en orden! No hay alertas pendientes.</p>
+                                <p className="text-sm text-slate-500">{t('dashboard.allOk')}</p>
                             </div>
                         ) : (
                             <div className="divide-y divide-slate-100 -mx-1 max-h-[320px] overflow-y-auto">
@@ -171,7 +173,7 @@ export default function Home() {
                                             <div className="flex justify-between items-center gap-2">
                                                 <h4 className="text-sm font-medium text-slate-900 truncate">{alert.entity}</h4>
                                                 <Badge tone={alert.status === 'VENCIDO' ? 'red' : 'amber'}>
-                                                    {alert.daysRemaining < 0 ? `Vencido ${Math.abs(alert.daysRemaining)}d` : `${alert.daysRemaining}d`}
+                                                    {alert.daysRemaining < 0 ? t('dashboard.vencidoDias', { days: Math.abs(alert.daysRemaining) }) : t('dashboard.diasRestantes', { days: alert.daysRemaining })}
                                                 </Badge>
                                             </div>
                                             <p className="text-xs text-slate-400 truncate mt-0.5">{alert.docName}</p>
@@ -184,7 +186,7 @@ export default function Home() {
 
                     {/* Quick access — solo módulos permitidos */}
                     {accesos.length > 0 && (
-                        <Card icon={<Activity size={17} />} title="Accesos rápidos">
+                        <Card icon={<Activity size={17} />} title={t('dashboard.accesosRapidosTitle')}>
                             <div className="grid grid-cols-2 gap-2.5">
                                 {accesos.map((a) => (
                                     <AccessLink key={a.href} href={a.href} icon={a.icon} label={a.label} />

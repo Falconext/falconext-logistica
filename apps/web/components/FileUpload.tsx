@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import api from '../lib/api';
 import { UploadCloud, Loader2, X, FileText } from 'lucide-react';
+import { useT } from '../lib/i18n';
 
 interface FileUploadProps {
   value?: string | null;            // URL actual (si ya hay archivo)
@@ -23,11 +24,13 @@ export default function FileUpload({
   value,
   onChange,
   onClear,
-  label = 'Subir archivo',
+  label,
   accept = 'image/*',
   variant = 'wide',
   placeholder,
 }: FileUploadProps) {
+  const t = useT();
+  const resolvedLabel = label ?? t('componentes.fileUpload.subirArchivo');
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
@@ -37,7 +40,7 @@ export default function FileUpload({
   const handleFile = async (file: File) => {
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
-      setError('El archivo supera 5MB');
+      setError(t('componentes.fileUpload.errorTamano'));
       return;
     }
     setError('');
@@ -50,7 +53,7 @@ export default function FileUpload({
       });
       onChange(res.data.url);
     } catch (e: any) {
-      setError(e?.response?.data?.message || 'Error al subir el archivo');
+      setError(e?.response?.data?.message || t('componentes.fileUpload.errorSubir'));
     } finally {
       setUploading(false);
     }
@@ -74,7 +77,7 @@ export default function FileUpload({
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={value || placeholder}
-              alt="foto"
+              alt={t('componentes.fileUpload.altFoto')}
               className="w-full h-full object-cover"
               onError={(e) => {
                 if (placeholder && e.currentTarget.dataset.fallback !== 'true') {
@@ -93,11 +96,11 @@ export default function FileUpload({
             onClick={() => inputRef.current?.click()}
             className="text-sm font-medium text-blue-600 hover:text-blue-700"
           >
-            {value ? 'Cambiar foto' : label}
+            {value ? t('componentes.fileUpload.cambiarFoto') : resolvedLabel}
           </button>
           {value && onClear && (
             <button type="button" onClick={onClear} className="block text-xs text-red-500 mt-1">
-              Quitar
+              {t('componentes.fileUpload.quitar')}
             </button>
           )}
           {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
@@ -115,17 +118,17 @@ export default function FileUpload({
             <FileText className="text-slate-500" size={20} />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={value} alt="archivo" className="w-12 h-12 rounded-lg object-cover" />
+            <img src={value} alt={t('componentes.fileUpload.altArchivo')} className="w-12 h-12 rounded-lg object-cover" />
           )}
           <a href={value} target="_blank" rel="noreferrer" className="flex-1 text-sm text-blue-600 truncate">
-            Ver archivo
+            {t('componentes.fileUpload.verArchivo')}
           </a>
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
             className="text-sm text-slate-600 hover:text-slate-900"
           >
-            Cambiar
+            {t('componentes.fileUpload.cambiar')}
           </button>
           {onClear && (
             <button type="button" onClick={onClear} className="text-slate-400 hover:text-red-500">
@@ -141,8 +144,8 @@ export default function FileUpload({
           className="w-full flex flex-col items-center justify-center gap-2 py-6 rounded-xl border-2 border-dashed border-slate-300 hover:border-blue-400 text-slate-500 hover:text-blue-600 transition"
         >
           {uploading ? <Loader2 className="animate-spin" size={22} /> : <UploadCloud size={22} />}
-          <span className="text-sm font-medium">{uploading ? 'Subiendo...' : label}</span>
-          <span className="text-xs text-slate-400">Imagen o PDF · máx 5MB</span>
+          <span className="text-sm font-medium">{uploading ? t('componentes.fileUpload.subiendo') : resolvedLabel}</span>
+          <span className="text-xs text-slate-400">{t('componentes.fileUpload.imagenOPdf')}</span>
         </button>
       )}
       {error && <p className="text-xs text-red-500 mt-1">{error}</p>}

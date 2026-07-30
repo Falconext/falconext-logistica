@@ -5,6 +5,7 @@ import { MapboxHistoryMap as HistoryMap } from '../../../../components/tracking/
 import { ArrowLeft } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import api from '../../../../lib/api';
+import { useT } from '../../../../lib/i18n';
 
 interface DeviceDetail {
     id: string;
@@ -15,6 +16,7 @@ interface DeviceDetail {
 }
 
 export default function HistoryPage() {
+    const t = useT();
     const params = useParams();
     const router = useRouter();
     const deviceId = params.id as string;
@@ -42,10 +44,10 @@ export default function HistoryPage() {
                     </button>
                     <div className="min-w-0">
                         <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                            Historial de Ruta
+                            {t('dispositivos.historial.titulo')}
                         </h1>
                         <p className="text-sm text-slate-500 truncate">
-                            {device ? `${device.name} ${device.vehiculo ? `(${device.vehiculo.placa})` : ''}` : 'Cargando dispositivo...'}
+                            {device ? `${device.name} ${device.vehiculo ? `(${device.vehiculo.placa})` : ''}` : t('dispositivos.historial.cargandoDispositivo')}
                         </p>
                     </div>
                 </div>

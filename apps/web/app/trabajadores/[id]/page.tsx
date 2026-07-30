@@ -13,6 +13,7 @@ import { useAuthStore } from '../../../lib/store';
 import { isAdmin } from '../../../lib/modules';
 import DocumentosPanel from '../../../components/DocumentosPanel';
 import { TRABAJADOR_DOCS } from '../../../components/documentTypes';
+import { useT } from '../../../lib/i18n';
 
 interface WorkerLocation {
     device: { id: string; name: string; last_activity: string | null; vehiculo_placa: string | null } | null;
@@ -27,17 +28,18 @@ interface HistorialData {
 
 const ITEMS_PER_PAGE = 15;
 
-function timeAgo(ts: string): string {
+function timeAgo(ts: string, t: ReturnType<typeof useT>): string {
     const diff = Date.now() - new Date(ts).getTime();
     const min = Math.floor(diff / 60000);
-    if (min < 1) return 'ahora';
-    if (min < 60) return `hace ${min} min`;
+    if (min < 1) return t('trabajadores.detalle.haceAhora');
+    if (min < 60) return t('trabajadores.detalle.haceMin', { min });
     const h = Math.floor(min / 60);
-    if (h < 24) return `hace ${h} h`;
-    return `hace ${Math.floor(h / 24)} d`;
+    if (h < 24) return t('trabajadores.detalle.haceHoras', { h });
+    return t('trabajadores.detalle.haceDias', { d: Math.floor(h / 24) });
 }
 
 export default function TrabajadorDetailsPage() {
+    const t = useT();
     const params = useParams();
     const id = params.id as string;
     const { format } = useCurrency();
@@ -127,11 +129,10 @@ export default function TrabajadorDetailsPage() {
     };
 
     const formatMonthLabel = (key: string) => {
-        if (key === 'sin-fecha') return 'Sin Fecha';
+        if (key === 'sin-fecha') return t('trabajadores.detalle.sinFecha');
         const [year, month] = key.split('-');
-        const monthNames = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
-            'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
-        return `${monthNames[parseInt(month) - 1]} ${year}`;
+        const monthIdx = parseInt(month) - 1;
+        return `${t(`trabajadores.detalle.meses.${monthIdx}`)} ${year}`;
     };
 
     // Group data by month
@@ -159,20 +160,20 @@ export default function TrabajadorDetailsPage() {
     );
 
     const checkExpiration = (dateStr: string | null) => {
-        if (!dateStr) return { status: 'MISSING', label: 'No Registrado', color: 'text-slate-400 bg-slate-100 dark:bg-slate-800' };
+        if (!dateStr) return { status: 'MISSING', label: t('trabajadores.detalle.estadoNoRegistrado'), color: 'text-slate-400 bg-slate-100 dark:bg-slate-800' };
         const date = new Date(dateStr);
         const today = new Date();
         const thirtyDays = new Date();
         thirtyDays.setDate(today.getDate() + 30);
-        if (date < today) return { status: 'EXPIRED', label: 'Vencido', color: 'text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400' };
-        if (date < thirtyDays) return { status: 'WARNING', label: 'Por Vencer', color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-400' };
-        return { status: 'OK', label: 'Vigente', color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-400' };
+        if (date < today) return { status: 'EXPIRED', label: t('trabajadores.detalle.estadoVencido'), color: 'text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400' };
+        if (date < thirtyDays) return { status: 'WARNING', label: t('trabajadores.detalle.estadoPorVencer'), color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-400' };
+        return { status: 'OK', label: t('trabajadores.detalle.estadoVigente'), color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-400' };
     };
 
     if (loading) {
         return (
             <div className="flex h-[50vh] items-center justify-center">
-                <div className="text-slate-500 animate-pulse">Cargando perfil del conductor...</div>
+                <div className="text-slate-500 animate-pulse">{t('trabajadores.detalle.cargandoPerfil')}</div>
             </div>
         );
     }
@@ -180,17 +181,17 @@ export default function TrabajadorDetailsPage() {
     if (!worker) {
         return (
             <div className="text-center py-12">
-                <h2 className="text-xl font-bold text-slate-700 dark:text-slate-300">Conductor no encontrado</h2>
-                <Link href="/trabajadores" className="text-blue-600 hover:underline mt-2 inline-block">Volver a la lista</Link>
+                <h2 className="text-xl font-bold text-slate-700 dark:text-slate-300">{t('trabajadores.detalle.noEncontrado')}</h2>
+                <Link href="/trabajadores" className="text-blue-600 hover:underline mt-2 inline-block">{t('trabajadores.detalle.volverLista')}</Link>
             </div>
         );
     }
 
     const tabs = [
-        { id: 'documentos', label: 'Documentos', icon: FolderArchive, count: null as number | null },
-        { id: 'rutas', label: 'Rutas', icon: Truck, count: historial.rutas?.length || 0 },
-        { id: 'peajes', label: 'Peajes / Multas', icon: Receipt, count: historial.peajes?.length || 0 },
-        { id: 'combustible', label: 'Combustible', icon: Fuel, count: historial.combustible?.length || 0 },
+        { id: 'documentos', label: t('trabajadores.detalle.tabDocumentos'), icon: FolderArchive, count: null as number | null },
+        { id: 'rutas', label: t('trabajadores.detalle.tabRutas'), icon: Truck, count: historial.rutas?.length || 0 },
+        { id: 'peajes', label: t('trabajadores.detalle.tabPeajes'), icon: Receipt, count: historial.peajes?.length || 0 },
+        { id: 'combustible', label: t('trabajadores.detalle.tabCombustible'), icon: Fuel, count: historial.combustible?.length || 0 },
     ];
 
     return (
@@ -250,7 +251,7 @@ export default function TrabajadorDetailsPage() {
                     {admin && (
                         <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
                             <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
-                                <KeyRound size={14} className="text-amber-500" /> Acceso a la app
+                                <KeyRound size={14} className="text-amber-500" /> {t('trabajadores.detalle.accesoApp')}
                             </h3>
                             {linkedUser ? (
                                 <div className="text-xs space-y-2">
@@ -258,23 +259,23 @@ export default function TrabajadorDetailsPage() {
                                         <Mail size={12} className="text-slate-400" /> {linkedUser.email}
                                     </div>
                                     <div className="text-slate-500">
-                                        Rol: {linkedUser.rol?.nombre || ((linkedUser.role || '').toUpperCase() === 'SUPERADMIN' ? 'Super Admin' : '—')}
+                                        {t('trabajadores.detalle.rolLabel')} {linkedUser.rol?.nombre || ((linkedUser.role || '').toUpperCase() === 'SUPERADMIN' ? t('trabajadores.detalle.superAdmin') : t('trabajadores.detalle.sinRol'))}
                                     </div>
                                     <button
                                         onClick={() => { setAccessPreset(linkedUser); setShowAccessModal(true); }}
                                         className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-medium transition"
                                     >
-                                        <KeyRound size={14} /> Gestionar acceso
+                                        <KeyRound size={14} /> {t('trabajadores.detalle.gestionarAcceso')}
                                     </button>
                                 </div>
                             ) : (
                                 <div className="text-xs space-y-2">
-                                    <p className="text-slate-500">Este trabajador no tiene cuenta para iniciar sesión.</p>
+                                    <p className="text-slate-500">{t('trabajadores.detalle.sinCuenta')}</p>
                                     <button
                                         onClick={() => { setAccessPreset({ nombre: worker.nombre_completo, trabajador_id: id } as unknown as Usuario); setShowAccessModal(true); }}
                                         className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:hover:bg-amber-900/40 text-amber-700 dark:text-amber-400 text-sm font-medium transition"
                                     >
-                                        <KeyRound size={14} /> Dar acceso a la app
+                                        <KeyRound size={14} /> {t('trabajadores.detalle.darAcceso')}
                                     </button>
                                 </div>
                             )}
@@ -284,15 +285,15 @@ export default function TrabajadorDetailsPage() {
                     {/* Ubicación en vivo */}
                     <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
                         <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
-                            <Navigation size={14} className="text-emerald-500" /> Ubicación
+                            <Navigation size={14} className="text-emerald-500" /> {t('trabajadores.detalle.ubicacionTitulo')}
                         </h3>
                         {location === null ? (
-                            <p className="text-xs text-slate-400">Cargando…</p>
+                            <p className="text-xs text-slate-400">{t('trabajadores.detalle.cargandoUbicacion')}</p>
                         ) : !location.device ? (
                             <div className="text-xs text-slate-500 space-y-2">
-                                <p>Este trabajador no tiene un dispositivo asignado.</p>
+                                <p>{t('trabajadores.detalle.sinDispositivo')}</p>
                                 <Link href="/dispositivos" className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 font-medium hover:underline">
-                                    Asignar dispositivo →
+                                    {t('trabajadores.detalle.asignarDispositivo')}
                                 </Link>
                             </div>
                         ) : !location.position ? (
@@ -300,7 +301,7 @@ export default function TrabajadorDetailsPage() {
                                 <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300 font-medium">
                                     <Radio size={12} className="text-slate-400" /> {location.device.name}
                                 </div>
-                                <p>Sin señal GPS todavía. Se mostrará cuando el dispositivo envíe su ubicación.</p>
+                                <p>{t('trabajadores.detalle.sinSenal')}</p>
                             </div>
                         ) : (() => {
                             const online = Date.now() - new Date(location.position.timestamp).getTime() < 5 * 60 * 1000;
@@ -309,9 +310,9 @@ export default function TrabajadorDetailsPage() {
                                     <div className="flex items-center gap-2 text-xs">
                                         <span className={clsx('w-2 h-2 rounded-full', online ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600')} />
                                         <span className={clsx('font-semibold', online ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500')}>
-                                            {online ? 'En línea' : 'Desconectado'}
+                                            {online ? t('trabajadores.detalle.enLinea') : t('trabajadores.detalle.desconectado')}
                                         </span>
-                                        <span className="text-slate-400">· {timeAgo(location.position.timestamp)}</span>
+                                        <span className="text-slate-400">· {timeAgo(location.position.timestamp, t)}</span>
                                     </div>
                                     <div className="text-xs text-slate-500 space-y-1">
                                         <div className="flex items-center gap-2">
@@ -327,7 +328,7 @@ export default function TrabajadorDetailsPage() {
                                         onClick={() => setShowLocationMap(true)}
                                         className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 text-sm font-medium transition"
                                     >
-                                        <Navigation size={15} /> Ver en mapa
+                                        <Navigation size={15} /> {t('trabajadores.detalle.verEnMapa')}
                                     </button>
                                 </div>
                             );
@@ -337,13 +338,13 @@ export default function TrabajadorDetailsPage() {
                     {/* Documents */}
                     <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
                         <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
-                            <FileText size={14} className="text-blue-500" /> Documentación
+                            <FileText size={14} className="text-blue-500" /> {t('trabajadores.detalle.documentacionTitulo')}
                         </h3>
                         <div className="space-y-2">
                             {[
-                                { label: 'Licencia', date: worker.fecha_vencimiento_licencia },
-                                { label: 'Pasaporte', date: worker.fecha_vencimiento_pasaporte },
-                                { label: 'Residencia', date: worker.fecha_vencimiento_residencia },
+                                { label: t('trabajadores.detalle.docLicencia'), date: worker.fecha_vencimiento_licencia },
+                                { label: t('trabajadores.detalle.docPasaporte'), date: worker.fecha_vencimiento_pasaporte },
+                                { label: t('trabajadores.detalle.docResidencia'), date: worker.fecha_vencimiento_residencia },
                             ].map((doc) => {
                                 const status = checkExpiration(doc.date);
                                 return (
@@ -362,7 +363,7 @@ export default function TrabajadorDetailsPage() {
                         activeTab === 'documentos' && 'hidden'
                     )}>
                         <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
-                            <Calendar size={14} className="text-purple-500" /> Navegación
+                            <Calendar size={14} className="text-purple-500" /> {t('trabajadores.detalle.navegacionTitulo')}
                         </h3>
                         <div className="space-y-1">
                             <button
@@ -374,7 +375,7 @@ export default function TrabajadorDetailsPage() {
                                         : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
                                 )}
                             >
-                                <span>Todos los registros</span>
+                                <span>{t('trabajadores.detalle.todosRegistros')}</span>
                                 <span className="text-xs bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded-full">{currentData.length}</span>
                             </button>
                             {monthGroups.map(([month, count]) => (
@@ -432,7 +433,7 @@ export default function TrabajadorDetailsPage() {
                         <div className="px-6 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30 flex-shrink-0">
                             <div className="flex items-center justify-between">
                                 <span className="text-sm text-slate-500">
-                                    Mostrando {paginatedData.length} de {filteredData.length} registros
+                                    {t('trabajadores.detalle.mostrandoRegistros', { mostrados: paginatedData.length, total: filteredData.length })}
                                     {selectedMonth !== 'all' && ` • ${formatMonthLabel(selectedMonth)}`}
                                 </span>
                             </div>
@@ -451,16 +452,16 @@ export default function TrabajadorDetailsPage() {
                             <table className="w-full text-left text-sm text-slate-600 dark:text-slate-400">
                                 <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800 text-xs uppercase font-semibold text-slate-500 dark:text-slate-400 sticky top-0">
                                     <tr>
-                                        <th className="px-6 py-3">Fecha</th>
-                                        <th className="px-6 py-3">Vehículo</th>
-                                        <th className="px-6 py-3">Cliente</th>
-                                        <th className="px-6 py-3">Destino</th>
-                                        <th className="px-6 py-3">Estado</th>
+                                        <th className="px-6 py-3">{t('trabajadores.detalle.colFecha')}</th>
+                                        <th className="px-6 py-3">{t('trabajadores.detalle.colVehiculo')}</th>
+                                        <th className="px-6 py-3">{t('trabajadores.detalle.colCliente')}</th>
+                                        <th className="px-6 py-3">{t('trabajadores.detalle.colDestino')}</th>
+                                        <th className="px-6 py-3">{t('trabajadores.detalle.colEstado')}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                                     {paginatedData.length === 0 ? (
-                                        <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-500">No hay registros.</td></tr>
+                                        <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-500">{t('trabajadores.detalle.sinRegistros')}</td></tr>
                                     ) : (
                                         paginatedData.map((route: any) => (
                                             <tr key={route.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
@@ -497,16 +498,16 @@ export default function TrabajadorDetailsPage() {
                             <table className="w-full text-left text-sm text-slate-600 dark:text-slate-400">
                                 <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800 text-xs uppercase font-semibold text-slate-500 dark:text-slate-400 sticky top-0">
                                     <tr>
-                                        <th className="px-6 py-3">Fecha</th>
-                                        <th className="px-6 py-3">Vehículo</th>
-                                        <th className="px-6 py-3">Monto</th>
-                                        <th className="px-6 py-3">Mes</th>
-                                        <th className="px-6 py-3">Estado</th>
+                                        <th className="px-6 py-3">{t('trabajadores.detalle.colFecha')}</th>
+                                        <th className="px-6 py-3">{t('trabajadores.detalle.colVehiculo')}</th>
+                                        <th className="px-6 py-3">{t('trabajadores.detalle.colMonto')}</th>
+                                        <th className="px-6 py-3">{t('trabajadores.detalle.colMes')}</th>
+                                        <th className="px-6 py-3">{t('trabajadores.detalle.colEstado')}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                                     {paginatedData.length === 0 ? (
-                                        <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-500">No hay registros.</td></tr>
+                                        <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-500">{t('trabajadores.detalle.sinRegistros')}</td></tr>
                                     ) : (
                                         paginatedData.map((peaje: any) => (
                                             <tr key={peaje.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
@@ -544,16 +545,16 @@ export default function TrabajadorDetailsPage() {
                             <table className="w-full text-left text-sm text-slate-600 dark:text-slate-400">
                                 <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800 text-xs uppercase font-semibold text-slate-500 dark:text-slate-400 sticky top-0">
                                     <tr>
-                                        <th className="px-6 py-3">Fecha</th>
-                                        <th className="px-6 py-3">Vehículo</th>
-                                        <th className="px-6 py-3">Monto</th>
-                                        <th className="px-6 py-3">Método</th>
-                                        <th className="px-6 py-3">Área</th>
+                                        <th className="px-6 py-3">{t('trabajadores.detalle.colFecha')}</th>
+                                        <th className="px-6 py-3">{t('trabajadores.detalle.colVehiculo')}</th>
+                                        <th className="px-6 py-3">{t('trabajadores.detalle.colMonto')}</th>
+                                        <th className="px-6 py-3">{t('trabajadores.detalle.colMetodo')}</th>
+                                        <th className="px-6 py-3">{t('trabajadores.detalle.colArea')}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                                     {paginatedData.length === 0 ? (
-                                        <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-500">No hay registros.</td></tr>
+                                        <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-500">{t('trabajadores.detalle.sinRegistros')}</td></tr>
                                     ) : (
                                         paginatedData.map((fuel: any) => (
                                             <tr key={fuel.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
@@ -594,7 +595,7 @@ export default function TrabajadorDetailsPage() {
                                 <ChevronLeft size={18} />
                             </button>
                             <span className="text-sm text-slate-600 dark:text-slate-400 px-4">
-                                Página {currentPage} de {totalPages}
+                                {t('trabajadores.detalle.paginaXdeY', { actual: currentPage, total: totalPages })}
                             </span>
                             <button
                                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
@@ -616,7 +617,7 @@ export default function TrabajadorDetailsPage() {
                             <div>
                                 <h2 className="font-bold text-lg dark:text-white flex items-center gap-2">
                                     <Navigation size={18} className="text-emerald-500" />
-                                    Ubicación en vivo: {worker.nombre_completo}
+                                    {t('trabajadores.detalle.ubicacionEnVivoTitulo', { nombre: worker.nombre_completo })}
                                 </h2>
                                 <p className="text-xs text-slate-500">
                                     {location.device.name}

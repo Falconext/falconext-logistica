@@ -10,6 +10,10 @@ import { toast } from 'sonner';
 import clsx from 'clsx';
 import api from '../../lib/api';
 import { PanelLiveMap } from '../../components/tracking/PanelLiveMap';
+import { useT, useDateLocale } from '../../lib/i18n';
+
+/** Firma de la función de traducción, para pasarla a helpers fuera del componente. */
+type TFunc = (key: string, vars?: Record<string, string | number>) => string;
 
 /* ---------- Tipos del endpoint /panel/status ---------- */
 interface Trabajador {
@@ -50,17 +54,17 @@ interface GeoEvent { id: string; event_type: string; timestamp: string; geofence
 const soloPlaca = (raw?: string | null) => (raw || '').trim().split(/\s+/)[0] || '—';
 
 // Minutos restantes → texto humano. Negativo = atrasado.
-function fmtRestante(min: number | null): { text: string; tone: 'late' | 'soon' | 'ok' | 'none' } {
-    if (min == null) return { text: 'Sin fecha', tone: 'none' };
+function fmtRestante(min: number | null, t: TFunc): { text: string; tone: 'late' | 'soon' | 'ok' | 'none' } {
+    if (min == null) return { text: t('panel.tiempo.sinFecha'), tone: 'none' };
     const late = min < 0;
     const abs = Math.abs(min);
     const d = Math.floor(abs / 1440);
     const h = Math.floor((abs % 1440) / 60);
     const m = abs % 60;
-    const parts = d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
-    if (late) return { text: `Atrasado ${parts}`, tone: 'late' };
-    if (min <= 120) return { text: `En ${parts}`, tone: 'soon' };
-    return { text: `En ${parts}`, tone: 'ok' };
+    const parts = d > 0 ? t('panel.tiempo.diasHoras', { d, h }) : h > 0 ? t('panel.tiempo.horasMin', { h, m }) : t('panel.tiempo.min', { m });
+    if (late) return { text: t('panel.tiempo.atrasado', { parts }), tone: 'late' };
+    if (min <= 120) return { text: t('panel.tiempo.en', { parts }), tone: 'soon' };
+    return { text: t('panel.tiempo.en', { parts }), tone: 'ok' };
 }
 
 // Recalcula minutos restantes en el cliente para que la cuenta regresiva avance sin refetch.
@@ -70,24 +74,26 @@ function restanteFrom(e: Entrega, nowMs: number): number | null {
 }
 
 // Días restantes → texto ("Vence hoy" / "en Nd" / "Vencido Nd").
-function fmtDias(d: number): string {
-    if (d < 0) return `Vencido ${Math.abs(d)}d`;
-    if (d === 0) return 'Vence hoy';
-    return `en ${d}d`;
+function fmtDias(d: number, t: TFunc): string {
+    if (d < 0) return t('panel.vencimientos.vencidoDias', { dias: Math.abs(d) });
+    if (d === 0) return t('panel.vencimientos.venceHoy');
+    return t('panel.vencimientos.enDias', { dias: d });
 }
 
-function timeAgo(ts: string): string {
+function timeAgo(ts: string, t: TFunc): string {
     const min = Math.floor((Date.now() - new Date(ts).getTime()) / 60000);
-    if (min < 1) return 'ahora';
-    if (min < 60) return `hace ${min} min`;
+    if (min < 1) return t('panel.tiempo.ahora');
+    if (min < 60) return t('panel.tiempo.haceMin', { min });
     const h = Math.floor(min / 60);
-    if (h < 24) return `hace ${h} h`;
-    return `hace ${Math.floor(h / 24)} d`;
+    if (h < 24) return t('panel.tiempo.haceHoras', { h });
+    return t('panel.tiempo.haceDias', { d: Math.floor(h / 24) });
 }
 
 const REFRESH_MS = 30000;
 
 export default function PanelPage() {
+    const t = useT();
+    const dateLocale = useDateLocale();
     const [data, setData] = useState<PanelStatus | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -116,14 +122,14 @@ export default function PanelPage() {
             setNow(Date.now());
         } else if (!silent) {
             console.error(statusR.reason);
-            toast.error('Error cargando el panel');
+            toast.error(t('panel.toasts.errorCargar'));
         }
         if (alertsR.status === 'fulfilled') setAlerts(alertsR.value.data ?? []);
         if (summaryR.status === 'fulfilled') setAlertSummary(summaryR.value.data ?? null);
         if (geoR.status === 'fulfilled') setGeoEvents(geoR.value.data ?? []);
         setLoading(false);
         setRefreshing(false);
-    }, []);
+    }, [t]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -158,12 +164,12 @@ export default function PanelPage() {
             await api.patch(`/panel/${kind}/${id}/disponibilidad`, { disponible: next });
         } catch (err) {
             console.error(err);
-            toast.error('No se pudo actualizar la disponibilidad');
+            toast.error(t('panel.toasts.errorDisponibilidad'));
             load(true);
         } finally {
             setBusyToggle((s) => { const n = new Set(s); n.delete(id); return n; });
         }
-    }, [load]);
+    }, [load, t]);
 
     const r = data?.resumen;
     const enConsegna = data?.entregas.enConsegna ?? [];
@@ -183,7 +189,7 @@ export default function PanelPage() {
     if (loading) {
         return (
             <div className="flex items-center justify-center h-[60vh] text-slate-400 gap-2">
-                <Loader2 className="animate-spin" size={20} /> Cargando panel...
+                <Loader2 className="animate-spin" size={20} /> {t('panel.header.cargando')}
             </div>
         );
     }
@@ -200,18 +206,18 @@ export default function PanelPage() {
                     </div>
                     <div>
                         <div className="flex items-center gap-2">
-                            <h1 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">Panel de Control</h1>
+                            <h1 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">{t('panel.header.titulo')}</h1>
                             <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/20">
                                 <span className="relative flex h-1.5 w-1.5">
                                     <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
                                     <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
                                 </span>
-                                <span className="text-[10px] font-bold tracking-wide text-emerald-600 dark:text-emerald-400">EN VIVO</span>
+                                <span className="text-[10px] font-bold tracking-wide text-emerald-600 dark:text-emerald-400">{t('panel.header.enVivo')}</span>
                             </span>
                         </div>
                         <p className="text-sm text-slate-500 dark:text-slate-400">
-                            Torre operativa · disponibilidad y entregas
-                            {lastUpdated && <span className="ml-1.5">· actualizado {lastUpdated.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>}
+                            {t('panel.header.subtitulo')}
+                            {lastUpdated && <span className="ml-1.5">{t('panel.header.actualizado', { hora: lastUpdated.toLocaleTimeString(dateLocale, { hour: '2-digit', minute: '2-digit' }) })}</span>}
                         </p>
                     </div>
                 </div>
@@ -220,17 +226,17 @@ export default function PanelPage() {
                     disabled={refreshing}
                     className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-60"
                 >
-                    <RefreshCw size={15} className={clsx(refreshing && 'animate-spin')} /> Actualizar
+                    <RefreshCw size={15} className={clsx(refreshing && 'animate-spin')} /> {t('panel.header.actualizar')}
                 </button>
             </div>
 
             {/* KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
-                <KpiCard icon={Users} label="Personal disponible" value={`${r?.personalDisponible ?? 0}/${r?.personalTotal ?? 0}`} tone="emerald" />
-                <KpiCard icon={Truck} label="Flota disponible" value={`${r?.flotaDisponible ?? 0}/${r?.flotaTotal ?? 0}`} tone="blue" />
-                <KpiCard icon={Package} label="Entregas activas" value={r?.entregasActivas ?? 0} tone="amber" />
-                <KpiCard icon={Navigation} label="En consegna" value={enConsegna.length} tone="indigo" />
-                <KpiCard icon={PauseCircle} label="In sospeso" value={enSospeso.length} tone="slate" />
+                <KpiCard icon={Users} label={t('panel.kpi.personalDisponible')} value={`${r?.personalDisponible ?? 0}/${r?.personalTotal ?? 0}`} tone="emerald" />
+                <KpiCard icon={Truck} label={t('panel.kpi.flotaDisponible')} value={`${r?.flotaDisponible ?? 0}/${r?.flotaTotal ?? 0}`} tone="blue" />
+                <KpiCard icon={Package} label={t('panel.kpi.entregasActivas')} value={r?.entregasActivas ?? 0} tone="amber" />
+                <KpiCard icon={Navigation} label={t('panel.kpi.enConsegna')} value={enConsegna.length} tone="indigo" />
+                <KpiCard icon={PauseCircle} label={t('panel.kpi.inSospeso')} value={enSospeso.length} tone="slate" />
             </div>
 
             {/* Héroe: mapa en vivo (Rastreo) + entregas activas */}
@@ -240,9 +246,9 @@ export default function PanelPage() {
                     <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
                         <div className="flex items-center gap-2">
                             <MapPin size={17} className="text-indigo-500" />
-                            <h2 className="font-bold text-slate-900 dark:text-white leading-tight">Flota en vivo</h2>
+                            <h2 className="font-bold text-slate-900 dark:text-white leading-tight">{t('panel.mapa.titulo')}</h2>
                         </div>
-                        <Link href="/rastreo" className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline">Ver rastreo →</Link>
+                        <Link href="/rastreo" className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline">{t('panel.mapa.verRastreo')}</Link>
                     </div>
                     <div className="h-[360px] sm:h-[420px]">
                         <PanelLiveMap enConsegnaPlacas={enConsegnaPlacas} />
@@ -252,29 +258,29 @@ export default function PanelPage() {
                 {/* Entregas activas con pestañas */}
                 <div className="xl:col-span-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 overflow-hidden flex flex-col">
                     <div className="flex items-center gap-1 p-1.5 border-b border-slate-100 dark:border-slate-800">
-                        <TabButton active={tab === 'consegna'} onClick={() => setTab('consegna')} icon={Navigation} label="In Consegna" count={enConsegna.length} accent="indigo" />
-                        <TabButton active={tab === 'sospeso'} onClick={() => setTab('sospeso')} icon={PauseCircle} label="In Sospeso" count={enSospeso.length} accent="amber" />
+                        <TabButton active={tab === 'consegna'} onClick={() => setTab('consegna')} icon={Navigation} label={t('panel.tabs.inConsegna')} count={enConsegna.length} accent="indigo" />
+                        <TabButton active={tab === 'sospeso'} onClick={() => setTab('sospeso')} icon={PauseCircle} label={t('panel.tabs.inSospeso')} count={enSospeso.length} accent="amber" />
                     </div>
                     <div className="flex-1 divide-y divide-slate-50 dark:divide-slate-800/60 overflow-y-auto max-h-[420px]">
                         {entregasTab.length === 0 ? (
                             <div className="py-16 flex flex-col items-center justify-center text-center gap-2 text-slate-400">
                                 <Package size={22} className="opacity-50" />
-                                <p className="text-sm">Sin entregas {tab === 'consegna' ? 'en ruta' : 'pendientes'}.</p>
+                                <p className="text-sm">{tab === 'consegna' ? t('panel.entregas.sinEntregasRuta') : t('panel.entregas.sinEntregasPendientes')}</p>
                             </div>
                         ) : entregasTab.map((e) => {
-                            const rest = fmtRestante(restanteFrom(e, now));
+                            const rest = fmtRestante(restanteFrom(e, now), t);
                             return (
-                                <Link key={e.id} href={`/operaciones?op=${e.id}`} title="Ver en Operaciones" className="px-4 py-3 flex items-center gap-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition">
+                                <Link key={e.id} href={`/operaciones?op=${e.id}`} title={t('panel.entregas.verEnOperaciones')} className="px-4 py-3 flex items-center gap-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition">
                                     <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center shrink-0">
                                         <Package size={16} />
                                     </div>
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-2">
                                             <span className="font-semibold text-slate-800 dark:text-slate-100 text-sm truncate">{soloPlaca(e.targa)}</span>
-                                            <span className="text-xs text-slate-400 truncate">{e.autista || 'Sin conductor'}</span>
+                                            <span className="text-xs text-slate-400 truncate">{e.autista || t('panel.entregas.sinConductor')}</span>
                                         </div>
                                         <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                                            {e.cliente ? `${e.cliente} · ` : ''}{e.lugar_entrega || 'Sin destino'}
+                                            {e.cliente ? `${e.cliente} · ` : ''}{e.lugar_entrega || t('panel.entregas.sinDestino')}
                                         </p>
                                     </div>
                                     <span className={clsx(
@@ -301,21 +307,21 @@ export default function PanelPage() {
                     <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
                         <div className="flex items-center gap-2 min-w-0">
                             <Bell size={17} className="text-amber-500 shrink-0" />
-                            <h2 className="font-bold text-slate-900 dark:text-white truncate">Vencimientos</h2>
+                            <h2 className="font-bold text-slate-900 dark:text-white truncate">{t('panel.vencimientos.titulo')}</h2>
                             {alertSummary && (alertSummary.critical > 0 || alertSummary.warning > 0) && (
                                 <div className="flex items-center gap-1.5 ml-1">
-                                    {alertSummary.critical > 0 && <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-500/10 dark:text-red-400">{alertSummary.critical} crít.</span>}
-                                    {alertSummary.warning > 0 && <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-400">{alertSummary.warning} próx.</span>}
+                                    {alertSummary.critical > 0 && <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-500/10 dark:text-red-400">{t('panel.vencimientos.critico', { n: alertSummary.critical })}</span>}
+                                    {alertSummary.warning > 0 && <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-400">{t('panel.vencimientos.proximo', { n: alertSummary.warning })}</span>}
                                 </div>
                             )}
                         </div>
-                        <Link href="/alertas" className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline shrink-0">Ver todas →</Link>
+                        <Link href="/alertas" className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline shrink-0">{t('panel.vencimientos.verTodas')}</Link>
                     </div>
                     <div className="divide-y divide-slate-50 dark:divide-slate-800/60 overflow-y-auto max-h-[300px]">
                         {alerts.length === 0 ? (
                             <div className="py-12 flex flex-col items-center justify-center text-center gap-2 text-slate-400">
                                 <CheckCircle2 size={22} className="opacity-50" />
-                                <p className="text-sm">Sin vencimientos en los próximos 30 días.</p>
+                                <p className="text-sm">{t('panel.vencimientos.sinVencimientos')}</p>
                             </div>
                         ) : alerts.slice(0, 8).map((a, i) => {
                             const critical = a.severity === 'critical' || a.daysRemaining < 0;
@@ -331,7 +337,7 @@ export default function PanelPage() {
                                     </div>
                                     <span className={clsx('shrink-0 px-2 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap',
                                         critical ? 'text-red-600 bg-red-50 dark:bg-red-500/10 dark:text-red-400' : 'text-amber-600 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-400')}>
-                                        {fmtDias(a.daysRemaining)}
+                                        {fmtDias(a.daysRemaining, t)}
                                     </span>
                                 </div>
                             );
@@ -344,16 +350,16 @@ export default function PanelPage() {
                     <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
                         <div className="flex items-center gap-2 min-w-0">
                             <MapPinned size={17} className="text-indigo-500 shrink-0" />
-                            <h2 className="font-bold text-slate-900 dark:text-white truncate">Actividad de geocercas</h2>
+                            <h2 className="font-bold text-slate-900 dark:text-white truncate">{t('panel.geocercas.titulo')}</h2>
                             {geoEvents.length > 0 && <span className="text-xs text-slate-400">({geoEvents.length})</span>}
                         </div>
-                        <Link href="/geocercas" className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline shrink-0">Ver geocercas →</Link>
+                        <Link href="/geocercas" className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline shrink-0">{t('panel.geocercas.verGeocercas')}</Link>
                     </div>
                     <div className="divide-y divide-slate-50 dark:divide-slate-800/60 overflow-y-auto max-h-[300px]">
                         {geoEvents.length === 0 ? (
                             <div className="py-12 flex flex-col items-center justify-center text-center gap-2 text-slate-400">
                                 <MapPinned size={22} className="opacity-50" />
-                                <p className="text-sm">Sin eventos de entrada/salida recientes.</p>
+                                <p className="text-sm">{t('panel.geocercas.sinEventos')}</p>
                             </div>
                         ) : geoEvents.map((ev) => {
                             const enter = ev.event_type === 'ENTER';
@@ -365,9 +371,9 @@ export default function PanelPage() {
                                     </div>
                                     <div className="min-w-0 flex-1">
                                         <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">
-                                            {ev.label} <span className={clsx('font-semibold', enter ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400')}>{enter ? 'entró a' : 'salió de'}</span> {ev.geofence}
+                                            {ev.label} <span className={clsx('font-semibold', enter ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400')}>{enter ? t('panel.geocercas.entroA') : t('panel.geocercas.salioDe')}</span> {ev.geofence}
                                         </p>
-                                        <p className="text-[11px] text-slate-400 truncate">{timeAgo(ev.timestamp)}</p>
+                                        <p className="text-[11px] text-slate-400 truncate">{timeAgo(ev.timestamp, t)}</p>
                                     </div>
                                 </div>
                             );
@@ -381,21 +387,21 @@ export default function PanelPage() {
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div className="flex items-center gap-2">
                         <Users size={18} className="text-slate-500" />
-                        <h2 className="font-bold text-slate-900 dark:text-white">Personal por zona</h2>
+                        <h2 className="font-bold text-slate-900 dark:text-white">{t('panel.personal.titulo')}</h2>
                     </div>
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 w-full sm:w-64">
                         <Search size={14} className="text-slate-400 shrink-0" />
                         <input
                             value={zonaQuery}
                             onChange={(e) => setZonaQuery(e.target.value)}
-                            placeholder="Buscar persona o zona"
+                            placeholder={t('panel.personal.buscarPlaceholder')}
                             className="w-full bg-transparent outline-none text-sm text-slate-900 dark:text-white placeholder:text-slate-400"
                         />
                     </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                     {zonasFiltradas.length === 0 ? (
-                        <p className="text-sm text-slate-400 py-6">Sin resultados.</p>
+                        <p className="text-sm text-slate-400 py-6">{t('panel.personal.sinResultados')}</p>
                     ) : zonasFiltradas.map((z) => (
                         <div key={z.zona} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 overflow-hidden">
                             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30">
@@ -404,7 +410,7 @@ export default function PanelPage() {
                                     <span className="font-semibold text-slate-800 dark:text-slate-100 truncate capitalize">{z.zona}</span>
                                 </div>
                                 <span className="shrink-0 text-xs font-medium text-slate-500 dark:text-slate-400">
-                                    <span className="text-emerald-600 dark:text-emerald-400 font-bold">{z.disponibles}</span>/{z.total} disp.
+                                    <span className="text-emerald-600 dark:text-emerald-400 font-bold">{z.disponibles}</span>/{z.total} {t('panel.personal.dispAbbrev')}
                                 </span>
                             </div>
                             <div className="divide-y divide-slate-50 dark:divide-slate-800/60 max-h-[420px] overflow-y-auto">
@@ -421,7 +427,7 @@ export default function PanelPage() {
             <section className="space-y-3">
                 <div className="flex items-center gap-2">
                     <Truck size={18} className="text-slate-500" />
-                    <h2 className="font-bold text-slate-900 dark:text-white">Flota</h2>
+                    <h2 className="font-bold text-slate-900 dark:text-white">{t('panel.flota.titulo')}</h2>
                     <span className="text-xs text-slate-400">({data?.flota.length ?? 0})</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -487,11 +493,12 @@ function TabButton({ active, onClick, icon: Icon, label, count, accent }: {
 function AvailabilityPill({ disponible, enOperacion, busy, onToggle }: {
     disponible: boolean; enOperacion: boolean; busy: boolean; onToggle: (next: boolean) => void;
 }) {
+    const t = useT();
     return (
         <button
             onClick={() => onToggle(!disponible)}
             disabled={busy}
-            title={enOperacion ? 'En operación activa' : disponible ? 'Marcar como no disponible' : 'Marcar como disponible'}
+            title={enOperacion ? t('panel.disponibilidad.enOperacionActiva') : disponible ? t('panel.disponibilidad.marcarNoDisponible') : t('panel.disponibilidad.marcarDisponible')}
             className={clsx(
                 'shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition disabled:opacity-60',
                 disponible
@@ -500,35 +507,37 @@ function AvailabilityPill({ disponible, enOperacion, busy, onToggle }: {
             )}
         >
             {busy ? <Loader2 size={12} className="animate-spin" /> : disponible ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
-            {disponible ? 'Disponibile' : 'Non disponibile'}
+            {disponible ? t('panel.disponibilidad.disponible') : t('panel.disponibilidad.noDisponible')}
         </button>
     );
 }
 
-function PersonRow({ t, busy, onToggle }: { t: Trabajador; busy: boolean; onToggle: (next: boolean) => void }) {
+function PersonRow({ t: trabajador, busy, onToggle }: { t: Trabajador; busy: boolean; onToggle: (next: boolean) => void }) {
+    const t = useT();
     return (
         <div className="px-4 py-2.5 flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0">
                 <img
-                    src={t.url_foto || '/default-avatar.svg'}
-                    alt={t.nombre_completo}
+                    src={trabajador.url_foto || '/default-avatar.svg'}
+                    alt={trabajador.nombre_completo}
                     className="w-full h-full object-cover"
                     onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/default-avatar.svg'; }}
                 />
             </div>
             <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{t.nombre_completo}</p>
+                <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{trabajador.nombre_completo}</p>
                 <p className="text-[11px] text-slate-400 truncate">
-                    {t.cargo || 'Conductor'}
-                    {t.enOperacion && <span className="ml-1.5 text-indigo-500 font-semibold">· en ruta</span>}
+                    {trabajador.cargo || t('panel.personal.cargoDefault')}
+                    {trabajador.enOperacion && <span className="ml-1.5 text-indigo-500 font-semibold">{t('panel.personal.enRuta')}</span>}
                 </p>
             </div>
-            <AvailabilityPill disponible={t.disponible} enOperacion={t.enOperacion} busy={busy} onToggle={onToggle} />
+            <AvailabilityPill disponible={trabajador.disponible} enOperacion={trabajador.enOperacion} busy={busy} onToggle={onToggle} />
         </div>
     );
 }
 
 function VehicleRow({ v, busy, onToggle }: { v: Vehiculo; busy: boolean; onToggle: (next: boolean) => void }) {
+    const t = useT();
     return (
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 px-3.5 py-2.5 flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0 flex items-center justify-center text-slate-400">
@@ -544,8 +553,8 @@ function VehicleRow({ v, busy, onToggle }: { v: Vehiculo; busy: boolean; onToggl
             <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{v.placa}</p>
                 <p className="text-[11px] text-slate-400 truncate">
-                    {v.marca_modelo || v.tipo_unidad || 'Vehículo'}
-                    {v.enOperacion && <span className="ml-1.5 text-indigo-500 font-semibold">· en ruta</span>}
+                    {v.marca_modelo || v.tipo_unidad || t('panel.flota.vehiculoDefault')}
+                    {v.enOperacion && <span className="ml-1.5 text-indigo-500 font-semibold">{t('panel.personal.enRuta')}</span>}
                 </p>
             </div>
             <AvailabilityPill disponible={v.disponible} enOperacion={v.enOperacion} busy={busy} onToggle={onToggle} />

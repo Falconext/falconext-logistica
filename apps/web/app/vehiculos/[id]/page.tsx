@@ -13,6 +13,7 @@ import FileUpload from '../../../components/FileUpload';
 import DocumentosPanel from '../../../components/DocumentosPanel';
 import { VEHICULO_DOCS } from '../../../components/documentTypes';
 import VehiculoModal from '../VehiculoModal';
+import { useT, useDateLocale } from '../../../lib/i18n';
 
 interface Mantenimiento {
     id: string;
@@ -25,6 +26,8 @@ interface Mantenimiento {
 }
 
 export default function VehiculoDetailPage() {
+    const t = useT();
+    const dateLocale = useDateLocale();
     const params = useParams();
     const vehiculoId = params.id as string;
 
@@ -52,9 +55,9 @@ export default function VehiculoDetailPage() {
         try {
             await api.patch(`/vehiculos/${vehiculo.id}`, { url_foto: url });
             setVehiculo({ ...vehiculo, url_foto: url });
-            toast.success('Foto actualizada');
+            toast.success(t('vehiculos.detalle.toastFotoActualizada'));
         } catch (error) {
-            toast.error('Error al guardar la foto');
+            toast.error(t('vehiculos.detalle.toastErrorFoto'));
         } finally {
             setSavingFoto(false);
         }
@@ -82,10 +85,10 @@ export default function VehiculoDetailPage() {
             setMantenimientos(prev => prev.map(m =>
                 m.id === editingMant.id ? { ...m, costo: parseFloat(editCosto) } : m
             ));
-            toast.success('Costo actualizado correctamente');
+            toast.success(t('vehiculos.detalle.toastCostoActualizado'));
             setEditingMant(null);
         } catch (error) {
-            toast.error('Error al actualizar el costo');
+            toast.error(t('vehiculos.detalle.toastErrorCosto'));
         } finally {
             setSaving(false);
         }
@@ -123,7 +126,7 @@ export default function VehiculoDetailPage() {
             <div className="flex h-[50vh] items-center justify-center">
                 <div className="flex flex-col items-center gap-3">
                     <div className="h-10 w-10 rounded-full border-4 border-purple-500/30 border-t-purple-500 animate-spin"></div>
-                    <span className="text-slate-500">Cargando vehículo...</span>
+                    <span className="text-slate-500">{t('vehiculos.detalle.cargando')}</span>
                 </div>
             </div>
         );
@@ -133,9 +136,9 @@ export default function VehiculoDetailPage() {
         return (
             <div className="text-center py-12">
                 <AlertTriangle className="mx-auto text-amber-500 mb-4" size={48} />
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white">Vehículo no encontrado</h2>
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white">{t('vehiculos.detalle.noEncontradoTitulo')}</h2>
                 <Link href="/vehiculos" className="text-blue-600 hover:underline mt-2 inline-block">
-                    ← Volver a la lista
+                    {t('vehiculos.detalle.volverALista')}
                 </Link>
             </div>
         );
@@ -176,7 +179,7 @@ export default function VehiculoDetailPage() {
                             {vehiculo.placa}
                         </h1>
                         <p className="text-slate-500 dark:text-slate-400">
-                            {vehiculo.marca_modelo || 'Sin marca/modelo'} • {vehiculo.tipo_unidad || 'Sin tipo'}
+                            {vehiculo.marca_modelo || t('vehiculos.detalle.sinMarcaModelo')} • {vehiculo.tipo_unidad || t('vehiculos.detalle.sinTipo')}
                         </p>
                     </div>
                 </div>
@@ -187,13 +190,13 @@ export default function VehiculoDetailPage() {
                             ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
                             : "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
                     )}>
-                        {vehiculo.estado_vehiculo || 'Sin estado'}
+                        {vehiculo.estado_vehiculo || t('vehiculos.detalle.sinEstado')}
                     </div>
                     <button
                         onClick={() => setEditVehiculoOpen(true)}
                         className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition"
                     >
-                        <Edit2 size={16} /> Editar
+                        <Edit2 size={16} /> {t('vehiculos.detalle.editar')}
                     </button>
                 </div>
             </div>
@@ -206,7 +209,7 @@ export default function VehiculoDetailPage() {
                             <Wrench size={20} />
                         </div>
                         <div>
-                            <p className="text-xs text-slate-500 uppercase font-bold">Mantenimientos</p>
+                            <p className="text-xs text-slate-500 uppercase font-bold">{t('vehiculos.detalle.stats.mantenimientos')}</p>
                             <p className="text-2xl font-bold text-slate-900 dark:text-white">{mantenimientos.length}</p>
                         </div>
                     </div>
@@ -217,7 +220,7 @@ export default function VehiculoDetailPage() {
                             <DollarSign size={20} />
                         </div>
                         <div>
-                            <p className="text-xs text-slate-500 uppercase font-bold">Costo Total</p>
+                            <p className="text-xs text-slate-500 uppercase font-bold">{t('vehiculos.detalle.stats.costoTotal')}</p>
                             <p className="text-2xl font-bold text-slate-900 dark:text-white">
                                 {format(totalCosto)}
                             </p>
@@ -230,7 +233,7 @@ export default function VehiculoDetailPage() {
                             <Calendar size={20} />
                         </div>
                         <div>
-                            <p className="text-xs text-slate-500 uppercase font-bold">Año</p>
+                            <p className="text-xs text-slate-500 uppercase font-bold">{t('vehiculos.detalle.stats.anio')}</p>
                             <p className="text-2xl font-bold text-slate-900 dark:text-white">
                                 {vehiculo.anio_fabricacion || '-'}
                             </p>
@@ -243,11 +246,11 @@ export default function VehiculoDetailPage() {
                             <Shield size={20} />
                         </div>
                         <div>
-                            <p className="text-xs text-slate-500 uppercase font-bold">Seguro</p>
+                            <p className="text-xs text-slate-500 uppercase font-bold">{t('vehiculos.detalle.stats.seguro')}</p>
                             <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
                                 {vehiculo.fecha_vencimiento_seguro
                                     ? new Date(vehiculo.fecha_vencimiento_seguro).toLocaleDateString()
-                                    : 'Sin fecha'}
+                                    : t('vehiculos.detalle.sinFecha')}
                             </p>
                         </div>
                     </div>
@@ -265,7 +268,7 @@ export default function VehiculoDetailPage() {
                             : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
                     )}
                 >
-                    🔧 Historial de Mantenimiento
+                    {t('vehiculos.detalle.tabs.historial')}
                 </button>
                 <button
                     onClick={() => setActiveTab('info')}
@@ -276,7 +279,7 @@ export default function VehiculoDetailPage() {
                             : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
                     )}
                 >
-                    📋 Información del Vehículo
+                    {t('vehiculos.detalle.tabs.info')}
                 </button>
                 <button
                     onClick={() => setActiveTab('documentos')}
@@ -287,7 +290,7 @@ export default function VehiculoDetailPage() {
                             : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
                     )}
                 >
-                    📎 Fotos y Documentos
+                    {t('vehiculos.detalle.tabs.documentos')}
                 </button>
             </div>
 
@@ -297,14 +300,14 @@ export default function VehiculoDetailPage() {
                     {mantenimientos.length === 0 ? (
                         <div className="text-center py-12">
                             <Wrench className="mx-auto text-slate-300 dark:text-slate-600 mb-4" size={48} />
-                            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Sin historial de mantenimiento</h3>
-                            <p className="text-slate-500 mt-1">Este vehículo no tiene registros de mantenimiento.</p>
+                            <h3 className="text-lg font-bold text-slate-900 dark:text-white">{t('vehiculos.detalle.historial.vacioTitulo')}</h3>
+                            <p className="text-slate-500 mt-1">{t('vehiculos.detalle.historial.vacioDesc')}</p>
                         </div>
                     ) : (
                         <>
                             {/* Info Banner */}
                             <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800/30 text-sm text-blue-700 dark:text-blue-300">
-                                ℹ️ Algunos costos aparecen en cero porque el Excel no incluye esa columna. Puedes editar cada registro para agregar el costo.
+                                {t('vehiculos.detalle.historial.infoBanner')}
                             </div>
 
                             {/* Table */}
@@ -312,13 +315,13 @@ export default function VehiculoDetailPage() {
                                 <table className="w-full">
                                     <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
                                         <tr>
-                                            <th className="text-left px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Fecha</th>
-                                            <th className="text-left px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tipo</th>
-                                            <th className="text-left px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Descripción</th>
-                                            <th className="text-left px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Taller</th>
-                                            <th className="text-right px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Kilometraje</th>
-                                            <th className="text-right px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Costo</th>
-                                            <th className="text-center px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Acciones</th>
+                                            <th className="text-left px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('vehiculos.detalle.historial.headers.fecha')}</th>
+                                            <th className="text-left px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('vehiculos.detalle.historial.headers.tipo')}</th>
+                                            <th className="text-left px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('vehiculos.detalle.historial.headers.descripcion')}</th>
+                                            <th className="text-left px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('vehiculos.detalle.historial.headers.taller')}</th>
+                                            <th className="text-right px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('vehiculos.detalle.historial.headers.kilometraje')}</th>
+                                            <th className="text-right px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('vehiculos.detalle.historial.headers.costo')}</th>
+                                            <th className="text-center px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('vehiculos.detalle.historial.headers.acciones')}</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -328,7 +331,7 @@ export default function VehiculoDetailPage() {
                                                 <tr key={mant.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                                                     <td className="px-6 py-4 whitespace-nowrap">
                                                         <span className="text-sm font-medium text-slate-900 dark:text-white">
-                                                            {new Date(mant.fecha).toLocaleDateString('es-ES', {
+                                                            {new Date(mant.fecha).toLocaleDateString(dateLocale, {
                                                                 day: '2-digit',
                                                                 month: 'short',
                                                                 year: 'numeric'
@@ -345,7 +348,7 @@ export default function VehiculoDetailPage() {
                                                     </td>
                                                     <td className="px-6 py-4">
                                                         <p className="text-sm text-slate-700 dark:text-slate-300 max-w-md truncate">
-                                                            {mant.descripcion || 'Sin descripción'}
+                                                            {mant.descripcion || t('vehiculos.detalle.sinDescripcion')}
                                                         </p>
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap">
@@ -355,7 +358,7 @@ export default function VehiculoDetailPage() {
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-right">
                                                         <span className="text-sm font-mono text-slate-600 dark:text-slate-300">
-                                                            {mant.kilometraje ? `${mant.kilometraje.toLocaleString()} km` : '-'}
+                                                            {mant.kilometraje ? t('vehiculos.detalle.historial.kmValue', { value: mant.kilometraje.toLocaleString() }) : '-'}
                                                         </span>
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-right">
@@ -370,7 +373,7 @@ export default function VehiculoDetailPage() {
                                                         <button
                                                             onClick={() => handleEditClick(mant)}
                                                             className="p-2 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 text-purple-600 dark:text-purple-400 transition"
-                                                            title="Editar costo"
+                                                            title={t('vehiculos.detalle.historial.editarCostoTooltip')}
                                                         >
                                                             <Edit2 size={16} />
                                                         </button>
@@ -386,7 +389,11 @@ export default function VehiculoDetailPage() {
                             {totalPages > 1 && (
                                 <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 dark:bg-slate-900/30">
                                     <p className="text-sm text-slate-500">
-                                        Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, mantenimientos.length)} de {mantenimientos.length} registros
+                                        {t('vehiculos.detalle.historial.paginacionResumen', {
+                                            desde: ((currentPage - 1) * itemsPerPage) + 1,
+                                            hasta: Math.min(currentPage * itemsPerPage, mantenimientos.length),
+                                            total: mantenimientos.length,
+                                        })}
                                     </p>
                                     <div className="flex items-center flex-wrap gap-2">
                                         <button
@@ -394,7 +401,7 @@ export default function VehiculoDetailPage() {
                                             disabled={currentPage === 1}
                                             className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-800 transition"
                                         >
-                                            Anterior
+                                            {t('vehiculos.detalle.historial.anterior')}
                                         </button>
                                         {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
                                             <button
@@ -415,7 +422,7 @@ export default function VehiculoDetailPage() {
                                             disabled={currentPage === totalPages}
                                             className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-800 transition"
                                         >
-                                            Siguiente
+                                            {t('vehiculos.detalle.historial.siguiente')}
                                         </button>
                                     </div>
                                 </div>
@@ -430,27 +437,27 @@ export default function VehiculoDetailPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-4">
                             <h3 className="font-bold text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-2">
-                                Información General
+                                {t('vehiculos.detalle.info.tituloGeneral')}
                             </h3>
                             <div className="space-y-3 text-sm">
                                 <div className="flex justify-between">
-                                    <span className="text-slate-500">Placa</span>
+                                    <span className="text-slate-500">{t('vehiculos.detalle.info.placa')}</span>
                                     <span className="font-medium text-slate-900 dark:text-white">{vehiculo.placa}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="text-slate-500">Marca/Modelo</span>
+                                    <span className="text-slate-500">{t('vehiculos.detalle.info.marcaModelo')}</span>
                                     <span className="font-medium text-slate-900 dark:text-white">{vehiculo.marca_modelo || '-'}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="text-slate-500">Año</span>
+                                    <span className="text-slate-500">{t('vehiculos.detalle.info.anio')}</span>
                                     <span className="font-medium text-slate-900 dark:text-white">{vehiculo.anio_fabricacion || '-'}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="text-slate-500">Tipo de Unidad</span>
+                                    <span className="text-slate-500">{t('vehiculos.detalle.info.tipoUnidad')}</span>
                                     <span className="font-medium text-slate-900 dark:text-white">{vehiculo.tipo_unidad || '-'}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="text-slate-500">Estado</span>
+                                    <span className="text-slate-500">{t('vehiculos.detalle.info.estado')}</span>
                                     <span className={clsx(
                                         "px-2 py-0.5 rounded text-xs font-bold",
                                         vehiculo.estado_vehiculo === 'Activo'
@@ -465,19 +472,19 @@ export default function VehiculoDetailPage() {
 
                         <div className="space-y-4">
                             <h3 className="font-bold text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-2">
-                                Documentación
+                                {t('vehiculos.detalle.info.tituloDocumentacion')}
                             </h3>
                             <div className="space-y-3 text-sm">
                                 <div className="flex justify-between">
-                                    <span className="text-slate-500">Tarjeta Circulación</span>
+                                    <span className="text-slate-500">{t('vehiculos.detalle.info.tarjetaCirculacion')}</span>
                                     <span className="font-medium text-slate-900 dark:text-white">{vehiculo.tarjeta_circulacion || '-'}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="text-slate-500">Póliza de Seguro</span>
+                                    <span className="text-slate-500">{t('vehiculos.detalle.info.polizaSeguro')}</span>
                                     <span className="font-medium text-slate-900 dark:text-white">{vehiculo.poliza_seguro || '-'}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="text-slate-500">Venc. Seguro</span>
+                                    <span className="text-slate-500">{t('vehiculos.detalle.info.vencSeguro')}</span>
                                     <span className={clsx(
                                         "font-medium",
                                         vehiculo.fecha_vencimiento_seguro && new Date(vehiculo.fecha_vencimiento_seguro) < new Date()
@@ -490,13 +497,13 @@ export default function VehiculoDetailPage() {
                                     </span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="text-slate-500">Revisión Técnica</span>
+                                    <span className="text-slate-500">{t('vehiculos.detalle.info.revisionTecnica')}</span>
                                     <span className="font-medium text-slate-900 dark:text-white">{vehiculo.revision_tecnica || '-'}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="text-slate-500">Kilometraje Actual</span>
+                                    <span className="text-slate-500">{t('vehiculos.detalle.info.kilometrajeActual')}</span>
                                     <span className="font-medium text-slate-900 dark:text-white">
-                                        {vehiculo.kilometraje_actual?.toLocaleString() || '0'} km
+                                        {t('vehiculos.detalle.info.kmValue', { value: vehiculo.kilometraje_actual?.toLocaleString() || '0' })}
                                     </span>
                                 </div>
                             </div>
@@ -510,20 +517,20 @@ export default function VehiculoDetailPage() {
                     {/* Foto del vehículo */}
                     <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
                         <h3 className="font-bold text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-2 mb-4 flex items-center gap-2">
-                            <Camera size={18} className="text-purple-500" /> Foto de la unidad
+                            <Camera size={18} className="text-purple-500" /> {t('vehiculos.detalle.documentos.fotoTitulo')}
                         </h3>
                         <div className="flex items-center gap-4">
                             <FileUpload
                                 variant="avatar"
                                 accept="image/*"
-                                label="Subir foto"
+                                label={t('vehiculos.detalle.documentos.subirFoto')}
                                 value={vehiculo.url_foto || null}
                                 onChange={handleFotoChange}
                                 onClear={() => handleFotoChange('')}
                             />
                             {savingFoto && (
                                 <span className="flex items-center gap-2 text-sm text-slate-500">
-                                    <Loader2 className="animate-spin" size={16} /> Guardando...
+                                    <Loader2 className="animate-spin" size={16} /> {t('vehiculos.detalle.guardando')}
                                 </span>
                             )}
                         </div>
@@ -532,7 +539,7 @@ export default function VehiculoDetailPage() {
                     {/* Documentos del vehículo (subir/previsualizar PDFs + vencimientos) */}
                     <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
                         <h3 className="font-bold text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-800 px-6 pt-5 pb-3 flex items-center gap-2">
-                            <FileText size={18} className="text-purple-500" /> Documentos del vehículo
+                            <FileText size={18} className="text-purple-500" /> {t('vehiculos.detalle.documentos.documentosTitulo')}
                         </h3>
                         <DocumentosPanel entidad="VEHICULO" entidadId={vehiculo.id} docTypes={VEHICULO_DOCS} />
                     </div>
@@ -554,7 +561,7 @@ export default function VehiculoDetailPage() {
                         <div className="flex justify-between items-center p-4 border-b border-slate-100 dark:border-slate-800">
                             <h3 className="font-bold text-lg text-slate-900 dark:text-white flex items-center gap-2">
                                 <DollarSign size={20} className="text-emerald-500" />
-                                Editar Costo
+                                {t('vehiculos.detalle.editarCostoModal.titulo')}
                             </h3>
                             <button
                                 onClick={() => setEditingMant(null)}
@@ -566,12 +573,12 @@ export default function VehiculoDetailPage() {
 
                         <div className="p-6 space-y-4">
                             <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                                <p className="text-xs text-slate-500 uppercase font-bold mb-1">Mantenimiento</p>
+                                <p className="text-xs text-slate-500 uppercase font-bold mb-1">{t('vehiculos.detalle.editarCostoModal.mantenimientoLabel')}</p>
                                 <p className="text-sm text-slate-900 dark:text-white font-medium">
-                                    {editingMant.descripcion || 'Sin descripción'}
+                                    {editingMant.descripcion || t('vehiculos.detalle.sinDescripcion')}
                                 </p>
                                 <p className="text-xs text-slate-500 mt-1">
-                                    {new Date(editingMant.fecha).toLocaleDateString('es-ES', {
+                                    {new Date(editingMant.fecha).toLocaleDateString(dateLocale, {
                                         day: 'numeric',
                                         month: 'long',
                                         year: 'numeric'
@@ -581,7 +588,7 @@ export default function VehiculoDetailPage() {
 
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                                    Costo
+                                    {t('vehiculos.detalle.editarCostoModal.costoLabel')}
                                 </label>
                                 <input
                                     type="number"
@@ -600,7 +607,7 @@ export default function VehiculoDetailPage() {
                                 onClick={() => setEditingMant(null)}
                                 className="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition"
                             >
-                                Cancelar
+                                {t('vehiculos.detalle.cancelar')}
                             </button>
                             <button
                                 onClick={handleSaveCosto}
@@ -608,11 +615,11 @@ export default function VehiculoDetailPage() {
                                 className="flex-1 px-4 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-medium transition flex items-center justify-center gap-2 disabled:opacity-50"
                             >
                                 {saving ? (
-                                    <span>Guardando...</span>
+                                    <span>{t('vehiculos.detalle.guardando')}</span>
                                 ) : (
                                     <>
                                         <Save size={16} />
-                                        <span>Guardar</span>
+                                        <span>{t('vehiculos.detalle.guardar')}</span>
                                     </>
                                 )}
                             </button>

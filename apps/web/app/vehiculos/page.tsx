@@ -7,10 +7,23 @@ import { Truck, Eye, Trash2, Search, SlidersHorizontal, Download, Plus, Chevrons
 import Link from 'next/link';
 import { toast } from 'sonner';
 import VehiculoModal from './VehiculoModal';
+import { useT } from '../../lib/i18n';
 
 const PAGE_SIZE = 10;
 
+// revision_tecnica es texto libre legacy (a veces una fecha completa de JS como
+// "Tue Sep 30 2025 00:00:36 GMT-0500 (…)"). La formateamos a fecha corta; si no
+// parsea como fecha, mostramos el valor tal cual.
+const fmtFechaCorta = (raw?: string | null): string => {
+    if (!raw) return '';
+    const d = new Date(raw);
+    return isNaN(d.getTime())
+        ? raw
+        : d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
 export default function VehiculosPage() {
+    const t = useT();
     const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
     const [loading, setLoading] = useState(true);
     const [query, setQuery] = useState('');
@@ -23,6 +36,8 @@ export default function VehiculosPage() {
     const [showFilters, setShowFilters] = useState(false);
     const [estadoFilter, setEstadoFilter] = useState<Set<string>>(new Set());
     const [tipoFilter, setTipoFilter] = useState<Set<string>>(new Set());
+    // GPS por vehículo: ¿tiene dispositivo? ¿está en línea (posición <5 min)?
+    const [gpsByVeh, setGpsByVeh] = useState<Record<string, { deviceId: string; online: boolean; hasPos: boolean }>>({});
 
     const fetchVehiculos = () => {
         setLoading(true);
@@ -32,8 +47,28 @@ export default function VehiculosPage() {
             .finally(() => setLoading(false));
     };
 
+    // Estado GPS real por vehículo (dispositivo asignado + última posición).
+    const fetchGps = () => {
+        api.get('/gps/devices')
+            .then(res => {
+                const map: Record<string, { deviceId: string; online: boolean; hasPos: boolean }> = {};
+                const now = Date.now();
+                (Array.isArray(res.data) ? res.data : []).forEach((d: any) => {
+                    const vehId = d.vehiculo?.id || d.vehiculo_id;
+                    if (!vehId) return;
+                    const pos = d.positions?.[0];
+                    const hasPos = !!pos;
+                    const online = hasPos && now - new Date(pos.timestamp).getTime() < 5 * 60 * 1000;
+                    map[vehId] = { deviceId: d.id, online, hasPos };
+                });
+                setGpsByVeh(map);
+            })
+            .catch(err => console.error('Error fetching GPS devices:', err));
+    };
+
     useEffect(() => {
         fetchVehiculos();
+        fetchGps();
     }, []);
 
     const handleDelete = async () => {
@@ -42,11 +77,11 @@ export default function VehiculosPage() {
         try {
             await api.delete(`/vehiculos/${deleteTarget.id}`);
             setVehiculos(prev => prev.filter(v => v.id !== deleteTarget.id));
-            toast.success('Vehículo eliminado');
+            toast.success(t('vehiculos.lista.toastEliminado'));
             setDeleteTarget(null);
         } catch (err: any) {
             console.error(err);
-            toast.error(err?.response?.data?.message || 'Error al eliminar el vehículo');
+            toast.error(err?.response?.data?.message || t('vehiculos.lista.toastErrorEliminar'));
         } finally {
             setDeleting(false);
         }
@@ -86,22 +121,22 @@ export default function VehiculosPage() {
     useEffect(() => setPage(1), [query, estadoFilter, tipoFilter]);
 
     const exportToExcel = () => {
-        if (filtered.length === 0) return toast.error('No hay vehículos para exportar');
+        if (filtered.length === 0) return toast.error(t('vehiculos.lista.toastErrorExportarVacio'));
         import('xlsx').then(xlsx => {
             const ws = xlsx.utils.json_to_sheet(filtered.map(v => ({
-                Placa: v.placa,
-                'Marca / Modelo': v.marca_modelo || '',
-                Tipo: v.tipo_unidad || '',
-                'Año': v.anio_fabricacion || '',
-                Seguro: v.poliza_seguro || '',
-                'Revisión Técnica': v.revision_tecnica || '',
-                Estado: v.estado_vehiculo || '',
+                [t('vehiculos.lista.columnas.placa')]: v.placa,
+                [t('vehiculos.lista.columnas.marcaModelo')]: v.marca_modelo || '',
+                [t('vehiculos.lista.columnas.tipo')]: v.tipo_unidad || '',
+                [t('vehiculos.lista.columnas.anio')]: v.anio_fabricacion || '',
+                [t('vehiculos.lista.columnas.seguro')]: v.poliza_seguro || '',
+                [t('vehiculos.lista.columnas.revisionTecnicaCompleta')]: fmtFechaCorta(v.revision_tecnica),
+                [t('vehiculos.lista.columnas.estado')]: v.estado_vehiculo || '',
             })));
             const wb = xlsx.utils.book_new();
-            xlsx.utils.book_append_sheet(wb, ws, 'Vehículos');
+            xlsx.utils.book_append_sheet(wb, ws, t('vehiculos.lista.titulo'));
             xlsx.writeFile(wb, 'Reporte_Vehiculos.xlsx');
-            toast.success('Excel generado');
-        }).catch(() => toast.error('Error al generar el Excel'));
+            toast.success(t('vehiculos.lista.toastExcelGenerado'));
+        }).catch(() => toast.error(t('vehiculos.lista.toastErrorExcel')));
     };
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -113,7 +148,7 @@ export default function VehiculosPage() {
             {/* Header */}
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
                 <div className="flex items-center gap-3">
-                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Vehículos</h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">{t('vehiculos.lista.titulo')}</h1>
                     <span className="min-w-[28px] h-6 px-2 flex items-center justify-center rounded-md bg-[#FFC933] text-[#1a1a1c] text-sm font-bold">
                         {vehiculos.length}
                     </span>
@@ -124,7 +159,7 @@ export default function VehiculosPage() {
                         <input
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                            placeholder="Buscar"
+                            placeholder={t('vehiculos.lista.buscar')}
                             className="w-full sm:w-56 pl-9 pr-3 py-2.5 rounded-xl bg-white border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900 placeholder:text-slate-400 transition"
                         />
                     </div>
@@ -133,7 +168,7 @@ export default function VehiculosPage() {
                             onClick={() => setShowFilters(v => !v)}
                             className={`w-full sm:w-auto flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-white border text-sm transition ${showFilters || activeFilterCount > 0 ? 'border-slate-400 text-slate-900' : 'border-slate-200 hover:border-slate-300 text-slate-700'}`}
                         >
-                            <SlidersHorizontal size={16} /> Filtros
+                            <SlidersHorizontal size={16} /> {t('vehiculos.lista.filtros')}
                             {activeFilterCount > 0 && (
                                 <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-[#FFC933] text-[#1a1a1c] text-[11px] font-bold">
                                     {activeFilterCount}
@@ -146,17 +181,17 @@ export default function VehiculosPage() {
                                 <div className="fixed inset-0 z-10" onClick={() => setShowFilters(false)} />
                                 <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 p-4 z-20 animate-in fade-in zoom-in-95 duration-150">
                                     <div className="flex items-center justify-between mb-3">
-                                        <span className="text-sm font-semibold text-slate-900">Filtrar por</span>
+                                        <span className="text-sm font-semibold text-slate-900">{t('vehiculos.lista.filtrarPor')}</span>
                                         {activeFilterCount > 0 && (
                                             <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-700 transition">
-                                                <X size={12} /> Limpiar
+                                                <X size={12} /> {t('vehiculos.lista.limpiar')}
                                             </button>
                                         )}
                                     </div>
 
-                                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400 mb-1.5">Estado</p>
+                                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400 mb-1.5">{t('vehiculos.lista.estado')}</p>
                                     <div className="space-y-1 mb-3">
-                                        {estadoOptions.length === 0 && <p className="text-xs text-slate-400">Sin datos</p>}
+                                        {estadoOptions.length === 0 && <p className="text-xs text-slate-400">{t('vehiculos.lista.sinDatos')}</p>}
                                         {estadoOptions.map((e) => {
                                             const on = estadoFilter.has(e);
                                             return (
@@ -174,9 +209,9 @@ export default function VehiculosPage() {
                                         })}
                                     </div>
 
-                                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400 mb-1.5">Tipo de unidad</p>
+                                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400 mb-1.5">{t('vehiculos.lista.tipoUnidad')}</p>
                                     <div className="space-y-1">
-                                        {tipoOptions.length === 0 && <p className="text-xs text-slate-400">Sin datos</p>}
+                                        {tipoOptions.length === 0 && <p className="text-xs text-slate-400">{t('vehiculos.lista.sinDatos')}</p>}
                                         {tipoOptions.map((t) => {
                                             const on = tipoFilter.has(t);
                                             return (
@@ -201,13 +236,13 @@ export default function VehiculosPage() {
                         onClick={exportToExcel}
                         className="w-full sm:w-auto flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 hover:border-slate-300 text-sm text-slate-700 transition"
                     >
-                        <Download size={16} /> Exportar
+                        <Download size={16} /> {t('vehiculos.lista.exportar')}
                     </button>
                     <button
                         onClick={() => setModalOpen(true)}
                         className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition"
                     >
-                        <Plus size={16} /> Nuevo vehículo
+                        <Plus size={16} /> {t('vehiculos.lista.nuevoVehiculo')}
                     </button>
                 </div>
             </div>
@@ -218,19 +253,28 @@ export default function VehiculosPage() {
                     <table className="w-full text-left text-sm">
                         <thead>
                             <tr className="border-b border-slate-100 text-slate-400">
-                                {['Unidad', 'Marca / Modelo', 'Tipo', 'Año', 'Seguro', 'Rev. Técnica', 'GPS', 'Estado'].map((h) => (
+                                {[
+                                    t('vehiculos.lista.columnas.unidad'),
+                                    t('vehiculos.lista.columnas.marcaModelo'),
+                                    t('vehiculos.lista.columnas.tipo'),
+                                    t('vehiculos.lista.columnas.anio'),
+                                    t('vehiculos.lista.columnas.seguro'),
+                                    t('vehiculos.lista.columnas.revTecnica'),
+                                    t('vehiculos.lista.columnas.gps'),
+                                    t('vehiculos.lista.columnas.estado'),
+                                ].map((h) => (
                                     <th key={h} className="px-5 py-3.5 font-medium">
                                         <span className="inline-flex items-center gap-1">{h} <ChevronsUpDown size={13} className="text-slate-300" /></span>
                                     </th>
                                 ))}
-                                <th className="px-5 py-3.5 font-medium text-right">Acciones</th>
+                                <th className="px-5 py-3.5 font-medium text-right">{t('vehiculos.lista.columnas.acciones')}</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={9} className="text-center py-16 text-slate-400">Cargando flota...</td></tr>
+                                <tr><td colSpan={9} className="text-center py-16 text-slate-400">{t('vehiculos.lista.cargando')}</td></tr>
                             ) : pageRows.length === 0 ? (
-                                <tr><td colSpan={9} className="text-center py-16 text-slate-400">No se encontraron vehículos.</td></tr>
+                                <tr><td colSpan={9} className="text-center py-16 text-slate-400">{t('vehiculos.lista.vacio')}</td></tr>
                             ) : pageRows.map((v) => {
                                 const estado = (v.estado_vehiculo || '').toUpperCase();
                                 const available = estado === 'ACTIVO' || estado === 'DISPONIBLE';
@@ -250,26 +294,43 @@ export default function VehiculosPage() {
                                         <td className="px-5 py-3.5">
                                             {v.poliza_seguro
                                                 ? <span className="text-slate-600">{v.poliza_seguro}</span>
-                                                : <span className="text-red-500 text-xs font-medium">Sin seguro</span>}
+                                                : <span className="text-red-500 text-xs font-medium">{t('vehiculos.lista.sinSeguro')}</span>}
                                         </td>
-                                        <td className="px-5 py-3.5 text-slate-600">{v.revision_tecnica || <span className="text-amber-500 text-xs font-medium">Pendiente</span>}</td>
+                                        <td className="px-5 py-3.5 text-slate-600 whitespace-nowrap">{fmtFechaCorta(v.revision_tecnica) || <span className="text-amber-500 text-xs font-medium">{t('vehiculos.lista.pendiente')}</span>}</td>
                                         <td className="px-5 py-3.5">
-                                            <span className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500">
-                                                <Crosshair size={15} />
-                                            </span>
+                                            {(() => {
+                                                const gps = gpsByVeh[v.id];
+                                                if (!gps) {
+                                                    return (
+                                                        <span title="Sin dispositivo GPS asignado" className="w-8 h-8 rounded-lg border border-dashed border-slate-200 flex items-center justify-center text-slate-300">
+                                                            <Crosshair size={15} />
+                                                        </span>
+                                                    );
+                                                }
+                                                return (
+                                                    <Link
+                                                        href={`/rastreo?device=${gps.deviceId}`}
+                                                        title={gps.online ? 'GPS en línea · ver en el mapa' : gps.hasPos ? 'Dispositivo asignado · sin señal reciente' : 'Dispositivo asignado · sin posición aún'}
+                                                        className={`relative w-8 h-8 rounded-lg border flex items-center justify-center transition ${gps.online ? 'border-emerald-200 text-emerald-600 bg-emerald-50 hover:bg-emerald-100' : 'border-slate-200 text-slate-400 hover:bg-slate-100'}`}
+                                                    >
+                                                        <Crosshair size={15} />
+                                                        {gps.online && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white" />}
+                                                    </Link>
+                                                );
+                                            })()}
                                         </td>
                                         <td className="px-5 py-3.5">
                                             <span className={`text-sm font-medium ${available ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                                {available ? 'Disponible' : 'No disponible'}
+                                                {available ? t('vehiculos.lista.disponible') : t('vehiculos.lista.noDisponible')}
                                             </span>
                                         </td>
                                         <td className="px-5 py-3.5">
                                             <div className="flex items-center justify-end gap-1.5">
-                                                <Link href={`/vehiculos/${v.id}`} title="Ver" className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-100 flex items-center justify-center text-slate-500 transition">
+                                                <Link href={`/vehiculos/${v.id}`} title={t('vehiculos.lista.ver')} className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-100 flex items-center justify-center text-slate-500 transition">
                                                     <Eye size={15} />
                                                 </Link>
                                                 <button
-                                                    title="Eliminar"
+                                                    title={t('vehiculos.lista.eliminar')}
                                                     onClick={() => setDeleteTarget(v)}
                                                     className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-red-50 hover:border-red-200 hover:text-red-500 flex items-center justify-center text-slate-500 transition"
                                                 >
@@ -306,9 +367,9 @@ export default function VehiculosPage() {
                                 <AlertTriangle size={22} />
                             </div>
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900">Eliminar vehículo</h3>
+                                <h3 className="text-lg font-bold text-slate-900">{t('vehiculos.lista.confirmarEliminarTitulo')}</h3>
                                 <p className="text-sm text-slate-500 mt-1">
-                                    ¿Seguro que deseas eliminar la unidad <span className="font-semibold text-slate-700">{deleteTarget.placa}</span>? Esta acción no se puede deshacer.
+                                    {t('vehiculos.lista.confirmarEliminarPre')}<span className="font-semibold text-slate-700">{deleteTarget.placa}</span>{t('vehiculos.lista.confirmarEliminarPost')}
                                 </p>
                             </div>
                         </div>
@@ -318,7 +379,7 @@ export default function VehiculosPage() {
                                 disabled={deleting}
                                 className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition disabled:opacity-60"
                             >
-                                Cancelar
+                                {t('vehiculos.lista.cancelar')}
                             </button>
                             <button
                                 onClick={handleDelete}
@@ -326,7 +387,7 @@ export default function VehiculosPage() {
                                 className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-medium transition flex items-center gap-2 disabled:opacity-60 disabled:pointer-events-none"
                             >
                                 {deleting ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />}
-                                Eliminar
+                                {t('vehiculos.lista.eliminar')}
                             </button>
                         </div>
                     </div>
@@ -337,6 +398,7 @@ export default function VehiculosPage() {
 }
 
 function Pagination({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
+    const t = useT();
     const pages = Array.from({ length: totalPages }, (_, i) => i + 1).slice(0, 6);
     return (
         <div className="flex items-center justify-between px-5 py-3.5 border-t border-slate-100">
@@ -345,7 +407,7 @@ function Pagination({ page, totalPages, onChange }: { page: number; totalPages: 
                 disabled={page === 1}
                 className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition"
             >
-                <ArrowLeft size={16} /> Anterior
+                <ArrowLeft size={16} /> {t('vehiculos.lista.anterior')}
             </button>
             <div className="flex items-center gap-1.5">
                 {pages.map((p) => (
@@ -365,7 +427,7 @@ function Pagination({ page, totalPages, onChange }: { page: number; totalPages: 
                 disabled={page === totalPages}
                 className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition"
             >
-                Siguiente <ArrowRight size={16} />
+                {t('vehiculos.lista.siguiente')} <ArrowRight size={16} />
             </button>
         </div>
     );

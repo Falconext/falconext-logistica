@@ -4,10 +4,12 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../../lib/store';
 import api from '../../lib/api';
+import { useT } from '../../lib/i18n';
 import { Truck, Lock, User, ArrowRight, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
     const router = useRouter();
+    const t = useT();
     const login = useAuthStore((state) => state.login);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -25,7 +27,7 @@ export default function LoginPage() {
             login(access_token, user);
             router.push('/');
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Error al iniciar sesión');
+            setError(err.response?.data?.message || t('login.error'));
         } finally {
             setLoading(false);
         }
@@ -44,8 +46,8 @@ export default function LoginPage() {
                     <div className="w-16 h-16 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-blue-500/20">
                         <Truck className="text-white" size={32} />
                     </div>
-                    <h1 className="text-2xl font-bold text-white mb-2">Bienvenido</h1>
-                    <p className="text-slate-400">Ingresa a tu cuenta para continuar</p>
+                    <h1 className="text-2xl font-bold text-white mb-2">{t('login.welcome')}</h1>
+                    <p className="text-slate-400">{t('login.subtitle')}</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -54,7 +56,7 @@ export default function LoginPage() {
                             <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={20} />
                             <input
                                 type="email"
-                                placeholder="Correo electrónico"
+                                placeholder={t('login.email')}
                                 className="w-full bg-slate-900/50 border border-slate-700 rounded-xl py-3.5 pl-12 pr-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
@@ -65,7 +67,7 @@ export default function LoginPage() {
                             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={20} />
                             <input
                                 type="password"
-                                placeholder="Contraseña"
+                                placeholder={t('login.password')}
                                 className="w-full bg-slate-900/50 border border-slate-700 rounded-xl py-3.5 pl-12 pr-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
@@ -87,7 +89,7 @@ export default function LoginPage() {
                     >
                         {loading ? <Loader2 className="animate-spin" size={20} /> : (
                             <>
-                                Iniciar Sesión
+                                {t('login.submit')}
                                 <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                             </>
                         )}
@@ -96,7 +98,7 @@ export default function LoginPage() {
 
                 <div className="mt-8 text-center">
                     <p className="text-slate-500 text-sm">
-                        ¿No tienes cuenta? <a href="#" className="text-blue-400 hover:text-blue-300 transition-colors">Contacta soporte</a>
+                        {t('login.noAccount')} <a href="#" className="text-blue-400 hover:text-blue-300 transition-colors">{t('login.contactSupport')}</a>
                     </p>
                 </div>
             </div>

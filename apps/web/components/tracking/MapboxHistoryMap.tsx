@@ -6,6 +6,7 @@ import api from '../../lib/api';
 import { toast } from 'sonner';
 import { useGoogleMaps, GOOGLE_MAPS_KEY } from './googleMaps';
 import { stylesFor, MapThemeToggle, MapPreset } from './mapTheme';
+import { useT } from '../../lib/i18n';
 
 interface HistoryMapProps {
     deviceId: string;
@@ -75,6 +76,7 @@ function fmtHora(iso: string | null): string {
 }
 
 export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: HistoryMapProps) {
+    const t = useT();
     const { isLoaded } = useGoogleMaps();
     const containerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<google.maps.Map | null>(null);
@@ -139,10 +141,10 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
                 })).filter((p: Position) => !isNaN(p.lat) && !isNaN(p.lng)).reverse(); // API DESC -> cronológico
                 setHistory(data);
                 setTrip(resTrip.data || null);
-                if (data.length === 0) toast.info('No hay historial para la fecha seleccionada');
+                if (data.length === 0) toast.info(t('componentes.historyMap.sinHistorial'));
             } catch (error) {
                 console.error('Error fetching history:', error);
-                toast.error('Error al cargar historial');
+                toast.error(t('componentes.historyMap.errorCargar'));
             }
         })();
         return () => { cancelled = true; };
@@ -212,7 +214,7 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
                 },
             });
             const infoWindow = new google.maps.InfoWindow({
-                content: `<div style="font-family:system-ui;font-size:12px"><b>Parada ${idx + 1}</b><br/>${fmtHora(s.startTime)} – ${fmtHora(s.endTime)}<br/>Detenido: <b>${fmtDur(s.durationMin)}</b></div>`,
+                content: `<div style="font-family:system-ui;font-size:12px"><b>${t('componentes.historyMap.popupParada', { n: idx + 1 })}</b><br/>${fmtHora(s.startTime)} – ${fmtHora(s.endTime)}<br/>${t('componentes.historyMap.detenidoLabel')}: <b>${fmtDur(s.durationMin)}</b></div>`,
             });
             marker.addListener('click', () => infoWindow.open({ map, anchor: marker }));
             stopMarkersRef.current.push(marker);
@@ -261,16 +263,16 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
     const toggleSpeed = () => setPlaybackSpeed(prev => (prev === 1 ? 5 : prev === 5 ? 10 : 1));
     const currentPos = history[currentIndex];
 
-    if (!GOOGLE_MAPS_KEY) return <div className="h-full flex items-center justify-center text-slate-400">Configura NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.</div>;
+    if (!GOOGLE_MAPS_KEY) return <div className="h-full flex items-center justify-center text-slate-400">{t('componentes.historyMap.configurarMapa')}</div>;
 
     const stats = [
-        { icon: Route, label: 'Distancia', value: `${trip?.distanceKm ?? 0} km`, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-100 dark:bg-blue-900/30' },
-        { icon: Clock, label: 'Duración total', value: fmtDur(trip?.durationMin ?? 0), color: 'text-violet-600 dark:text-violet-400', bg: 'bg-violet-100 dark:bg-violet-900/30' },
-        { icon: Navigation, label: 'En movimiento', value: fmtDur(trip?.movingMin ?? 0), color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-100 dark:bg-emerald-900/30' },
-        { icon: Timer, label: 'Detenido', value: fmtDur(trip?.stoppedMin ?? 0), color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-100 dark:bg-orange-900/30' },
-        { icon: Gauge, label: 'Vel. promedio', value: `${trip?.avgSpeedKmh ?? 0} km/h`, color: 'text-cyan-600 dark:text-cyan-400', bg: 'bg-cyan-100 dark:bg-cyan-900/30' },
-        { icon: TrendingUp, label: 'Vel. máxima', value: `${trip?.maxSpeedKmh ?? 0} km/h`, color: 'text-rose-600 dark:text-rose-400', bg: 'bg-rose-100 dark:bg-rose-900/30' },
-        { icon: MapPin, label: 'Paradas', value: `${trip?.stops.length ?? 0}`, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30' },
+        { icon: Route, label: t('componentes.historyMap.distancia'), value: `${trip?.distanceKm ?? 0} km`, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-100 dark:bg-blue-900/30' },
+        { icon: Clock, label: t('componentes.historyMap.duracionTotal'), value: fmtDur(trip?.durationMin ?? 0), color: 'text-violet-600 dark:text-violet-400', bg: 'bg-violet-100 dark:bg-violet-900/30' },
+        { icon: Navigation, label: t('componentes.historyMap.enMovimiento'), value: fmtDur(trip?.movingMin ?? 0), color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-100 dark:bg-emerald-900/30' },
+        { icon: Timer, label: t('componentes.historyMap.detenido'), value: fmtDur(trip?.stoppedMin ?? 0), color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-100 dark:bg-orange-900/30' },
+        { icon: Gauge, label: t('componentes.historyMap.velPromedio'), value: `${trip?.avgSpeedKmh ?? 0} km/h`, color: 'text-cyan-600 dark:text-cyan-400', bg: 'bg-cyan-100 dark:bg-cyan-900/30' },
+        { icon: TrendingUp, label: t('componentes.historyMap.velMaxima'), value: `${trip?.maxSpeedKmh ?? 0} km/h`, color: 'text-rose-600 dark:text-rose-400', bg: 'bg-rose-100 dark:bg-rose-900/30' },
+        { icon: MapPin, label: t('componentes.historyMap.paradas'), value: `${trip?.stops.length ?? 0}`, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30' },
     ];
 
     return (
@@ -282,7 +284,7 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
                         <CalendarIcon size={20} />
                     </div>
                     <div>
-                        <p className="text-xs text-slate-500 font-bold uppercase">Fecha de Rastreo</p>
+                        <p className="text-xs text-slate-500 font-bold uppercase">{t('componentes.historyMap.fechaRastreo')}</p>
                         <input
                             type="date"
                             value={selectedDate}
@@ -293,11 +295,11 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="text-right mr-2">
-                        <p className="text-xs text-slate-500">Jornada</p>
+                        <p className="text-xs text-slate-500">{t('componentes.historyMap.jornada')}</p>
                         <p className="font-bold text-slate-900 dark:text-white">{fmtHora(trip?.startTime ?? null)} – {fmtHora(trip?.endTime ?? null)}</p>
                     </div>
                     <div className="text-right border-l pl-4 border-slate-200 dark:border-slate-700">
-                        <p className="text-xs text-slate-500">{vehiclePlate || 'Dispositivo'}</p>
+                        <p className="text-xs text-slate-500">{vehiclePlate || t('componentes.historyMap.dispositivoFallback')}</p>
                         <p className="font-bold text-slate-900 dark:text-white truncate max-w-[150px]">{deviceName || deviceId}</p>
                     </div>
                 </div>
@@ -342,7 +344,7 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
                         <button
                             onClick={() => { setIsPlaying(false); setCurrentIndex(0); }}
                             className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                            title="Reiniciar"
+                            title={t('componentes.historyMap.reiniciar')}
                         >
                             <RotateCcw size={16} />
                         </button>
@@ -369,13 +371,13 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
                 <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
                     <h3 className="font-bold text-slate-900 dark:text-white mb-3 flex flex-wrap items-center gap-2">
                         <Route size={18} className="text-blue-600 dark:text-blue-400" />
-                        Recorrido del día
+                        {t('componentes.historyMap.recorridoDia')}
                         {trip.expectedMovingMin != null && (
-                            <span className="text-xs font-normal text-slate-400">· esperado {fmtDur(trip.expectedMovingMin)} en ruta</span>
+                            <span className="text-xs font-normal text-slate-400">{t('componentes.historyMap.esperadoEnRuta', { dur: fmtDur(trip.expectedMovingMin) })}</span>
                         )}
                         {trip.delayMin != null && (
                             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${trip.delayMin > 1 ? 'text-rose-600 bg-rose-50 dark:bg-rose-900/20' : trip.delayMin < -1 ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20' : 'text-slate-500 bg-slate-100 dark:bg-slate-800'}`}>
-                                {trip.delayMin > 1 ? `+${trip.delayMin} min de demora total` : trip.delayMin < -1 ? `${Math.abs(trip.delayMin)} min más rápido` : 'En tiempo'}
+                                {trip.delayMin > 1 ? t('componentes.historyMap.demoraTotalMin', { min: trip.delayMin }) : trip.delayMin < -1 ? t('componentes.historyMap.masRapidoMin', { min: Math.abs(trip.delayMin) }) : t('componentes.historyMap.enTiempo')}
                             </span>
                         )}
                     </h3>
@@ -395,21 +397,21 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
                                     <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-slate-500 mt-0.5">
                                         <span className="inline-flex items-center gap-1"><Clock size={12} /> {fmtDur(leg.durationMin)}</span>
                                         <span className="inline-flex items-center gap-1"><Route size={12} /> {leg.distanceKm} km</span>
-                                        <span className="inline-flex items-center gap-1"><Gauge size={12} /> {leg.avgSpeedKmh} km/h prom.</span>
+                                        <span className="inline-flex items-center gap-1"><Gauge size={12} /> {leg.avgSpeedKmh} km/h {t('componentes.historyMap.promAbbrev')}</span>
                                     </div>
                                     {leg.expectedMin != null && (
                                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-                                            <span className="text-slate-400">Esperado: {fmtDur(leg.expectedMin)}</span>
+                                            <span className="text-slate-400">{t('componentes.historyMap.esperadoLabel', { dur: fmtDur(leg.expectedMin) })}</span>
                                             {leg.delayMin != null && (
                                                 <span className={`font-semibold px-1.5 py-0.5 rounded ${leg.delayMin > 1 ? 'text-rose-600 bg-rose-50 dark:bg-rose-900/20' : leg.delayMin < -1 ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20' : 'text-slate-500 bg-slate-100 dark:bg-slate-800'}`}>
-                                                    {leg.delayMin > 1 ? `+${leg.delayMin} min de demora` : leg.delayMin < -1 ? `${Math.abs(leg.delayMin)} min más rápido` : 'En tiempo'}
+                                                    {leg.delayMin > 1 ? t('componentes.historyMap.demoraMin', { min: leg.delayMin }) : leg.delayMin < -1 ? t('componentes.historyMap.masRapidoMin', { min: Math.abs(leg.delayMin) }) : t('componentes.historyMap.enTiempo')}
                                                 </span>
                                             )}
                                         </div>
                                     )}
                                     {stopAfter && (
                                         <div className="mt-1.5 ml-1 inline-flex items-center gap-1.5 text-xs font-medium text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded-md">
-                                            <MapPin size={12} /> Parada {idx + 1} · detenido {fmtDur(stopAfter.durationMin)}
+                                            <MapPin size={12} /> {t('componentes.historyMap.paradaDetenido', { n: idx + 1, dur: fmtDur(stopAfter.durationMin) })}
                                         </div>
                                     )}
                                 </div>

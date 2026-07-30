@@ -5,8 +5,10 @@ import { Title, Text, Card, Metric, Button, TextInput } from '@tremor/react';
 import { RefreshCw, Save, CheckCircle2, FileSpreadsheet, ExternalLink } from 'lucide-react';
 import api from '../../../lib/api';
 import { toast } from 'sonner';
+import { useT } from '../../../lib/i18n';
 
 export default function GoogleSheetsPage() {
+    const t = useT();
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
 
@@ -32,13 +34,13 @@ export default function GoogleSheetsPage() {
     };
 
     const handleSaveConfig = async () => {
-        if (!spreadsheetId) return toast.error('Ingresa el ID de la hoja');
+        if (!spreadsheetId) return toast.error(t('admin.sheets.toasts.ingresaId'));
         try {
             await api.post('/sheets/config', { spreadsheetId });
-            toast.success('Configuración guardada');
+            toast.success(t('admin.sheets.toasts.configGuardada'));
             fetchStatus();
         } catch (error) {
-            toast.error('Error al guardar configuración');
+            toast.error(t('admin.sheets.toasts.errorGuardarConfig'));
         }
     };
 
@@ -47,24 +49,24 @@ export default function GoogleSheetsPage() {
         try {
             const res = await api.post('/sheets/sync');
             const { count } = res.data;
-            toast.success(`Sincronización exitosa: ${count} filas procesadas`);
+            toast.success(t('admin.sheets.toasts.syncExitosa', { count }));
             fetchStatus();
         } catch (error) {
             console.error(error);
-            toast.error('Error al sincronizar. Verifica permisos.');
+            toast.error(t('admin.sheets.toasts.errorSync'));
         } finally {
             setSyncing(false);
         }
     };
 
-    if (loading) return <div className="p-8">Cargando integración...</div>;
+    if (loading) return <div className="p-8">{t('admin.sheets.cargando')}</div>;
 
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
-                    <Title>Integración con Google Sheets</Title>
-                    <Text>Conecta tu hoja de cálculo privada para sincronizar rutas automáticamente.</Text>
+                    <Title>{t('admin.sheets.titulo')}</Title>
+                    <Text>{t('admin.sheets.subtitulo')}</Text>
                 </div>
             </div>
 
@@ -73,15 +75,15 @@ export default function GoogleSheetsPage() {
                 <Card decoration="top" decorationColor="blue">
                     <div className="flex items-center space-x-2 mb-4">
                         <FileSpreadsheet className="text-blue-500" size={24} />
-                        <h3 className="font-bold text-slate-700 dark:text-slate-200">Configuración</h3>
+                        <h3 className="font-bold text-slate-700 dark:text-slate-200">{t('admin.sheets.configuracion.titulo')}</h3>
                     </div>
 
                     <div className="space-y-4">
                         <div>
-                            <label className="text-sm font-medium text-slate-500">Spreadsheet ID</label>
+                            <label className="text-sm font-medium text-slate-500">{t('admin.sheets.configuracion.spreadsheetIdLabel')}</label>
                             <div className="flex flex-col sm:flex-row gap-2">
                                 <TextInput
-                                    placeholder="docs.google.com/spreadsheets/d/ID_AQUI/edit"
+                                    placeholder={t('admin.sheets.configuracion.spreadsheetIdPlaceholder')}
                                     value={spreadsheetId}
                                     onChange={(e) => {
                                         const val = e.target.value;
@@ -91,23 +93,23 @@ export default function GoogleSheetsPage() {
                                     }}
                                 />
                                 <Button icon={Save} variant="secondary" onClick={handleSaveConfig}>
-                                    Guardar
+                                    {t('admin.sheets.configuracion.guardar')}
                                 </Button>
                             </div>
                             <p className="text-xs text-slate-400 mt-1">
-                                Copia el ID desde la URL de tu Google Sheet.
+                                {t('admin.sheets.configuracion.ayuda')}
                             </p>
                         </div>
 
                         <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-800">
-                            <h4 className="font-medium text-sm text-slate-700 dark:text-slate-300 mb-2">Instrucciones de Seguridad:</h4>
+                            <h4 className="font-medium text-sm text-slate-700 dark:text-slate-300 mb-2">{t('admin.sheets.configuracion.seguridadTitulo')}</h4>
                             <ol className="list-decimal list-inside text-sm text-slate-500 space-y-1">
-                                <li>Abre tu Google Sheet.</li>
-                                <li>Haz clic en el botón <strong>Compartir</strong> (Share).</li>
-                                <li>Agrega este email como <strong>Editor</strong>:</li>
+                                <li>{t('admin.sheets.configuracion.paso1')}</li>
+                                <li>{t('admin.sheets.configuracion.paso2Pre')} <strong>{t('admin.sheets.configuracion.paso2Compartir')}</strong> (Share).</li>
+                                <li>{t('admin.sheets.configuracion.paso3Pre')} <strong>{t('admin.sheets.configuracion.paso3Editor')}</strong>:</li>
                             </ol>
                             <div className="mt-2 p-2 bg-white dark:bg-black rounded border border-dashed border-slate-300 text-xs font-mono select-all">
-                                {status?.serviceEmail || 'Cargando email de servicio...'}
+                                {status?.serviceEmail || t('admin.sheets.configuracion.cargandoEmail')}
                             </div>
                         </div>
                     </div>
@@ -117,27 +119,27 @@ export default function GoogleSheetsPage() {
                 <Card decoration="top" decorationColor={status?.connected ? 'emerald' : 'amber'}>
                     <div className="flex items-center space-x-2 mb-4">
                         <RefreshCw className={status?.connected ? 'text-emerald-500' : 'text-amber-500'} size={24} />
-                        <h3 className="font-bold text-slate-700 dark:text-slate-200">Estado y Acciones</h3>
+                        <h3 className="font-bold text-slate-700 dark:text-slate-200">{t('admin.sheets.estado.titulo')}</h3>
                     </div>
 
                     <div className="space-y-6">
                         <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-900 p-3 rounded-lg">
-                            <span className="text-sm text-slate-500">Estado Conexión</span>
+                            <span className="text-sm text-slate-500">{t('admin.sheets.estado.estadoConexion')}</span>
                             {status?.connected ? (
                                 <span className="flex items-center text-emerald-600 font-bold text-sm">
-                                    <CheckCircle2 size={16} className="mr-1" /> Conectado
+                                    <CheckCircle2 size={16} className="mr-1" /> {t('admin.sheets.estado.conectado')}
                                 </span>
                             ) : (
-                                <span className="text-amber-500 font-bold text-sm">No Configurado</span>
+                                <span className="text-amber-500 font-bold text-sm">{t('admin.sheets.estado.noConfigurado')}</span>
                             )}
                         </div>
 
                         <div>
-                            <Text>Última Sincronización</Text>
+                            <Text>{t('admin.sheets.estado.ultimaSincronizacion')}</Text>
                             <Metric>
                                 {status?.lastSynced
                                     ? new Date(status.lastSynced).toLocaleString()
-                                    : 'Nunca'}
+                                    : t('admin.sheets.estado.nunca')}
                             </Metric>
                         </div>
 
@@ -149,7 +151,7 @@ export default function GoogleSheetsPage() {
                             disabled={!status?.connected}
                             onClick={handleSync}
                         >
-                            {syncing ? 'Sincronizando...' : 'Sincronizar Ahora'}
+                            {syncing ? t('admin.sheets.estado.sincronizando') : t('admin.sheets.estado.sincronizarAhora')}
                         </Button>
                     </div>
                 </Card>

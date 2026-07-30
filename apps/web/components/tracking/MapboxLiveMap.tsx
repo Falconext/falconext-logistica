@@ -5,6 +5,7 @@ import { Truck } from 'lucide-react';
 import api from '../../lib/api';
 import { useGoogleMaps, GOOGLE_MAPS_KEY } from './googleMaps';
 import { stylesFor, MapThemeToggle, MapPreset } from './mapTheme';
+import { useT } from '../../lib/i18n';
 
 interface LiveMapRealProps {
     deviceId: string;
@@ -15,6 +16,7 @@ interface LiveMapRealProps {
 }
 
 export function MapboxLiveMap({ deviceId, vehiclePlate, deviceName, workerName }: LiveMapRealProps) {
+    const t = useT();
     const { isLoaded } = useGoogleMaps();
     const containerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<google.maps.Map | null>(null);
@@ -87,7 +89,7 @@ export function MapboxLiveMap({ deviceId, vehiclePlate, deviceName, workerName }
         return () => { cancelled = true; clearInterval(id); };
     }, [deviceId, isLoaded]);
 
-    if (!GOOGLE_MAPS_KEY) return <div className="h-full flex items-center justify-center text-slate-400">Configura NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.</div>;
+    if (!GOOGLE_MAPS_KEY) return <div className="h-full flex items-center justify-center text-slate-400">{t('componentes.liveMap.configurarMapa')}</div>;
 
     return (
         <div className="relative h-full w-full">
@@ -101,10 +103,10 @@ export function MapboxLiveMap({ deviceId, vehiclePlate, deviceName, workerName }
                     <div>
                         <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
                             <Truck size={16} />
-                            {workerName || (vehiclePlate ? `Vehículo: ${vehiclePlate}` : (deviceName || `ID: ${deviceId.substring(0, 6)}...`))}
+                            {workerName || (vehiclePlate ? t('componentes.liveMap.vehiculoLabel', { placa: vehiclePlate }) : (deviceName || t('componentes.liveMap.idLabel', { id: deviceId.substring(0, 6) })))}
                         </h3>
                         <p className="text-xs text-slate-500">
-                            {[vehiclePlate && `Vehículo ${vehiclePlate}`, lastUpdate ? `Última act: ${lastUpdate.toLocaleTimeString()}` : 'Esperando data...'].filter(Boolean).join(' · ')}
+                            {[vehiclePlate && t('componentes.liveMap.vehiculoShort', { placa: vehiclePlate }), lastUpdate ? t('componentes.liveMap.ultimaAct', { time: lastUpdate.toLocaleTimeString() }) : t('componentes.liveMap.esperandoData')].filter(Boolean).join(' · ')}
                         </p>
                     </div>
                     <div className="text-right">

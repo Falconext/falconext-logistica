@@ -5,23 +5,25 @@ import { Truck, Search, Circle } from 'lucide-react';
 import api from '../../lib/api';
 import { useGoogleMaps, GOOGLE_MAPS_KEY } from './googleMaps';
 import { stylesFor, MapThemeToggle, MapPreset } from './mapTheme';
+import { useT } from '../../lib/i18n';
 
 const ONLINE_MS = 5 * 60 * 1000;
 
 interface Position { latitude: number | string; longitude: number | string; timestamp: string; speed?: number; }
 interface Device { id: string; name: string; vehiculo?: { placa?: string } | null; trabajador?: { nombre_completo?: string } | null; positions?: Position[]; }
 
-function timeAgo(ts: string): string {
+function timeAgo(ts: string, t: ReturnType<typeof useT>): string {
   const diff = Date.now() - new Date(ts).getTime();
   const min = Math.floor(diff / 60000);
-  if (min < 1) return 'ahora';
-  if (min < 60) return `hace ${min} min`;
+  if (min < 1) return t('componentes.fleetMap.ahora');
+  if (min < 60) return t('componentes.fleetMap.haceMin', { min });
   const h = Math.floor(min / 60);
-  if (h < 24) return `hace ${h} h`;
-  return `hace ${Math.floor(h / 24)} d`;
+  if (h < 24) return t('componentes.fleetMap.haceHoras', { h });
+  return t('componentes.fleetMap.haceDias', { d: Math.floor(h / 24) });
 }
 
 export function MapboxFleetMap() {
+  const t = useT();
   const { isLoaded } = useGoogleMaps();
   const mapRef = useRef<google.maps.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -102,7 +104,7 @@ export function MapboxFleetMap() {
     located.forEach((l) => {
       seen.add(l.device.id);
       const color = l.online ? '#16A34A' : '#94A3B8';
-      const html = `<div style="font-family:system-ui;font-size:12px"><b>${label(l)}</b><br/>${((l.p.speed ?? 0) * 3.6).toFixed(0)} km/h · ${timeAgo(l.p.timestamp)}<br/><span style="color:${color}">${l.online ? '● En línea' : '○ Desconectado'}</span></div>`;
+      const html = `<div style="font-family:system-ui;font-size:12px"><b>${label(l)}</b><br/>${((l.p.speed ?? 0) * 3.6).toFixed(0)} km/h · ${timeAgo(l.p.timestamp, t)}<br/><span style="color:${color}">${l.online ? t('componentes.fleetMap.popupEnLinea') : t('componentes.fleetMap.popupDesconectado')}</span></div>`;
       let m = markersRef.current[l.device.id];
       if (!m) {
         m = new google.maps.Marker({
@@ -141,14 +143,27 @@ export function MapboxFleetMap() {
     const m = markersRef.current[l.device.id];
     if (m) {
       const color = l.online ? '#16A34A' : '#94A3B8';
-      const html = `<div style="font-family:system-ui;font-size:12px"><b>${label(l)}</b><br/>${((l.p.speed ?? 0) * 3.6).toFixed(0)} km/h · ${timeAgo(l.p.timestamp)}<br/><span style="color:${color}">${l.online ? '● En línea' : '○ Desconectado'}</span></div>`;
+      const html = `<div style="font-family:system-ui;font-size:12px"><b>${label(l)}</b><br/>${((l.p.speed ?? 0) * 3.6).toFixed(0)} km/h · ${timeAgo(l.p.timestamp, t)}<br/><span style="color:${color}">${l.online ? t('componentes.fleetMap.popupEnLinea') : t('componentes.fleetMap.popupDesconectado')}</span></div>`;
       infoRef.current?.setContent(html);
       infoRef.current?.open({ map, anchor: m });
     }
   };
 
+  // Deep-link ?device=<id> (desde Vehículos): enfoca ese dispositivo una vez ubicado.
+  const autoFocused = useRef(false);
+  useEffect(() => {
+    if (autoFocused.current || !ready || located.length === 0) return;
+    const deviceId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('device') : null;
+    if (!deviceId) return;
+    const target = located.find((l) => l.device.id === deviceId);
+    if (target && markersRef.current[deviceId]) {
+      focus(target);
+      autoFocused.current = true;
+    }
+  }, [located, ready]);
+
   if (!GOOGLE_MAPS_KEY) {
-    return <div className="h-full flex items-center justify-center text-slate-400">Configura NEXT_PUBLIC_GOOGLE_MAPS_API_KEY para ver el mapa.</div>;
+    return <div className="h-full flex items-center justify-center text-slate-400">{t('componentes.fleetMap.configurarMapa')}</div>;
   }
 
   return (
@@ -167,18 +182,18 @@ export function MapboxFleetMap() {
         </div>
         <div className="px-4 pb-4 pt-1 sm:p-4 border-b border-slate-100 dark:border-[#202a40] shrink-0">
           <div className="flex items-center justify-between">
-            <h3 className="font-bold text-slate-900 dark:text-white">Flota en vivo</h3>
-            <span className="text-xs font-semibold text-emerald-600">{onlineCount} en línea</span>
+            <h3 className="font-bold text-slate-900 dark:text-white">{t('componentes.fleetMap.flotaEnVivo')}</h3>
+            <span className="text-xs font-semibold text-emerald-600">{t('componentes.fleetMap.badgeEnLinea', { count: onlineCount })}</span>
           </div>
-          <p className="text-xs text-slate-500 mb-2">{located.length} con ubicación · {devices.length} dispositivos</p>
+          <p className="text-xs text-slate-500 mb-2">{t('componentes.fleetMap.conUbicacion', { count: located.length, total: devices.length })}</p>
           <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#141d2e] border border-slate-200 dark:border-[#202a40]">
             <Search size={15} className="text-slate-400" />
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar chofer o placa" className="w-full bg-transparent outline-none text-sm text-slate-900 dark:text-white placeholder:text-slate-400" />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('componentes.fleetMap.buscarPlaceholder')} className="w-full bg-transparent outline-none text-sm text-slate-900 dark:text-white placeholder:text-slate-400" />
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-2">
           {filtered.length === 0 ? (
-            <div className="p-6 text-center text-sm text-slate-400">Sin choferes con ubicación aún.</div>
+            <div className="p-6 text-center text-sm text-slate-400">{t('componentes.fleetMap.sinChoferes')}</div>
           ) : (
             filtered.map((l) => (
               <button key={l.device.id} onClick={() => focus(l)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-slate-50 dark:hover:bg-[#141d2e] transition">
@@ -187,7 +202,7 @@ export function MapboxFleetMap() {
                 </span>
                 <span className="flex-1 min-w-0">
                   <span className="block text-sm font-semibold text-slate-900 dark:text-white truncate">{label(l)}</span>
-                  <span className="block text-xs text-slate-500 truncate">{l.device.vehiculo?.placa || l.device.name} · {timeAgo(l.p.timestamp)}</span>
+                  <span className="block text-xs text-slate-500 truncate">{l.device.vehiculo?.placa || l.device.name} · {timeAgo(l.p.timestamp, t)}</span>
                 </span>
                 <Circle size={9} className={l.online ? 'text-emerald-500 fill-emerald-500' : 'text-slate-300 fill-slate-300'} />
               </button>

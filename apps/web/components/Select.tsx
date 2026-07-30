@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, Search, X } from 'lucide-react';
+import { useT } from '../lib/i18n';
 
 /**
  * Select — reemplazo profesional y BUSCABLE del <select> nativo.
@@ -36,12 +37,14 @@ export default function Select({
   onChange,
   options,
   label,
-  placeholder = 'Seleccionar...',
+  placeholder,
   disabled = false,
   searchable = true,
   clearable = false,
   className = '',
 }: SelectProps) {
+  const t = useT();
+  const resolvedPlaceholder = placeholder ?? t('componentes.select.placeholder');
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -122,7 +125,7 @@ export default function Select({
             ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
         >
           <span className={`flex-1 truncate ${selected ? 'text-slate-900' : 'text-slate-400'}`}>
-            {selected ? selected.label : placeholder}
+            {selected ? selected.label : resolvedPlaceholder}
           </span>
           {clearable && selected && !disabled && (
             <span
@@ -149,7 +152,7 @@ export default function Select({
                 value={query}
                 onChange={(e) => { setQuery(e.target.value); setActive(0); }}
                 onKeyDown={onKeyDown}
-                placeholder="Buscar..."
+                placeholder={t('componentes.select.buscar')}
                 className="w-full bg-transparent outline-none text-sm text-slate-900 placeholder:text-slate-400"
               />
             </div>
@@ -157,7 +160,7 @@ export default function Select({
 
           <div ref={listRef} className="max-h-60 overflow-y-auto p-1.5" onKeyDown={onKeyDown} tabIndex={-1}>
             {filtered.length === 0 ? (
-              <div className="px-3 py-6 text-center text-sm text-slate-400">Sin resultados</div>
+              <div className="px-3 py-6 text-center text-sm text-slate-400">{t('componentes.select.sinResultados')}</div>
             ) : (
               filtered.map((opt, i) => {
                 const isSel = opt.value === value;

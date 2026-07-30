@@ -5,6 +5,7 @@ import { GeofencesMap, GeofenceEditorMap } from '../../components/tracking/Mapbo
 import { Plus, Trash, MapPin, X, Save, AlertCircle, Pencil } from 'lucide-react';
 import api from '../../lib/api';
 import { toast } from 'sonner';
+import { useT } from '../../lib/i18n';
 
 const defaultCenter = { lat: -12.0464, lng: -77.0428 }; // Lima
 
@@ -19,6 +20,7 @@ interface Geofence {
 }
 
 export default function GeocercasPage() {
+    const t = useT();
     const [geofences, setGeofences] = useState<Geofence[]>([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
@@ -46,7 +48,7 @@ export default function GeocercasPage() {
             setGeofences(res.data);
         } catch (error) {
             console.error(error);
-            toast.error("Error al cargar geocercas");
+            toast.error(t('geocercas.toasts.errorCargar'));
         } finally {
             setLoading(false);
         }
@@ -73,7 +75,7 @@ export default function GeocercasPage() {
     };
 
     const handleSave = async () => {
-        if (!newName) return toast.error("El nombre es obligatorio");
+        if (!newName) return toast.error(t('geocercas.toasts.nombreObligatorio'));
 
         const payload = {
             name: newName,
@@ -87,10 +89,10 @@ export default function GeocercasPage() {
         try {
             if (editingId) {
                 await api.patch(`/gps/geofences/${editingId}`, payload);
-                toast.success("Geocerca actualizada exitosamente");
+                toast.success(t('geocercas.toasts.actualizadoExitoso'));
             } else {
                 await api.post('/gps/geofences', payload);
-                toast.success("Geocerca creada exitosamente");
+                toast.success(t('geocercas.toasts.creadoExitoso'));
             }
             setShowModal(false);
             setEditingId(null);
@@ -99,7 +101,7 @@ export default function GeocercasPage() {
             fetchGeofences();
         } catch (error) {
             console.error(error);
-            toast.error(editingId ? "Error al actualizar geocerca" : "Error al crear geocerca");
+            toast.error(editingId ? t('geocercas.toasts.errorActualizar') : t('geocercas.toasts.errorCrear'));
         } finally {
             setSaving(false);
         }
@@ -110,12 +112,12 @@ export default function GeocercasPage() {
         setDeleting(true);
         try {
             await api.delete(`/gps/geofences/${deleteTarget.id}`);
-            toast.success("Geocerca eliminada");
+            toast.success(t('geocercas.toasts.eliminadoExitoso'));
             setDeleteTarget(null);
             fetchGeofences();
         } catch (error) {
             console.error(error);
-            toast.error("Error al eliminar geocerca");
+            toast.error(t('geocercas.toasts.errorEliminar'));
         } finally {
             setDeleting(false);
         }
@@ -126,15 +128,15 @@ export default function GeocercasPage() {
             {/* Header */}
             <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 sm:p-6 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Geocercas</h1>
-                    <p className="text-slate-500 dark:text-slate-400 text-sm">Define zonas de control y alertas</p>
+                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('geocercas.header.titulo')}</h1>
+                    <p className="text-slate-500 dark:text-slate-400 text-sm">{t('geocercas.header.subtitulo')}</p>
                 </div>
                 <button
                     onClick={openCreate}
                     className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors shadow-lg shadow-blue-500/20"
                 >
                     <Plus size={20} />
-                    Nueva Geocerca
+                    {t('geocercas.header.nuevaGeocerca')}
                 </button>
             </div>
 
@@ -142,11 +144,11 @@ export default function GeocercasPage() {
                 {/* Geofence List Sidebar */}
                 <div className="w-full lg:w-1/3 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-y-auto p-4 flex flex-col gap-3 max-h-[35vh] lg:max-h-none shrink-0">
                     {loading ? (
-                        <p className="text-slate-500 text-center py-10">Cargando...</p>
+                        <p className="text-slate-500 text-center py-10">{t('geocercas.lista.cargando')}</p>
                     ) : geofences.length === 0 ? (
                         <div className="text-center py-10 opacity-60">
                             <MapPin size={48} className="mx-auto mb-2 text-slate-300" />
-                            <p>No tienes geocercas creadas</p>
+                            <p>{t('geocercas.lista.vacio')}</p>
                         </div>
                     ) : (
                         geofences.map(gf => (
@@ -157,19 +159,19 @@ export default function GeocercasPage() {
                                         {gf.name}
                                     </h3>
                                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => openEdit(gf)} title="Editar" className="text-slate-400 hover:text-blue-600">
+                                        <button onClick={() => openEdit(gf)} title={t('geocercas.lista.editarTitle')} className="text-slate-400 hover:text-blue-600">
                                             <Pencil size={16} />
                                         </button>
-                                        <button onClick={() => setDeleteTarget(gf)} title="Eliminar" className="text-slate-400 hover:text-red-500">
+                                        <button onClick={() => setDeleteTarget(gf)} title={t('geocercas.lista.eliminarTitle')} className="text-slate-400 hover:text-red-500">
                                             <Trash size={16} />
                                         </button>
                                     </div>
                                 </div>
-                                <p className="text-xs text-slate-500 mb-2">{gf.description || 'Sin descripción'}</p>
+                                <p className="text-xs text-slate-500 mb-2">{gf.description || t('geocercas.lista.sinDescripcion')}</p>
                                 <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono bg-white dark:bg-slate-900/50 p-2 rounded-lg">
-                                    <span>R: {gf.radius}m</span>
-                                    <span>Lat: {gf.latitude.toFixed(4)}</span>
-                                    <span>Lng: {gf.longitude.toFixed(4)}</span>
+                                    <span>{t('geocercas.lista.radio', { radius: gf.radius })}</span>
+                                    <span>{t('geocercas.lista.lat', { value: gf.latitude.toFixed(4) })}</span>
+                                    <span>{t('geocercas.lista.lng', { value: gf.longitude.toFixed(4) })}</span>
                                 </div>
                             </div>
                         ))
@@ -197,24 +199,24 @@ export default function GeocercasPage() {
                         <div className="flex flex-col md:flex-row h-full">
                             {/* Editor Panel */}
                             <div className="w-full md:w-1/3 p-6 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800 flex flex-col overflow-y-auto max-h-[50vh] md:max-h-none shrink-0">
-                                <h2 className="text-xl font-bold mb-6 text-slate-900 dark:text-white">{editingId ? 'Editar Geocerca' : 'Nueva Geocerca'}</h2>
+                                <h2 className="text-xl font-bold mb-6 text-slate-900 dark:text-white">{editingId ? t('geocercas.modal.editarTitulo') : t('geocercas.modal.nuevaTitulo')}</h2>
 
                                 <div className="space-y-4 flex-1">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nombre</label>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('geocercas.modal.nombreLabel')}</label>
                                         <input
                                             value={newName}
                                             onChange={(e) => setNewName(e.target.value)}
-                                            placeholder="Ej. Almacén Central"
+                                            placeholder={t('geocercas.modal.nombrePlaceholder')}
                                             className="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-blue-500"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Descripción</label>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('geocercas.modal.descripcionLabel')}</label>
                                         <input
                                             value={newDesc}
                                             onChange={(e) => setNewDesc(e.target.value)}
-                                            placeholder="Zona de carga y descarga"
+                                            placeholder={t('geocercas.modal.descripcionPlaceholder')}
                                             className="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-blue-500"
                                         />
                                     </div>
@@ -222,7 +224,7 @@ export default function GeocercasPage() {
                                     <hr className="border-slate-100 dark:border-slate-800" />
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Radio (metros): <span className="text-blue-600 font-bold">{newRadius}m</span></label>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('geocercas.modal.radioLabel')} <span className="text-blue-600 font-bold">{newRadius}m</span></label>
                                         <input
                                             type="range"
                                             min="50"
@@ -237,7 +239,7 @@ export default function GeocercasPage() {
                                     <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg flex gap-3 items-start">
                                         <AlertCircle size={18} className="text-blue-600 mt-0.5 shrink-0" />
                                         <p className="text-xs text-blue-800 dark:text-blue-200">
-                                            Arrastra el círculo azul en el mapa para ubicar la zona. Usa el deslizador para cambiar el tamaño.
+                                            {t('geocercas.modal.ayudaMapa')}
                                         </p>
                                     </div>
                                 </div>
@@ -248,7 +250,7 @@ export default function GeocercasPage() {
                                     className="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-60 disabled:cursor-not-allowed"
                                 >
                                     <Save size={18} />
-                                    {saving ? 'Guardando...' : (editingId ? 'Actualizar Geocerca' : 'Guardar Geocerca')}
+                                    {saving ? t('geocercas.modal.guardando') : (editingId ? t('geocercas.modal.actualizarGeocerca') : t('geocercas.modal.guardarGeocerca'))}
                                 </button>
                             </div>
 
@@ -274,12 +276,12 @@ export default function GeocercasPage() {
                                 <Trash size={20} className="text-red-600" />
                             </div>
                             <div>
-                                <h3 className="font-bold text-slate-900 dark:text-white">Eliminar geocerca</h3>
-                                <p className="text-sm text-slate-500">Esta acción no se puede deshacer.</p>
+                                <h3 className="font-bold text-slate-900 dark:text-white">{t('geocercas.eliminarModal.titulo')}</h3>
+                                <p className="text-sm text-slate-500">{t('geocercas.eliminarModal.subtitulo')}</p>
                             </div>
                         </div>
                         <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">
-                            ¿Seguro que deseas eliminar <span className="font-semibold text-slate-900 dark:text-white">{deleteTarget.name}</span>?
+                            {t('geocercas.eliminarModal.confirmacionPre')} <span className="font-semibold text-slate-900 dark:text-white">{deleteTarget.name}</span>{t('geocercas.eliminarModal.confirmacionPost')}
                         </p>
                         <div className="flex gap-3">
                             <button
@@ -287,14 +289,14 @@ export default function GeocercasPage() {
                                 disabled={deleting}
                                 className="flex-1 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-60"
                             >
-                                Cancelar
+                                {t('geocercas.eliminarModal.cancelar')}
                             </button>
                             <button
                                 onClick={handleDelete}
                                 disabled={deleting}
                                 className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                             >
-                                {deleting ? 'Eliminando...' : 'Eliminar'}
+                                {deleting ? t('geocercas.eliminarModal.eliminando') : t('geocercas.eliminarModal.eliminar')}
                             </button>
                         </div>
                     </div>

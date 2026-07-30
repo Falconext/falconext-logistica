@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { MapPin, Clock, Navigation } from 'lucide-react';
 import { useGoogleMaps, GOOGLE_MAPS_KEY } from './googleMaps';
 import { stylesFor } from './mapTheme';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   originAddress: string;
@@ -34,7 +35,9 @@ async function geocode(addr: string): Promise<google.maps.LatLng | null> {
   }
 }
 
-export function MapboxRouteMap({ originAddress, destinationAddress, mapType = 'roadmap', statusText = 'En Tránsito' }: Props) {
+export function MapboxRouteMap({ originAddress, destinationAddress, mapType = 'roadmap', statusText }: Props) {
+  const t = useT();
+  const resolvedStatusText = statusText ?? t('componentes.routeMap.enTransito');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const polylineRef = useRef<google.maps.Polyline | null>(null);
@@ -130,8 +133,8 @@ export function MapboxRouteMap({ originAddress, destinationAddress, mapType = 'r
         return marker;
       };
       markersRef.current = [
-        makeMarker(o, '#16A34A', 'Origen'),
-        makeMarker(d, '#DC2626', 'Destino'),
+        makeMarker(o, '#16A34A', t('componentes.routeMap.origen')),
+        makeMarker(d, '#DC2626', t('componentes.routeMap.destino')),
       ];
 
       const bounds = new google.maps.LatLngBounds();
@@ -142,7 +145,7 @@ export function MapboxRouteMap({ originAddress, destinationAddress, mapType = 'r
     return () => { cancelled = true; };
   }, [originAddress, destinationAddress, isLoaded]);
 
-  if (!GOOGLE_MAPS_KEY) return <div className="h-full flex items-center justify-center text-slate-400">Configura NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.</div>;
+  if (!GOOGLE_MAPS_KEY) return <div className="h-full flex items-center justify-center text-slate-400">{t('componentes.routeMap.configurarMapa')}</div>;
 
   return (
     <div className="relative h-full w-full">
@@ -150,12 +153,12 @@ export function MapboxRouteMap({ originAddress, destinationAddress, mapType = 'r
 
       {err ? (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/95 backdrop-blur shadow-lg border border-amber-200 text-sm text-amber-700">
-          <MapPin size={15} className="text-amber-500" /> No se pudo trazar la ruta para estas direcciones.
+          <MapPin size={15} className="text-amber-500" /> {t('componentes.routeMap.noSePudoTrazar')}
         </div>
       ) : (
         <div className="absolute top-4 left-4 z-10 flex items-center gap-4 px-4 py-2.5 rounded-xl bg-white/95 dark:bg-[#0f1522]/95 backdrop-blur shadow-lg border border-slate-200 dark:border-[#202a40]">
           <span className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> {statusText}
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> {resolvedStatusText}
           </span>
           {eta && <span className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300"><Clock size={14} /> {eta}</span>}
           {dist && <span className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300"><Navigation size={14} /> {dist}</span>}

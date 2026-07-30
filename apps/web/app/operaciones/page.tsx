@@ -12,28 +12,38 @@ import {
 import { toast } from 'sonner';
 import clsx from 'clsx';
 import { useCurrency } from '../../lib/useCurrency';
+import { useT, useDateLocale } from '../../lib/i18n';
 
 const MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyDJ-Y0SukxfjbACOUjPY7CoV6qnaQkKSZg";
 
 // Estado → LoadSwift-style badge
-const ESTADO_META: Record<string, { label: string; badge: string; dot: string }> = {
-    PENDIENTE: { label: 'Pendiente', badge: 'text-amber-600 border-amber-200 bg-amber-50', dot: 'bg-amber-500' },
-    RETIRADO: { label: 'En ruta', badge: 'text-blue-600 border-blue-200 bg-blue-50', dot: 'bg-blue-500' },
-    ENTREGADO: { label: 'Entregado', badge: 'text-emerald-600 border-emerald-200 bg-emerald-50', dot: 'bg-emerald-500' },
-    ANULADO: { label: 'Anulado', badge: 'text-red-600 border-red-200 bg-red-50', dot: 'bg-red-500' },
-    REPROGRAMADO: { label: 'Reprog.', badge: 'text-purple-600 border-purple-200 bg-purple-50', dot: 'bg-purple-500' },
+const ESTADO_META: Record<string, { badge: string; dot: string }> = {
+    PENDIENTE: { badge: 'text-amber-600 border-amber-200 bg-amber-50', dot: 'bg-amber-500' },
+    RETIRADO: { badge: 'text-blue-600 border-blue-200 bg-blue-50', dot: 'bg-blue-500' },
+    ENTREGADO: { badge: 'text-emerald-600 border-emerald-200 bg-emerald-50', dot: 'bg-emerald-500' },
+    ANULADO: { badge: 'text-red-600 border-red-200 bg-red-50', dot: 'bg-red-500' },
+    REPROGRAMADO: { badge: 'text-purple-600 border-purple-200 bg-purple-50', dot: 'bg-purple-500' },
+};
+// Mapea el código de estado del backend a la clave de traducción en dicts/operaciones.ts
+const ESTADO_LABEL_KEY: Record<string, string> = {
+    PENDIENTE: 'pendiente',
+    RETIRADO: 'enRuta',
+    ENTREGADO: 'entregado',
+    ANULADO: 'anulado',
+    REPROGRAMADO: 'reprogramado',
 };
 const estadoMeta = (e?: string) => ESTADO_META[e || 'PENDIENTE'] || ESTADO_META.PENDIENTE;
+const estadoLabelKey = (e?: string) => ESTADO_LABEL_KEY[e || 'PENDIENTE'] || 'pendiente';
 const ALL_ESTADOS = Object.keys(ESTADO_META);
 
-const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '—';
+const fmtDate = (d?: string, locale = 'es-ES') => d ? new Date(d).toLocaleDateString(locale, { day: '2-digit', month: 'short' }) : '—';
 
 const PAGE_SIZE = 60;
-const WINDOW_OPTIONS: { label: string; days: number | null }[] = [
-    { label: '60 días', days: 60 },
-    { label: '6 meses', days: 180 },
-    { label: '1 año', days: 365 },
-    { label: 'Todo', days: null },
+const WINDOW_OPTIONS_BASE: { key: string; days: number | null }[] = [
+    { key: 'd60', days: 60 },
+    { key: 'm6', days: 180 },
+    { key: 'a1', days: 365 },
+    { key: 'todo', days: null },
 ];
 
 // Tarjeta de detalle de la operación seleccionada.
@@ -44,14 +54,15 @@ function RouteDetailCard({ selected, format, onEdit, onDelete }: {
     onEdit: () => void;
     onDelete: () => void;
 }) {
+    const t = useT();
     return (
         <div className="bg-white rounded-2xl shadow-lg lg:shadow-xl border border-slate-200 p-4">
             <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-slate-900 truncate">{selected.cliente || 'Operación'}</span>
+                        <span className="font-bold text-slate-900 truncate">{selected.cliente || t('operaciones.operacionFallback')}</span>
                         <span className={`px-2 py-0.5 rounded-md text-[11px] font-medium border ${estadoMeta(selected.estado).badge}`}>
-                            {estadoMeta(selected.estado).label}
+                            {t(`operaciones.estados.${estadoLabelKey(selected.estado)}`)}
                         </span>
                     </div>
                     <p className="text-xs text-slate-400 mt-0.5">{selected.id_programacion}</p>
@@ -61,11 +72,11 @@ function RouteDetailCard({ selected, format, onEdit, onDelete }: {
                         onClick={onEdit}
                         className="px-3 py-1.5 rounded-lg bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-xs font-medium transition"
                     >
-                        Editar
+                        {t('operaciones.editar')}
                     </button>
                     <button
                         onClick={onDelete}
-                        title="Eliminar operación"
+                        title={t('operaciones.eliminarOperacionTitle')}
                         className="w-8 h-8 rounded-lg border border-slate-200 text-slate-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 flex items-center justify-center transition"
                     >
                         <Trash2 size={14} />
@@ -76,21 +87,21 @@ function RouteDetailCard({ selected, format, onEdit, onDelete }: {
                 <div className="flex items-start gap-2">
                     <MapPin size={15} className="text-emerald-500 mt-0.5 shrink-0" />
                     <div className="min-w-0">
-                        <p className="text-[11px] text-slate-400">Origen</p>
+                        <p className="text-[11px] text-slate-400">{t('operaciones.origen')}</p>
                         <p className="text-slate-700 truncate">{selected.lugar_retiro || '—'}</p>
                     </div>
                 </div>
                 <div className="flex items-start gap-2">
                     <MapPin size={15} className="text-slate-900 mt-0.5 shrink-0" />
                     <div className="min-w-0">
-                        <p className="text-[11px] text-slate-400">Destino</p>
+                        <p className="text-[11px] text-slate-400">{t('operaciones.destino')}</p>
                         <p className="text-slate-700 truncate">{selected.lugar_entrega || '—'}</p>
                     </div>
                 </div>
             </div>
             <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-4 text-xs text-slate-500 flex-wrap">
                 <span className="flex items-center gap-1.5"><Truck size={13} /> {selected.vehiculo_id || '—'}</span>
-                <span className="flex items-center gap-1.5 truncate"><User size={13} /> {selected.trabajador_nombre || selected.trabajador_id || 'Sin asignar'}</span>
+                <span className="flex items-center gap-1.5 truncate"><User size={13} /> {selected.trabajador_nombre || selected.trabajador_id || t('operaciones.sinAsignar')}</span>
                 {selected.ingreso_estimado != null && (
                     <span className="ml-auto font-semibold text-slate-900 tabular-nums">{format(selected.ingreso_estimado)}</span>
                 )}
@@ -100,7 +111,9 @@ function RouteDetailCard({ selected, format, onEdit, onDelete }: {
 }
 
 export default function OperacionesPage() {
+    const t = useT();
     const { format } = useCurrency();
+    const WINDOW_OPTIONS = WINDOW_OPTIONS_BASE.map(o => ({ ...o, label: t(`operaciones.ventana.${o.key}`) }));
     const [rutas, setRutas] = useState<Programacion[]>([]);
     const [total, setTotal] = useState(0);
     const [counts, setCounts] = useState<Record<string, number>>({});
@@ -231,7 +244,7 @@ export default function OperacionesPage() {
         setIsDeleting(true);
         try {
             await api.delete(`/programacion/${deleting.id}`);
-            toast.success('Operación eliminada');
+            toast.success(t('operaciones.toastEliminada'));
             // Drop it locally and adjust the total instead of a full refetch.
             setRutas(prev => prev.filter(r => r.id !== deleting.id));
             setTotal(t => Math.max(0, t - 1));
@@ -239,7 +252,7 @@ export default function OperacionesPage() {
             setDeleting(null);
         } catch (error) {
             console.error(error);
-            toast.error('Error al eliminar la operación');
+            toast.error(t('operaciones.toastErrorEliminar'));
         } finally {
             setIsDeleting(false);
         }
@@ -263,20 +276,25 @@ export default function OperacionesPage() {
             const params = { ...buildParams(0), take: 1000 };
             const res = await api.get('/programacion', { params });
             const data: Programacion[] = res.data.items ?? [];
-            if (data.length === 0) return toast.error('No hay datos');
+            if (data.length === 0) return toast.error(t('operaciones.toastNoHayDatos'));
             const xlsx = await import('xlsx');
             const ws = xlsx.utils.json_to_sheet(data.map(r => ({
-                ID: r.id_programacion, Fecha: new Date(r.fecha).toLocaleDateString(), Cliente: r.cliente,
-                Vehículo: r.vehiculo_id, Conductor: r.trabajador_nombre || r.trabajador_id, Estado: r.estado,
-                Origen: r.lugar_retiro, Destino: r.lugar_entrega
+                [t('operaciones.excel.id')]: r.id_programacion,
+                [t('operaciones.excel.fecha')]: new Date(r.fecha).toLocaleDateString(),
+                [t('operaciones.excel.cliente')]: r.cliente,
+                [t('operaciones.excel.vehiculo')]: r.vehiculo_id,
+                [t('operaciones.excel.conductor')]: r.trabajador_nombre || r.trabajador_id,
+                [t('operaciones.excel.estado')]: r.estado,
+                [t('operaciones.excel.origen')]: r.lugar_retiro,
+                [t('operaciones.excel.destino')]: r.lugar_entrega,
             })));
             const wb = xlsx.utils.book_new();
-            xlsx.utils.book_append_sheet(wb, ws, 'Operaciones');
+            xlsx.utils.book_append_sheet(wb, ws, t('operaciones.excel.hoja'));
             xlsx.writeFile(wb, 'Reporte_Operaciones.xlsx');
-            toast.success('Excel generado');
+            toast.success(t('operaciones.toastExcelGenerado'));
         } catch (error) {
             console.error(error);
-            toast.error('Error al exportar');
+            toast.error(t('operaciones.toastErrorExportar'));
         }
     };
 
@@ -290,12 +308,12 @@ export default function OperacionesPage() {
                 <div className="p-4 pb-3">
                     <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2.5">
-                            <h1 className="text-xl font-bold text-slate-900">Operaciones</h1>
+                            <h1 className="text-xl font-bold text-slate-900">{t('operaciones.titulo')}</h1>
                             <span className="min-w-[26px] h-6 px-2 flex items-center justify-center rounded-md bg-[#FFC933] text-[#1a1a1c] text-sm font-bold">
                                 {total}
                             </span>
                         </div>
-                        <button onClick={exportToExcel} title="Exportar" className="w-9 h-9 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 transition">
+                        <button onClick={exportToExcel} title={t('operaciones.exportarTitle')} className="w-9 h-9 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 transition">
                             <FileSpreadsheet size={16} />
                         </button>
                     </div>
@@ -304,7 +322,7 @@ export default function OperacionesPage() {
                         <input
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="Buscar cliente, placa, destino..."
+                            placeholder={t('operaciones.buscarPlaceholder')}
                             className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900 placeholder:text-slate-400 transition"
                         />
                     </div>
@@ -312,7 +330,7 @@ export default function OperacionesPage() {
                     <div className="mt-2 flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg p-1">
                         {WINDOW_OPTIONS.map(opt => (
                             <button
-                                key={opt.label}
+                                key={opt.key}
                                 onClick={() => setWindowDays(opt.days)}
                                 className={clsx(
                                     "flex-1 px-2 py-1 rounded-md text-xs font-medium transition",
@@ -328,9 +346,9 @@ export default function OperacionesPage() {
                 {/* List */}
                 <div ref={listRef} onScroll={onListScroll} className="flex-1 overflow-y-auto px-3 pb-3 space-y-2.5">
                     {loading ? (
-                        <div className="text-center py-16 text-sm text-slate-400">Cargando operaciones...</div>
+                        <div className="text-center py-16 text-sm text-slate-400">{t('operaciones.cargando')}</div>
                     ) : rutas.length === 0 ? (
-                        <div className="text-center py-16 text-sm text-slate-400">Sin operaciones para mostrar.</div>
+                        <div className="text-center py-16 text-sm text-slate-400">{t('operaciones.sinOperaciones')}</div>
                     ) : (
                         <>
                             {rutas.map((ruta) => (
@@ -351,7 +369,7 @@ export default function OperacionesPage() {
                                     onClick={loadMore}
                                     className="w-full py-2.5 text-xs font-medium text-slate-500 hover:text-slate-900 transition"
                                 >
-                                    Cargar más ({total - rutas.length} restantes)
+                                    {t('operaciones.cargarMas', { n: total - rutas.length })}
                                 </button>
                             )}
                         </>
@@ -364,7 +382,7 @@ export default function OperacionesPage() {
                         onClick={() => { setEditingRuta(null); setIsNewRouteModalOpen(true); }}
                         className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition"
                     >
-                        <Plus size={16} /> Nueva operación
+                        <Plus size={16} /> {t('operaciones.nuevaOperacion')}
                     </button>
                 </div>
             </div>
@@ -391,13 +409,13 @@ export default function OperacionesPage() {
                             onClick={() => setMapType('roadmap')}
                             className={clsx("px-3.5 py-1.5 rounded-lg text-sm font-medium transition", mapType === 'roadmap' ? "bg-[#FFC933] text-[#1a1a1c]" : "text-slate-600 hover:text-slate-900")}
                         >
-                            Mapa
+                            {t('operaciones.mapaBtn')}
                         </button>
                         <button
                             onClick={() => setMapType('satellite')}
                             className={clsx("px-3.5 py-1.5 rounded-lg text-sm font-medium transition", mapType === 'satellite' ? "bg-[#FFC933] text-[#1a1a1c]" : "text-slate-600 hover:text-slate-900")}
                         >
-                            Satélite
+                            {t('operaciones.satelite')}
                         </button>
                     </div>
                     <div className="relative">
@@ -405,13 +423,13 @@ export default function OperacionesPage() {
                             onClick={() => setShowLayers(v => !v)}
                             className={clsx("flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white shadow-sm border text-sm font-medium transition", showLayers ? "border-blue-400 text-slate-900" : "border-slate-200 text-slate-600 hover:text-slate-900")}
                         >
-                            <Layers size={16} /> Capas
+                            <Layers size={16} /> {t('operaciones.capas')}
                         </button>
 
                         {showLayers && (
                             <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 p-4 animate-in fade-in zoom-in-95 duration-150">
                                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 mb-3">
-                                    <Package size={15} /> Estados visibles
+                                    <Package size={15} /> {t('operaciones.estadosVisibles')}
                                 </div>
                                 <div className="space-y-1">
                                     {ALL_ESTADOS.map((e) => {
@@ -427,7 +445,7 @@ export default function OperacionesPage() {
                                                     {on && <Check size={11} className="text-white" />}
                                                 </span>
                                                 <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
-                                                <span className="text-sm text-slate-700 flex-1">{meta.label}</span>
+                                                <span className="text-sm text-slate-700 flex-1">{t(`operaciones.estados.${estadoLabelKey(e)}`)}</span>
                                                 <span className="text-xs text-slate-400 tabular-nums">{counts[e]}</span>
                                             </button>
                                         );
@@ -481,11 +499,11 @@ export default function OperacionesPage() {
                                 <AlertTriangle size={20} />
                             </div>
                             <div className="min-w-0">
-                                <h3 className="text-lg font-bold text-slate-900">Eliminar operación</h3>
+                                <h3 className="text-lg font-bold text-slate-900">{t('operaciones.eliminarOperacionTitle')}</h3>
                                 <p className="text-sm text-slate-500 mt-1">
-                                    ¿Seguro que deseas eliminar{' '}
-                                    <span className="font-medium text-slate-700">{deleting.cliente || deleting.id_programacion || 'esta operación'}</span>?
-                                    Esta acción no se puede deshacer.
+                                    {t('operaciones.confirmarEliminarPrefix')}{' '}
+                                    <span className="font-medium text-slate-700">{deleting.cliente || deleting.id_programacion || t('operaciones.estaOperacionFallback')}</span>
+                                    {t('operaciones.confirmarEliminarSuffix')}
                                 </p>
                             </div>
                         </div>
@@ -496,7 +514,7 @@ export default function OperacionesPage() {
                                 disabled={isDeleting}
                                 className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition disabled:opacity-60"
                             >
-                                Cancelar
+                                {t('operaciones.cancelar')}
                             </button>
                             <button
                                 type="button"
@@ -505,7 +523,7 @@ export default function OperacionesPage() {
                                 className="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-bold transition flex items-center gap-2 disabled:opacity-70 disabled:pointer-events-none"
                             >
                                 {isDeleting ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
-                                Eliminar
+                                {t('operaciones.eliminar')}
                             </button>
                         </div>
                     </div>
@@ -520,6 +538,8 @@ export default function OperacionesPage() {
 const RouteCard = memo(function RouteCard({ ruta, isSelected, onSelect }: {
     ruta: Programacion; isSelected: boolean; onSelect: (r: Programacion) => void;
 }) {
+    const t = useT();
+    const dateLocale = useDateLocale();
     const meta = estadoMeta(ruta.estado);
     return (
         <button
@@ -533,9 +553,9 @@ const RouteCard = memo(function RouteCard({ ruta, isSelected, onSelect }: {
                 <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
                     <Package size={15} />
                 </div>
-                <span className="font-semibold text-slate-900 text-sm truncate">{ruta.cliente || ruta.id_programacion || 'Operación'}</span>
+                <span className="font-semibold text-slate-900 text-sm truncate">{ruta.cliente || ruta.id_programacion || t('operaciones.operacionFallback')}</span>
                 <span className={`ml-auto shrink-0 px-2 py-0.5 rounded-md text-[11px] font-medium border ${meta.badge}`}>
-                    {meta.label}
+                    {t(`operaciones.estados.${estadoLabelKey(ruta.estado)}`)}
                 </span>
             </div>
 
@@ -547,13 +567,13 @@ const RouteCard = memo(function RouteCard({ ruta, isSelected, onSelect }: {
                 <span className="w-2 h-2 rounded-full border-2 border-slate-400 shrink-0" />
             </div>
             <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-500">
-                <span className="truncate max-w-[45%]">{ruta.lugar_retiro?.split(',')[0] || 'Origen'} · {fmtDate(ruta.fecha_retiro || ruta.fecha)}</span>
-                <span className="truncate max-w-[45%] text-right">{ruta.lugar_entrega?.split(',')[0] || 'Destino'} · {fmtDate(ruta.fecha_entrega)}</span>
+                <span className="truncate max-w-[45%]">{ruta.lugar_retiro?.split(',')[0] || t('operaciones.origen')} · {fmtDate(ruta.fecha_retiro || ruta.fecha, dateLocale)}</span>
+                <span className="truncate max-w-[45%] text-right">{ruta.lugar_entrega?.split(',')[0] || t('operaciones.destino')} · {fmtDate(ruta.fecha_entrega, dateLocale)}</span>
             </div>
 
             <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center gap-3 text-xs text-slate-500">
                 <span className="flex items-center gap-1"><Truck size={12} /> {ruta.vehiculo_id || '—'}</span>
-                <span className="flex items-center gap-1 truncate"><User size={12} /> {ruta.trabajador_nombre || ruta.trabajador_id || 'Sin asignar'}</span>
+                <span className="flex items-center gap-1 truncate"><User size={12} /> {ruta.trabajador_nombre || ruta.trabajador_id || t('operaciones.sinAsignar')}</span>
             </div>
         </button>
     );
@@ -564,6 +584,7 @@ const RouteCard = memo(function RouteCard({ ruta, isSelected, onSelect }: {
 const MapView = memo(function MapView({ deviceId, worker, origin, destination, plate, mapType }: {
     deviceId: string; worker?: string; origin: string; destination: string; plate: string; mapType: 'roadmap' | 'satellite';
 }) {
+    const t = useT();
     if (deviceId) {
         return <LiveMapReal deviceId={deviceId} apiKey={MAPS_KEY} vehiclePlate={plate} workerName={worker} />;
     }
@@ -573,7 +594,7 @@ const MapView = memo(function MapView({ deviceId, worker, origin, destination, p
     return (
         <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-3">
             <Navigation size={40} className="opacity-40" />
-            <p className="text-sm">Selecciona una operación para ver su ruta.</p>
+            <p className="text-sm">{t('operaciones.seleccionaOperacion')}</p>
         </div>
     );
 });

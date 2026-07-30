@@ -5,6 +5,7 @@ import api from '../../lib/api';
 import { AlertTriangle, Clock, FileWarning, Shield, User, Calendar, ChevronRight, Filter, Bell } from 'lucide-react';
 import Link from 'next/link';
 import clsx from 'clsx';
+import { useT, useDateLocale } from '../../lib/i18n';
 
 interface DocumentAlert {
     trabajadorId: string;
@@ -28,6 +29,8 @@ interface AlertSummary {
 }
 
 export default function AlertasPage() {
+    const t = useT();
+    const dateLocale = useDateLocale();
     const [alerts, setAlerts] = useState<DocumentAlert[]>([]);
     const [summary, setSummary] = useState<AlertSummary | null>(null);
     const [loading, setLoading] = useState(true);
@@ -62,7 +65,7 @@ export default function AlertasPage() {
             text: 'text-red-700 dark:text-red-400',
             icon: 'text-red-500',
             badge: 'bg-red-500',
-            label: 'Crítico'
+            label: t('alertas.severidadCritico')
         },
         warning: {
             bg: 'bg-amber-50 dark:bg-amber-900/20',
@@ -70,7 +73,7 @@ export default function AlertasPage() {
             text: 'text-amber-700 dark:text-amber-400',
             icon: 'text-amber-500',
             badge: 'bg-amber-500',
-            label: 'Próximo'
+            label: t('alertas.severidadProximo')
         },
         info: {
             bg: 'bg-blue-50 dark:bg-blue-900/20',
@@ -78,7 +81,7 @@ export default function AlertasPage() {
             text: 'text-blue-700 dark:text-blue-400',
             icon: 'text-blue-500',
             badge: 'bg-blue-500',
-            label: 'Planeado'
+            label: t('alertas.severidadPlaneado')
         }
     };
 
@@ -103,7 +106,7 @@ export default function AlertasPage() {
             <div className="flex h-[50vh] items-center justify-center">
                 <div className="flex flex-col items-center gap-3">
                     <div className="h-10 w-10 rounded-full border-4 border-amber-500/30 border-t-amber-500 animate-spin"></div>
-                    <span className="text-slate-500">Cargando alertas...</span>
+                    <span className="text-slate-500">{t('alertas.cargando')}</span>
                 </div>
             </div>
         );
@@ -116,10 +119,10 @@ export default function AlertasPage() {
                 <div>
                     <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
                         <Bell className="text-amber-500 shrink-0" />
-                        Centro de Alertas
+                        {t('alertas.titulo')}
                     </h1>
                     <p className="text-slate-500 dark:text-slate-400 mt-1">
-                        Documentos próximos a vencer en los próximos 90 días
+                        {t('alertas.subtitulo')}
                     </p>
                 </div>
             </div>
@@ -138,7 +141,7 @@ export default function AlertasPage() {
                     >
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-xs font-bold uppercase text-slate-500 tracking-wider">Total</p>
+                                <p className="text-xs font-bold uppercase text-slate-500 tracking-wider">{t('alertas.cardTotal')}</p>
                                 <p className="text-3xl font-bold text-slate-900 dark:text-white mt-1">{summary.total}</p>
                             </div>
                             <div className="h-12 w-12 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
@@ -158,9 +161,9 @@ export default function AlertasPage() {
                     >
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-xs font-bold uppercase text-red-500 tracking-wider">Críticos</p>
+                                <p className="text-xs font-bold uppercase text-red-500 tracking-wider">{t('alertas.cardCriticos')}</p>
                                 <p className="text-3xl font-bold text-red-600 dark:text-red-400 mt-1">{summary.critical}</p>
-                                <p className="text-xs text-slate-500 mt-1">Menos de 15 días</p>
+                                <p className="text-xs text-slate-500 mt-1">{t('alertas.cardCriticosSub')}</p>
                             </div>
                             <div className="h-12 w-12 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
                                 <AlertTriangle className="text-red-500" size={24} />
@@ -179,9 +182,9 @@ export default function AlertasPage() {
                     >
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-xs font-bold uppercase text-amber-500 tracking-wider">Próximos</p>
+                                <p className="text-xs font-bold uppercase text-amber-500 tracking-wider">{t('alertas.cardProximos')}</p>
                                 <p className="text-3xl font-bold text-amber-600 dark:text-amber-400 mt-1">{summary.warning}</p>
-                                <p className="text-xs text-slate-500 mt-1">15-30 días</p>
+                                <p className="text-xs text-slate-500 mt-1">{t('alertas.cardProximosSub')}</p>
                             </div>
                             <div className="h-12 w-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
                                 <Clock className="text-amber-500" size={24} />
@@ -200,9 +203,9 @@ export default function AlertasPage() {
                     >
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-xs font-bold uppercase text-blue-500 tracking-wider">Planeados</p>
+                                <p className="text-xs font-bold uppercase text-blue-500 tracking-wider">{t('alertas.cardPlaneados')}</p>
                                 <p className="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-1">{summary.info}</p>
-                                <p className="text-xs text-slate-500 mt-1">30-90 días</p>
+                                <p className="text-xs text-slate-500 mt-1">{t('alertas.cardPlaneadosSub')}</p>
                             </div>
                             <div className="h-12 w-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
                                 <Calendar className="text-blue-500" size={24} />
@@ -216,11 +219,11 @@ export default function AlertasPage() {
             <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
                 <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <h2 className="font-bold text-slate-900 dark:text-white">
-                        Documentos por Vencer ({filteredAlerts.length})
+                        {t('alertas.listaTitulo', { count: filteredAlerts.length })}
                     </h2>
                     <div className="flex items-center gap-2 text-sm text-slate-500">
                         <Filter size={16} />
-                        <span>Filtrado por: <strong className="text-slate-700 dark:text-slate-300">{filter === 'all' ? 'Todos' : severityConfig[filter].label}</strong></span>
+                        <span>{t('alertas.filtradoPor')} <strong className="text-slate-700 dark:text-slate-300">{filter === 'all' ? t('alertas.filtroTodos') : severityConfig[filter].label}</strong></span>
                     </div>
                 </div>
 
@@ -229,8 +232,8 @@ export default function AlertasPage() {
                         <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-emerald-100 dark:bg-emerald-900/20 mb-4">
                             <Shield className="text-emerald-500" size={32} />
                         </div>
-                        <h3 className="text-lg font-bold text-slate-900 dark:text-white">¡Todo en orden!</h3>
-                        <p className="text-slate-500 mt-1">No hay documentos próximos a vencer en esta categoría.</p>
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-white">{t('alertas.vacioTitulo')}</h3>
+                        <p className="text-slate-500 mt-1">{t('alertas.vacioDescripcion')}</p>
                     </div>
                 ) : (
                     <div className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -258,14 +261,14 @@ export default function AlertasPage() {
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <span className="font-bold text-slate-900 dark:text-white">{alert.trabajadorNombre}</span>
                                                 <span className={clsx("px-2 py-0.5 rounded-full text-xs font-bold", config.badge, "text-white")}>
-                                                    {alert.daysRemaining} días
+                                                    {t('alertas.diasRestantes', { count: alert.daysRemaining })}
                                                 </span>
                                             </div>
                                             <div className="flex items-center gap-2 flex-wrap text-sm text-slate-500 mt-0.5">
                                                 {alert.entityType && alert.entityType !== 'TRABAJADOR' && (
                                                     <>
                                                         <span className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
-                                                            {alert.entityType === 'VEHICULO' ? 'Vehículo' : 'Documento'}
+                                                            {alert.entityType === 'VEHICULO' ? t('alertas.entidadVehiculo') : t('alertas.entidadDocumento')}
                                                         </span>
                                                         <span>•</span>
                                                     </>
@@ -279,9 +282,9 @@ export default function AlertasPage() {
 
                                     <div className="flex items-center gap-4 shrink-0">
                                         <div className="text-right hidden md:block">
-                                            <p className="text-xs text-slate-500 uppercase font-bold">Vence</p>
+                                            <p className="text-xs text-slate-500 uppercase font-bold">{t('alertas.vence')}</p>
                                             <p className={clsx("font-mono font-bold", config.text)}>
-                                                {new Date(alert.expirationDate).toLocaleDateString('es-ES', {
+                                                {new Date(alert.expirationDate).toLocaleDateString(dateLocale, {
                                                     day: '2-digit',
                                                     month: 'short',
                                                     year: 'numeric'

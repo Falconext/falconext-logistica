@@ -9,6 +9,7 @@ import Link from 'next/link';
 import api from '../../lib/api';
 import { useGoogleMaps, GOOGLE_MAPS_KEY } from './googleMaps';
 import { stylesFor, MapThemeToggle, MapPreset } from './mapTheme';
+import { useT } from '../../lib/i18n';
 
 const ONLINE_MS = 5 * 60 * 1000;
 const REFRESH_MS = 15000;
@@ -24,16 +25,17 @@ interface Device {
 // Normaliza una placa/targa legacy ("ABC-123 - MODELO" → "ABC-123") para comparar.
 const normPlaca = (raw?: string | null) => (raw || '').trim().split(/\s+/)[0].toUpperCase();
 
-function timeAgo(ts: string): string {
+function timeAgo(ts: string, t: ReturnType<typeof useT>): string {
   const min = Math.floor((Date.now() - new Date(ts).getTime()) / 60000);
-  if (min < 1) return 'ahora';
-  if (min < 60) return `hace ${min} min`;
+  if (min < 1) return t('componentes.panelLiveMap.ahora');
+  if (min < 60) return t('componentes.panelLiveMap.haceMin', { min });
   const h = Math.floor(min / 60);
-  if (h < 24) return `hace ${h} h`;
-  return `hace ${Math.floor(h / 24)} d`;
+  if (h < 24) return t('componentes.panelLiveMap.haceHoras', { h });
+  return t('componentes.panelLiveMap.haceDias', { d: Math.floor(h / 24) });
 }
 
 export function PanelLiveMap({ enConsegnaPlacas }: { enConsegnaPlacas?: string[] }) {
+  const t = useT();
   const { isLoaded } = useGoogleMaps();
   const mapRef = useRef<google.maps.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -115,8 +117,8 @@ export function PanelLiveMap({ enConsegnaPlacas }: { enConsegnaPlacas?: string[]
     located.forEach((l) => {
       seen.add(l.device.id);
       const color = colorFor(l);
-      const estado = l.enConsegna ? '● En consegna' : l.online ? '● En línea' : '○ Desconectado';
-      const html = `<div style="font-family:system-ui;font-size:12px"><b>${label(l)}</b><br/>${((l.p.speed ?? 0) * 3.6).toFixed(0)} km/h · ${timeAgo(l.p.timestamp)}<br/><span style="color:${color}">${estado}</span></div>`;
+      const estado = l.enConsegna ? t('componentes.panelLiveMap.popupEnConsegna') : l.online ? t('componentes.panelLiveMap.popupEnLinea') : t('componentes.panelLiveMap.popupDesconectado');
+      const html = `<div style="font-family:system-ui;font-size:12px"><b>${label(l)}</b><br/>${((l.p.speed ?? 0) * 3.6).toFixed(0)} km/h · ${timeAgo(l.p.timestamp, t)}<br/><span style="color:${color}">${estado}</span></div>`;
       const icon = {
         path: google.maps.SymbolPath.CIRCLE,
         scale: l.enConsegna ? 9 : 8,
@@ -150,7 +152,7 @@ export function PanelLiveMap({ enConsegnaPlacas }: { enConsegnaPlacas?: string[]
   if (!GOOGLE_MAPS_KEY) {
     return (
       <div className="h-full flex items-center justify-center text-center text-sm text-slate-400 px-6">
-        Configura <code className="mx-1 px-1 rounded bg-slate-100 dark:bg-slate-800">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> para ver la flota en el mapa.
+        {t('componentes.panelLiveMap.configuraPre')} <code className="mx-1 px-1 rounded bg-slate-100 dark:bg-slate-800">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> {t('componentes.panelLiveMap.configuraPost')}
       </div>
     );
   }
@@ -166,16 +168,16 @@ export function PanelLiveMap({ enConsegnaPlacas }: { enConsegnaPlacas?: string[]
           <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
         </span>
         <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-          {onlineCount} en línea
+          {t('componentes.panelLiveMap.badgeEnLinea', { count: onlineCount })}
         </span>
-        <span className="text-xs text-slate-400">· {located.length} ubicados</span>
+        <span className="text-xs text-slate-400">{t('componentes.panelLiveMap.ubicados', { count: located.length })}</span>
       </div>
 
       <div className="absolute top-3 right-3 flex items-center gap-2">
         <MapThemeToggle preset={preset} onChange={setPreset} />
         <Link
           href="/rastreo"
-          title="Abrir rastreo completo"
+          title={t('componentes.panelLiveMap.abrirRastreo')}
           className="flex items-center justify-center w-9 h-9 rounded-xl bg-white/90 dark:bg-[#0f1522]/90 backdrop-blur border border-slate-200 dark:border-[#202a40] text-slate-600 dark:text-slate-300 shadow-sm hover:bg-white dark:hover:bg-[#141d2e] transition"
         >
           <Maximize2 size={15} />
@@ -185,7 +187,7 @@ export function PanelLiveMap({ enConsegnaPlacas }: { enConsegnaPlacas?: string[]
       {located.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/90 dark:bg-[#0f1522]/90 backdrop-blur border border-slate-200 dark:border-[#202a40] text-sm text-slate-500 shadow-sm">
-            <Radio size={15} className="text-slate-400" /> Sin ubicaciones de flota aún
+            <Radio size={15} className="text-slate-400" /> {t('componentes.panelLiveMap.sinUbicaciones')}
           </div>
         </div>
       )}

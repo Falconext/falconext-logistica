@@ -6,10 +6,12 @@ import { useEffect, useState } from 'react';
 import { Menu, X } from 'lucide-react';
 import { useAuthStore } from '../lib/store';
 import { MODULES, moduleForPath, canAccessModule, isAdmin } from '../lib/modules';
+import { useT } from '../lib/i18n';
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
+    const t = useT();
     const { checkAuth, isAuthenticated, token, user } = useAuthStore();
     const [checked, setChecked] = useState(false);
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -81,7 +83,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                         <button
                             onClick={() => setMobileNavOpen(false)}
                             className="absolute top-3 right-3 z-10 p-1.5 text-zinc-400 hover:text-white transition-colors"
-                            aria-label="Cerrar menú"
+                            aria-label={t('menu.close')}
                         >
                             <X size={20} />
                         </button>
@@ -96,7 +98,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                     <button
                         onClick={() => setMobileNavOpen(true)}
                         className="p-1.5 -ml-1.5 text-zinc-300 hover:text-white transition-colors"
-                        aria-label="Abrir menú"
+                        aria-label={t('menu.open')}
                     >
                         <Menu size={22} />
                     </button>

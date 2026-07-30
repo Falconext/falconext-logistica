@@ -6,8 +6,11 @@ import { Programacion } from '../../types';
 import { ChevronLeft, ChevronRight, Calendar, MapPin, Truck, User, Clock, X } from 'lucide-react';
 import clsx from 'clsx';
 import Link from 'next/link';
+import { useT, useDateLocale } from '../../lib/i18n';
 
 export default function CalendarioPage() {
+    const t = useT();
+    const dateLocale = useDateLocale();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [rutas, setRutas] = useState<Programacion[]>([]);
     const [loading, setLoading] = useState(true);
@@ -37,9 +40,16 @@ export default function CalendarioPage() {
     const startingDayOfWeek = firstDayOfMonth.getDay(); // 0 = Sunday
     const daysInMonth = lastDayOfMonth.getDate();
 
-    const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    const monthNames = [
+        t('calendario.meses.enero'), t('calendario.meses.febrero'), t('calendario.meses.marzo'),
+        t('calendario.meses.abril'), t('calendario.meses.mayo'), t('calendario.meses.junio'),
+        t('calendario.meses.julio'), t('calendario.meses.agosto'), t('calendario.meses.septiembre'),
+        t('calendario.meses.octubre'), t('calendario.meses.noviembre'), t('calendario.meses.diciembre'),
+    ];
+    const dayNames = [
+        t('calendario.dias.dom'), t('calendario.dias.lun'), t('calendario.dias.mar'),
+        t('calendario.dias.mie'), t('calendario.dias.jue'), t('calendario.dias.vie'), t('calendario.dias.sab'),
+    ];
 
     const goToPreviousMonth = () => {
         setCurrentDate(new Date(year, month - 1, 1));
@@ -92,7 +102,7 @@ export default function CalendarioPage() {
             <div className="flex h-[50vh] items-center justify-center">
                 <div className="flex flex-col items-center gap-3">
                     <div className="h-10 w-10 rounded-full border-4 border-blue-500/30 border-t-blue-500 animate-spin"></div>
-                    <span className="text-slate-500">Cargando calendario...</span>
+                    <span className="text-slate-500">{t('calendario.cargando')}</span>
                 </div>
             </div>
         );
@@ -105,14 +115,14 @@ export default function CalendarioPage() {
                 <div>
                     <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
                         <Calendar className="text-blue-500" />
-                        Calendario de Operaciones
+                        {t('calendario.titulo')}
                     </h1>
                     <p className="text-slate-500 dark:text-slate-400 mt-1">
-                        Vista mensual de rutas programadas
+                        {t('calendario.subtitulo')}
                     </p>
                 </div>
                 <Link href="/operaciones" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">
-                    ← Volver a lista de operaciones
+                    {t('calendario.volverOperaciones')}
                 </Link>
             </div>
 
@@ -141,7 +151,7 @@ export default function CalendarioPage() {
                         onClick={goToToday}
                         className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition"
                     >
-                        Hoy
+                        {t('calendario.hoy')}
                     </button>
                 </div>
 
@@ -190,12 +200,12 @@ export default function CalendarioPage() {
                                                             key={i}
                                                             className="text-xs px-2 py-1 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 truncate"
                                                         >
-                                                            <span className="font-medium">{ruta.trabajador_nombre || ruta.trabajador_id || 'Sin asignar'}</span>
+                                                            <span className="font-medium">{ruta.trabajador_nombre || ruta.trabajador_id || t('calendario.sinAsignar')}</span>
                                                         </div>
                                                     ))
                                                 ) : (
                                                     <div className="text-xs px-2 py-1 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold text-center">
-                                                        {dayRutasCount} rutas
+                                                        {t('calendario.rutasCount', { n: dayRutasCount })}
                                                     </div>
                                                 )}
                                             </div>
@@ -215,14 +225,14 @@ export default function CalendarioPage() {
                         <div className="flex justify-between items-center p-4 border-b border-slate-100 dark:border-slate-800">
                             <div>
                                 <h3 className="font-bold text-lg text-slate-900 dark:text-white">
-                                    {selectedDay.toLocaleDateString('es-ES', {
+                                    {selectedDay.toLocaleDateString(dateLocale, {
                                         weekday: 'long',
                                         year: 'numeric',
                                         month: 'long',
                                         day: 'numeric'
                                     })}
                                 </h3>
-                                <p className="text-sm text-slate-500">{dayRutas.length} operaciones programadas</p>
+                                <p className="text-sm text-slate-500">{t('calendario.operacionesProgramadas', { n: dayRutas.length })}</p>
                             </div>
                             <button
                                 onClick={() => setSelectedDay(null)}
@@ -236,7 +246,7 @@ export default function CalendarioPage() {
                             {dayRutas.length === 0 ? (
                                 <div className="text-center py-8 text-slate-500">
                                     <Calendar size={48} className="mx-auto mb-3 opacity-30" />
-                                    <p>No hay operaciones programadas para este día.</p>
+                                    <p>{t('calendario.sinOperacionesDia')}</p>
                                 </div>
                             ) : (
                                 <div className="space-y-3">
@@ -251,10 +261,10 @@ export default function CalendarioPage() {
                                                 </div>
                                                 <div>
                                                     <p className="font-medium text-slate-900 dark:text-white">
-                                                        {ruta.vehiculo_id || 'Sin vehículo'}
+                                                        {ruta.vehiculo_id || t('calendario.sinVehiculo')}
                                                     </p>
                                                     <p className="text-xs text-slate-500 flex items-center gap-1">
-                                                        <User size={12} /> {ruta.trabajador_nombre || ruta.trabajador_id || 'Sin asignar'}
+                                                        <User size={12} /> {ruta.trabajador_nombre || ruta.trabajador_id || t('calendario.sinAsignar')}
                                                     </p>
                                                 </div>
                                             </div>
@@ -263,13 +273,13 @@ export default function CalendarioPage() {
                                                 <div className="flex items-center gap-2">
                                                     <div className="h-2 w-2 rounded-full bg-emerald-500"></div>
                                                     <span className="text-slate-600 dark:text-slate-300 truncate">
-                                                        {ruta.lugar_retiro || 'Origen no especificado'}
+                                                        {ruta.lugar_retiro || t('calendario.origenNoEspecificado')}
                                                     </span>
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     <div className="h-2 w-2 rounded-full bg-red-500"></div>
                                                     <span className="text-slate-600 dark:text-slate-300 truncate">
-                                                        {ruta.lugar_entrega || 'Destino no especificado'}
+                                                        {ruta.lugar_entrega || t('calendario.destinoNoEspecificado')}
                                                     </span>
                                                 </div>
                                             </div>
@@ -277,7 +287,7 @@ export default function CalendarioPage() {
                                             {ruta.hora_retiro && (
                                                 <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
                                                     <Clock size={12} />
-                                                    <span>Hora de retiro: {ruta.hora_retiro}</span>
+                                                    <span>{t('calendario.horaRetiro', { hora: ruta.hora_retiro })}</span>
                                                 </div>
                                             )}
                                         </div>
@@ -291,7 +301,7 @@ export default function CalendarioPage() {
                                 href="/operaciones"
                                 className="block w-full text-center py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition"
                             >
-                                Ver todas las operaciones
+                                {t('calendario.verTodasOperaciones')}
                             </Link>
                         </div>
                     </div>

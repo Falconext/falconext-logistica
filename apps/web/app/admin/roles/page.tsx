@@ -5,31 +5,34 @@ import api from '../../../lib/api';
 import { MODULES } from '../../../lib/modules';
 import { ShieldCheck, Plus, Pencil, Trash2, Loader2, AlertTriangle, Users, Crown, Lock } from 'lucide-react';
 import { toast } from 'sonner';
+import { useT } from '../../../lib/i18n';
 import RolModal, { Rol } from './RolModal';
 
 function TipoBadge({ rol }: { rol: Rol }) {
+    const t = useT();
     if (rol.es_admin) {
         return (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-[#1a1a1c] text-[#FFC933]">
-                <Crown size={12} /> Administrador
+                <Crown size={12} /> {t('admin.roles.badge.administrador')}
             </span>
         );
     }
     if (rol.solo_propios) {
         return (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-[#FFC933] text-[#1a1a1c]">
-                <Lock size={12} /> Restringido a lo suyo
+                <Lock size={12} /> {t('admin.roles.badge.restringido')}
             </span>
         );
     }
     return (
         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-600">
-            <ShieldCheck size={12} /> Estándar
+            <ShieldCheck size={12} /> {t('admin.roles.badge.estandar')}
         </span>
     );
 }
 
 export default function RolesPage() {
+    const t = useT();
     const [roles, setRoles] = useState<Rol[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -44,7 +47,7 @@ export default function RolesPage() {
             .then((res) => setRoles(Array.isArray(res.data) ? res.data : []))
             .catch((err) => {
                 console.error('Error fetching roles:', err);
-                toast.error(err?.response?.data?.message || 'No se pudieron cargar los roles.');
+                toast.error(err?.response?.data?.message || t('admin.roles.toasts.errorCargar'));
             })
             .finally(() => setLoading(false));
     }, []);
@@ -60,11 +63,11 @@ export default function RolesPage() {
         try {
             await api.delete(`/roles/${toDelete.id}`);
             setRoles((prev) => prev.filter((r) => r.id !== toDelete.id));
-            toast.success('Rol eliminado.');
+            toast.success(t('admin.roles.toasts.eliminado'));
             setToDelete(null);
         } catch (err: any) {
             console.error('Error deleting role:', err);
-            toast.error(err?.response?.data?.message || 'No se pudo eliminar el rol.');
+            toast.error(err?.response?.data?.message || t('admin.roles.toasts.errorEliminar'));
         } finally {
             setDeleting(false);
         }
@@ -79,15 +82,15 @@ export default function RolesPage() {
                         <ShieldCheck size={20} />
                     </div>
                     <div className="min-w-0">
-                        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Gestión de roles</h1>
-                        <p className="text-sm text-slate-500">Define perfiles de acceso y los módulos que cada uno puede ver.</p>
+                        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">{t('admin.roles.header.titulo')}</h1>
+                        <p className="text-sm text-slate-500">{t('admin.roles.header.subtitulo')}</p>
                     </div>
                     <span className="min-w-[28px] h-6 px-2 flex items-center justify-center rounded-md bg-[#FFC933] text-[#1a1a1c] text-sm font-bold">
                         {roles.length}
                     </span>
                 </div>
                 <button onClick={openCreate} className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition w-full sm:w-auto lg:self-start">
-                    <Plus size={16} /> Nuevo rol
+                    <Plus size={16} /> {t('admin.roles.header.nuevoRol')}
                 </button>
             </div>
 
@@ -97,17 +100,17 @@ export default function RolesPage() {
                     <table className="w-full text-left text-sm">
                         <thead>
                             <tr className="border-b border-slate-100 text-slate-400">
-                                {['Rol', 'Tipo', 'Módulos', 'Usuarios'].map((h) => (
+                                {[t('admin.roles.tabla.colRol'), t('admin.roles.tabla.colTipo'), t('admin.roles.tabla.colModulos'), t('admin.roles.tabla.colUsuarios')].map((h) => (
                                     <th key={h} className="px-5 py-3.5 font-medium">{h}</th>
                                 ))}
-                                <th className="px-5 py-3.5 font-medium text-right">Acciones</th>
+                                <th className="px-5 py-3.5 font-medium text-right">{t('admin.roles.tabla.colAcciones')}</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={5} className="text-center py-16 text-slate-400">Cargando roles...</td></tr>
+                                <tr><td colSpan={5} className="text-center py-16 text-slate-400">{t('admin.roles.tabla.cargando')}</td></tr>
                             ) : roles.length === 0 ? (
-                                <tr><td colSpan={5} className="text-center py-16 text-slate-400">No hay roles registrados.</td></tr>
+                                <tr><td colSpan={5} className="text-center py-16 text-slate-400">{t('admin.roles.tabla.vacio')}</td></tr>
                             ) : roles.map((r) => (
                                 <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
                                     <td className="px-5 py-3.5">
@@ -121,10 +124,10 @@ export default function RolesPage() {
                                     <td className="px-5 py-3.5"><TipoBadge rol={r} /></td>
                                     <td className="px-5 py-3.5">
                                         {r.es_admin ? (
-                                            <span className="text-sm font-medium text-slate-700">Todos</span>
+                                            <span className="text-sm font-medium text-slate-700">{t('admin.roles.tabla.todos')}</span>
                                         ) : (
                                             <span className="text-sm text-slate-600">
-                                                {(r.modulos?.length || 0)} de {MODULES.length}
+                                                {t('admin.roles.tabla.moduloConteo', { count: r.modulos?.length || 0, total: MODULES.length })}
                                             </span>
                                         )}
                                     </td>
@@ -136,12 +139,12 @@ export default function RolesPage() {
                                     </td>
                                     <td className="px-5 py-3.5">
                                         <div className="flex items-center justify-end gap-1.5">
-                                            <button onClick={() => openEdit(r)} title="Editar" className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-100 flex items-center justify-center text-slate-500 transition">
+                                            <button onClick={() => openEdit(r)} title={t('admin.roles.tabla.editarTitle')} className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-100 flex items-center justify-center text-slate-500 transition">
                                                 <Pencil size={15} />
                                             </button>
                                             <button
                                                 onClick={() => setToDelete(r)}
-                                                title="Eliminar"
+                                                title={t('admin.roles.tabla.eliminarTitle')}
                                                 className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-red-50 hover:border-red-200 hover:text-red-500 flex items-center justify-center text-slate-500 transition"
                                             >
                                                 <Trash2 size={15} />
@@ -172,13 +175,13 @@ export default function RolesPage() {
                                 <AlertTriangle size={20} />
                             </div>
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900">Eliminar rol</h3>
+                                <h3 className="text-lg font-bold text-slate-900">{t('admin.roles.eliminarModal.titulo')}</h3>
                                 <p className="text-sm text-slate-500 mt-1">
-                                    ¿Seguro que deseas eliminar el rol <span className="font-semibold text-slate-700">{toDelete.nombre}</span>? Esta acción no se puede deshacer.
+                                    {t('admin.roles.eliminarModal.confirmacionPre')} <span className="font-semibold text-slate-700">{toDelete.nombre}</span>{t('admin.roles.eliminarModal.confirmacionPost')}
                                 </p>
                                 {(toDelete.usuarios_count ?? 0) > 0 && (
                                     <p className="text-xs text-amber-600 mt-2">
-                                        Este rol tiene {toDelete.usuarios_count} usuario(s) asignado(s); el sistema podría impedir su eliminación.
+                                        {t('admin.roles.eliminarModal.advertenciaUsuarios', { count: toDelete.usuarios_count ?? 0 })}
                                     </p>
                                 )}
                             </div>
@@ -186,12 +189,12 @@ export default function RolesPage() {
                         <div className="mt-6 flex justify-end gap-3">
                             <button onClick={() => setToDelete(null)} disabled={deleting}
                                 className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition disabled:opacity-60">
-                                Cancelar
+                                {t('admin.roles.eliminarModal.cancelar')}
                             </button>
                             <button onClick={confirmDelete} disabled={deleting}
                                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition disabled:opacity-60">
                                 {deleting ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
-                                Eliminar
+                                {t('admin.roles.eliminarModal.eliminar')}
                             </button>
                         </div>
                     </div>

@@ -3,11 +3,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useGoogleMaps, GOOGLE_MAPS_KEY } from './googleMaps';
 import { stylesFor, MapThemeToggle, MapPreset } from './mapTheme';
+import { useT } from '../../lib/i18n';
 
 interface GF { id: string; latitude: number; longitude: number; radius: number; }
 
 /** Mapa de solo lectura: muestra todas las geocercas como círculos. */
 export function GeofencesMap({ geofences }: { geofences: GF[] }) {
+    const t = useT();
     const containerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<google.maps.Map | null>(null);
     const circlesRef = useRef<google.maps.Circle[]>([]);
@@ -54,7 +56,7 @@ export function GeofencesMap({ geofences }: { geofences: GF[] }) {
         }
     }, [geofences, ready]);
 
-    if (!GOOGLE_MAPS_KEY) return <div className="h-full flex items-center justify-center text-slate-400">Configura NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.</div>;
+    if (!GOOGLE_MAPS_KEY) return <div className="h-full flex items-center justify-center text-slate-400">{t('componentes.geofences.configurarMapa')}</div>;
     return (
         <div className="relative h-full w-full rounded-xl overflow-hidden">
             <div ref={containerRef} className="h-full w-full" />
@@ -65,6 +67,7 @@ export function GeofencesMap({ geofences }: { geofences: GF[] }) {
 
 /** Editor: centro arrastrable + círculo que sigue al radio. Click en el mapa reubica el centro. */
 export function GeofenceEditorMap({ center, radius, onCenterChange }: { center: { lat: number; lng: number }; radius: number; onCenterChange: (lat: number, lng: number) => void }) {
+    const t = useT();
     const containerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<google.maps.Map | null>(null);
     const markerRef = useRef<google.maps.Marker | null>(null);
@@ -137,7 +140,7 @@ export function GeofenceEditorMap({ center, radius, onCenterChange }: { center: 
         }
     }, [center.lat, center.lng, radius, ready]);
 
-    if (!GOOGLE_MAPS_KEY) return <div className="h-full flex items-center justify-center text-slate-400">Configura NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.</div>;
+    if (!GOOGLE_MAPS_KEY) return <div className="h-full flex items-center justify-center text-slate-400">{t('componentes.geofences.configurarMapa')}</div>;
     return (
         <div className="relative h-full w-full">
             <div ref={containerRef} className="h-full w-full" />

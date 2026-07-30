@@ -6,6 +6,7 @@ import { MODULES } from '../../../lib/modules';
 import { useAuthStore } from '../../../lib/store';
 import { UserCog, Plus, Pencil, Trash2, Loader2, AlertTriangle, ShieldCheck, User as UserIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { useT } from '../../../lib/i18n';
 import UsuarioModal, { Usuario } from './UsuarioModal';
 
 function isAdminLike(role?: string) {
@@ -29,6 +30,7 @@ function RoleBadge({ role }: { role: string }) {
 }
 
 export default function UsuariosPage() {
+    const t = useT();
     const { user: currentUser } = useAuthStore();
     const [usuarios, setUsuarios] = useState<Usuario[]>([]);
     const [loading, setLoading] = useState(true);
@@ -44,7 +46,7 @@ export default function UsuariosPage() {
             .then((res) => setUsuarios(res.data))
             .catch((err) => {
                 console.error('Error fetching users:', err);
-                toast.error(err?.response?.data?.message || 'No se pudieron cargar los usuarios.');
+                toast.error(err?.response?.data?.message || t('admin.usuarios.toasts.errorCargar'));
             })
             .finally(() => setLoading(false));
     }, []);
@@ -60,11 +62,11 @@ export default function UsuariosPage() {
         try {
             await api.delete(`/usuarios/${toDelete.id}`);
             setUsuarios((prev) => prev.filter((u) => u.id !== toDelete.id));
-            toast.success('Usuario eliminado.');
+            toast.success(t('admin.usuarios.toasts.eliminado'));
             setToDelete(null);
         } catch (err: any) {
             console.error('Error deleting user:', err);
-            toast.error(err?.response?.data?.message || 'No se pudo eliminar el usuario.');
+            toast.error(err?.response?.data?.message || t('admin.usuarios.toasts.errorEliminar'));
         } finally {
             setDeleting(false);
         }
@@ -79,15 +81,15 @@ export default function UsuariosPage() {
                         <UserCog size={20} />
                     </div>
                     <div className="min-w-0">
-                        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Administración de usuarios</h1>
-                        <p className="text-sm text-slate-500">Gestiona el acceso y los módulos visibles de cada usuario.</p>
+                        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">{t('admin.usuarios.header.titulo')}</h1>
+                        <p className="text-sm text-slate-500">{t('admin.usuarios.header.subtitulo')}</p>
                     </div>
                     <span className="min-w-[28px] h-6 px-2 flex items-center justify-center rounded-md bg-[#FFC933] text-[#1a1a1c] text-sm font-bold">
                         {usuarios.length}
                     </span>
                 </div>
                 <button onClick={openCreate} className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition w-full sm:w-auto lg:self-start">
-                    <Plus size={16} /> Nuevo usuario
+                    <Plus size={16} /> {t('admin.usuarios.header.nuevoUsuario')}
                 </button>
             </div>
 
@@ -97,21 +99,21 @@ export default function UsuariosPage() {
                     <table className="w-full text-left text-sm">
                         <thead>
                             <tr className="border-b border-slate-100 text-slate-400">
-                                {['Usuario', 'Rol', 'Módulos', 'Estado'].map((h) => (
+                                {[t('admin.usuarios.tabla.colUsuario'), t('admin.usuarios.tabla.colRol'), t('admin.usuarios.tabla.colModulos'), t('admin.usuarios.tabla.colEstado')].map((h) => (
                                     <th key={h} className="px-5 py-3.5 font-medium">{h}</th>
                                 ))}
-                                <th className="px-5 py-3.5 font-medium text-right">Acciones</th>
+                                <th className="px-5 py-3.5 font-medium text-right">{t('admin.usuarios.tabla.colAcciones')}</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={5} className="text-center py-16 text-slate-400">Cargando usuarios...</td></tr>
+                                <tr><td colSpan={5} className="text-center py-16 text-slate-400">{t('admin.usuarios.tabla.cargando')}</td></tr>
                             ) : usuarios.length === 0 ? (
-                                <tr><td colSpan={5} className="text-center py-16 text-slate-400">No hay usuarios registrados.</td></tr>
+                                <tr><td colSpan={5} className="text-center py-16 text-slate-400">{t('admin.usuarios.tabla.vacio')}</td></tr>
                             ) : usuarios.map((u) => {
                                 const isSuper = (u.role || '').toUpperCase() === 'SUPERADMIN';
                                 const admin = isSuper || !!u.rol?.es_admin;
-                                const rolNombre = isSuper ? 'Super Admin' : (u.rol?.nombre || '— sin rol —');
+                                const rolNombre = isSuper ? t('admin.usuarios.tabla.superAdmin') : (u.rol?.nombre || t('admin.usuarios.tabla.sinRol'));
                                 const isSelf = currentUser?.id === u.id;
                                 return (
                                     <tr key={u.id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
@@ -132,33 +134,33 @@ export default function UsuariosPage() {
                                                 {rolNombre}
                                             </span>
                                             {u.rol?.solo_propios && (
-                                                <span className="ml-1.5 text-[11px] text-amber-600 font-medium">solo lo suyo</span>
+                                                <span className="ml-1.5 text-[11px] text-amber-600 font-medium">{t('admin.usuarios.tabla.soloLoSuyo')}</span>
                                             )}
                                         </td>
                                         <td className="px-5 py-3.5">
                                             {admin ? (
-                                                <span className="text-sm font-medium text-slate-700">Todos</span>
+                                                <span className="text-sm font-medium text-slate-700">{t('admin.usuarios.tabla.todos')}</span>
                                             ) : (
                                                 <span className="text-sm text-slate-600">
-                                                    {(u.rol?.modulos?.length ?? 0)} de {MODULES.length}
+                                                    {t('admin.usuarios.tabla.moduloConteo', { count: u.rol?.modulos?.length ?? 0, total: MODULES.length })}
                                                 </span>
                                             )}
                                         </td>
                                         <td className="px-5 py-3.5">
                                             <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${u.activo ? 'text-emerald-600' : 'text-slate-400'}`}>
                                                 <span className={`w-2 h-2 rounded-full ${u.activo ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                                                {u.activo ? 'Activo' : 'Inactivo'}
+                                                {u.activo ? t('admin.usuarios.tabla.activo') : t('admin.usuarios.tabla.inactivo')}
                                             </span>
                                         </td>
                                         <td className="px-5 py-3.5">
                                             <div className="flex items-center justify-end gap-1.5">
-                                                <button onClick={() => openEdit(u)} title="Editar" className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-100 flex items-center justify-center text-slate-500 transition">
+                                                <button onClick={() => openEdit(u)} title={t('admin.usuarios.tabla.editarTitle')} className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-100 flex items-center justify-center text-slate-500 transition">
                                                     <Pencil size={15} />
                                                 </button>
                                                 <button
                                                     onClick={() => setToDelete(u)}
                                                     disabled={isSelf}
-                                                    title={isSelf ? 'No puedes eliminar tu propio usuario' : 'Eliminar'}
+                                                    title={isSelf ? t('admin.usuarios.tabla.noEliminarPropio') : t('admin.usuarios.tabla.eliminarTitle')}
                                                     className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-red-50 hover:border-red-200 hover:text-red-500 flex items-center justify-center text-slate-500 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-slate-200 disabled:hover:text-slate-500"
                                                 >
                                                     <Trash2 size={15} />
@@ -190,21 +192,21 @@ export default function UsuariosPage() {
                                 <AlertTriangle size={20} />
                             </div>
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900">Eliminar usuario</h3>
+                                <h3 className="text-lg font-bold text-slate-900">{t('admin.usuarios.eliminarModal.titulo')}</h3>
                                 <p className="text-sm text-slate-500 mt-1">
-                                    ¿Seguro que deseas eliminar a <span className="font-semibold text-slate-700">{toDelete.nombre || toDelete.email}</span>? Esta acción no se puede deshacer.
+                                    {t('admin.usuarios.eliminarModal.confirmacionPre')} <span className="font-semibold text-slate-700">{toDelete.nombre || toDelete.email}</span>{t('admin.usuarios.eliminarModal.confirmacionPost')}
                                 </p>
                             </div>
                         </div>
                         <div className="mt-6 flex justify-end gap-3">
                             <button onClick={() => setToDelete(null)} disabled={deleting}
                                 className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition disabled:opacity-60">
-                                Cancelar
+                                {t('admin.usuarios.eliminarModal.cancelar')}
                             </button>
                             <button onClick={confirmDelete} disabled={deleting}
                                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition disabled:opacity-60">
                                 {deleting ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
-                                Eliminar
+                                {t('admin.usuarios.eliminarModal.eliminar')}
                             </button>
                         </div>
                     </div>

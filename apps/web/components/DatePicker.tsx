@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Calendar, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { useT } from '../lib/i18n';
 
 /**
  * DatePicker — reemplazo profesional del <input type="date"> nativo.
@@ -12,10 +13,6 @@ import { Calendar, ChevronLeft, ChevronRight, X } from 'lucide-react';
  * Uso:
  *   <DatePicker label="Fecha" value={fecha} onChange={setFecha} />
  */
-
-const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-const MESES_CORTO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-const DIAS = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá', 'Do'];
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const toISO = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -52,13 +49,18 @@ export default function DatePicker({
   value,
   onChange,
   label,
-  placeholder = 'Seleccionar fecha',
+  placeholder,
   disabled = false,
   clearable = true,
   min,
   max,
   className = '',
 }: DatePickerProps) {
+  const t = useT();
+  const MESES = useMemo(() => Array.from({ length: 12 }, (_, i) => t(`componentes.datePicker.m${i}`)), [t]);
+  const MESES_CORTO = useMemo(() => Array.from({ length: 12 }, (_, i) => t(`componentes.datePicker.mc${i}`)), [t]);
+  const DIAS = useMemo(() => Array.from({ length: 7 }, (_, i) => t(`componentes.datePicker.d${i}`)), [t]);
+  const resolvedPlaceholder = placeholder ?? t('componentes.datePicker.placeholder');
   const selected = useMemo(() => parseISO(value), [value]);
   const minDate = useMemo(() => parseISO(min), [min]);
   const maxDate = useMemo(() => parseISO(max), [max]);
@@ -183,7 +185,7 @@ export default function DatePicker({
             ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
         >
           <Calendar size={16} className="text-slate-400 shrink-0" />
-          <span className={`flex-1 ${label_ ? 'text-slate-900' : 'text-slate-400'}`}>{label_ || placeholder}</span>
+          <span className={`flex-1 ${label_ ? 'text-slate-900' : 'text-slate-400'}`}>{label_ || resolvedPlaceholder}</span>
           {clearable && label_ && !disabled && (
             <span
               role="button"
@@ -250,11 +252,11 @@ export default function DatePicker({
           {/* Pie: hoy / limpiar */}
           <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 px-1">
             <button type="button" onClick={goToday} className="text-xs font-semibold text-[#1a1a1c] hover:underline">
-              Hoy
+              {t('componentes.datePicker.hoy')}
             </button>
             {clearable && (
               <button type="button" onClick={() => { onChange(''); setOpen(false); }} className="text-xs font-medium text-slate-400 hover:text-red-500">
-                Limpiar
+                {t('componentes.datePicker.limpiar')}
               </button>
             )}
           </div>

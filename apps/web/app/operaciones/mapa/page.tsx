@@ -6,6 +6,7 @@ import { MapboxLiveMap as LiveMapReal } from '../../../components/tracking/Mapbo
 import api from '../../../lib/api';
 import Select from '../../../components/Select';
 import { Search } from 'lucide-react';
+import { useT } from '../../../lib/i18n';
 
 interface Device {
     id: string;
@@ -17,6 +18,7 @@ interface Device {
 }
 
 export default function MapaPage() {
+    const t = useT();
     const searchParams = useSearchParams();
     const initialDeviceId = searchParams.get('device');
 
@@ -47,13 +49,13 @@ export default function MapaPage() {
         <div className="h-[calc(100vh-100px)] flex flex-col space-y-4">
             {/* Header / Selector */}
             <div className="bg-white dark:bg-[#0f172a] p-4 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row gap-3 md:gap-4 justify-between md:items-center shadow-sm">
-                <h1 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-white">Mapa en Vivo (GPS Real)</h1>
+                <h1 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-white">{t('operaciones.mapa.titulo')}</h1>
 
                 <div className="flex items-center gap-2 w-full md:w-auto">
                     <Search className="text-slate-400" size={18} />
                     <Select
                         className="flex-1 md:w-64"
-                        placeholder="Seleccionar Vehículo"
+                        placeholder={t('operaciones.mapa.seleccionarVehiculo')}
                         value={selectedDeviceId || ''}
                         onChange={(v) => setSelectedDeviceId(v)}
                         options={devices.map(dev => ({
@@ -68,7 +70,7 @@ export default function MapaPage() {
             <div className="flex-1 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden relative shadow-inner">
                 {loading ? (
                     <div className="absolute inset-0 flex items-center justify-center text-slate-500 animate-pulse">
-                        Cargando dispositivos...
+                        {t('operaciones.mapa.cargandoDispositivos')}
                     </div>
                 ) : selectedDeviceId ? (
                     <LiveMapReal
@@ -80,7 +82,7 @@ export default function MapaPage() {
                 ) : (
                     <div className="absolute inset-0 flex items-center justify-center flex-col gap-2 text-slate-400">
                         <Search size={48} className="opacity-20" />
-                        <p>Selecciona un dispositivo para ver su ubicación en tiempo real.</p>
+                        <p>{t('operaciones.mapa.seleccionaDispositivo')}</p>
                     </div>
                 )}
             </div>
