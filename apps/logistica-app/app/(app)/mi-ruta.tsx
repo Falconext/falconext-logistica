@@ -87,8 +87,15 @@ export default function MiRutaScreen() {
         // Cuenta no rastreable: la ruta arranca pero el supervisor no verá GPS.
         Alert.alert('Ruta iniciada · sin GPS', 'Tu cuenta no está habilitada para rastreo, así que el supervisor no verá tu ubicación ni el tiempo estimado. Pide al administrador que active «Será rastreado» en tu ficha.');
       } else {
-        const ok = await startTracking();
-        if (!ok) Alert.alert('GPS', 'Ruta iniciada, pero falta permiso de ubicación para rastrear. Actívalo para compartir tu posición.');
+        // El GPS es secundario: si falla (permiso denegado, Expo Go sin background),
+        // la ruta ya quedó iniciada — no abortamos el flujo por eso.
+        try {
+          const ok = await startTracking();
+          if (!ok) Alert.alert('GPS', 'Ruta iniciada, pero falta permiso de ubicación para rastrear. Actívalo para compartir tu posición.');
+        } catch (gpsErr) {
+          console.warn('[MiRuta] startTracking falló:', gpsErr);
+          Alert.alert('GPS', 'Ruta iniciada, pero no se pudo activar el rastreo en este dispositivo.');
+        }
       }
       await load();
     } catch (e: any) {
