@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Navigation, MapPin, CornerUpLeft, Clock, Timer, RefreshCw, Loader2, Route as RouteIcon, User, X, MapPinned
+    Navigation, MapPin, CornerUpLeft, Clock, Timer, RefreshCw, Loader2, Route as RouteIcon, User, X, MapPinned, Coffee
 } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../../lib/api';
@@ -14,7 +14,9 @@ interface RecorridoActivo {
     trabajador: string;
     url_foto: string | null;
     placa: string | null;
-    estado: 'EN_RUTA_IDA' | 'EN_DESTINO' | 'EN_RUTA_VUELTA';
+    estado: 'EN_RUTA_IDA' | 'EN_DESTINO' | 'EN_RUTA_VUELTA' | 'EN_DESCANSO';
+    descansando: boolean;
+    descansoMin: number;
     origen: string | null;
     destino: string | null;
     origen_lat: number | null;
@@ -37,6 +39,7 @@ const ESTADO_META: Record<string, { label: string; chip: string; icon: any }> = 
     EN_RUTA_IDA: { label: 'En ruta · ida', chip: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-500/10 dark:text-indigo-400', icon: Navigation },
     EN_DESTINO: { label: 'En el destino', chip: 'text-amber-600 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-400', icon: MapPin },
     EN_RUTA_VUELTA: { label: 'Regresando', chip: 'text-blue-600 bg-blue-50 dark:bg-blue-500/10 dark:text-blue-400', icon: CornerUpLeft },
+    EN_DESCANSO: { label: 'Descansando', chip: 'text-orange-600 bg-orange-50 dark:bg-orange-500/10 dark:text-orange-400', icon: Coffee },
 };
 
 function fmtMin(min: number | null): string {
@@ -86,6 +89,7 @@ export default function RecorridosPage() {
         ida: data.filter((r) => r.estado === 'EN_RUTA_IDA').length,
         destino: data.filter((r) => r.estado === 'EN_DESTINO').length,
         vuelta: data.filter((r) => r.estado === 'EN_RUTA_VUELTA').length,
+        descanso: data.filter((r) => r.estado === 'EN_DESCANSO').length,
     }), [data]);
 
     if (loading) {
@@ -131,11 +135,12 @@ export default function RecorridosPage() {
             </div>
 
             {/* Resumen */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
                 <Kpi label="En curso" value={resumen.total} tone="slate" icon={RouteIcon} />
                 <Kpi label="En ruta (ida)" value={resumen.ida} tone="indigo" icon={Navigation} />
                 <Kpi label="En destino" value={resumen.destino} tone="amber" icon={MapPin} />
                 <Kpi label="Regresando" value={resumen.vuelta} tone="blue" icon={CornerUpLeft} />
+                <Kpi label="Descansando" value={resumen.descanso} tone="orange" icon={Coffee} />
             </div>
 
             {/* Lista */}
@@ -196,13 +201,19 @@ export default function RecorridosPage() {
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <Timer size={15} className="text-indigo-400 shrink-0" />
+                                        {r.estado === 'EN_DESCANSO'
+                                            ? <Coffee size={15} className="text-orange-400 shrink-0" />
+                                            : <Timer size={15} className="text-indigo-400 shrink-0" />}
                                         <div className="min-w-0">
                                             <p className="text-[10px] uppercase text-slate-400">
-                                                {r.estado === 'EN_RUTA_VUELTA' ? 'Disponible en' : r.estado === 'EN_DESTINO' ? 'Estado' : 'Llega en'}
+                                                {r.estado === 'EN_DESCANSO' ? 'Descansando hace'
+                                                    : r.estado === 'EN_RUTA_VUELTA' ? 'Disponible en'
+                                                        : r.estado === 'EN_DESTINO' ? 'Estado' : 'Llega en'}
                                             </p>
-                                            <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">
-                                                {r.estado === 'EN_DESTINO' ? 'En destino' : `~${fmtMin(r.disponibleEnMin ?? r.etaMin)}`}
+                                            <p className={clsx('text-sm font-bold tabular-nums', r.estado === 'EN_DESCANSO' ? 'text-orange-600 dark:text-orange-400' : 'text-indigo-600 dark:text-indigo-400')}>
+                                                {r.estado === 'EN_DESCANSO' ? fmtMin(r.descansoMin)
+                                                    : r.estado === 'EN_DESTINO' ? 'En destino'
+                                                        : `~${fmtMin(r.disponibleEnMin ?? r.etaMin)}`}
                                             </p>
                                         </div>
                                     </div>
@@ -303,6 +314,7 @@ const KPI_TONES: Record<string, string> = {
     indigo: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-500/10 dark:text-indigo-400',
     amber: 'text-amber-600 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-400',
     blue: 'text-blue-600 bg-blue-50 dark:bg-blue-500/10 dark:text-blue-400',
+    orange: 'text-orange-600 bg-orange-50 dark:bg-orange-500/10 dark:text-orange-400',
 };
 
 function Kpi({ label, value, tone, icon: Icon }: { label: string; value: number; tone: string; icon: any }) {

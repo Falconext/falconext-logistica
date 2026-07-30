@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Alert, ScrollView } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Navigation, MapPin, CornerUpLeft, Flag, Play, Package, Clock } from 'lucide-react-native';
+import { Navigation, MapPin, CornerUpLeft, Flag, Play, Package, Clock, Coffee } from 'lucide-react-native';
 import { Screen, AppHeader, Card, Button, Badge, LoadingState, EmptyState, Theme } from '../../components/ui';
 import api, { DEVICE_TOKEN_KEY } from '../../services/api';
 import { startTracking, stopTracking } from '../../services/LocationService';
@@ -17,6 +17,7 @@ interface Recorrido {
   origen_label?: string | null;
   destino_label?: string | null;
   iniciado_en: string;
+  descanso_desde?: string | null;
 }
 interface Operacion {
   id: string;
@@ -128,10 +129,14 @@ export default function MiRutaScreen() {
       <Screen scroll padded>
         <AppHeader title="Mi Ruta" subtitle="Traslado en curso" />
 
-        <Card style={styles.activeCard}>
+        <Card style={[styles.activeCard, activo.descanso_desde && styles.restingCard]}>
           <View style={styles.stateRow}>
-            <Navigation size={22} color={C.primary} />
-            <Text style={styles.stateTitle}>{ESTADO_LABEL[activo.estado] || activo.estado}</Text>
+            {activo.descanso_desde
+              ? <Coffee size={22} color={C.warning} />
+              : <Navigation size={22} color={C.primary} />}
+            <Text style={styles.stateTitle}>
+              {activo.descanso_desde ? 'En descanso' : (ESTADO_LABEL[activo.estado] || activo.estado)}
+            </Text>
           </View>
 
           <View style={styles.legRow}>
@@ -156,24 +161,42 @@ export default function MiRutaScreen() {
         </Card>
 
         <View style={{ gap: S.sm, marginTop: S.md }}>
-          {activo.estado === 'EN_RUTA_IDA' && (
+          {activo.descanso_desde ? (
+            // Descansando: solo reanudar (o cancelar).
             <>
-              <Button title="LLEGUÉ AL DESTINO" icon={Flag} onPress={() => accion('llegada')} loading={busy} />
+              <Button title="REANUDAR RUTA" icon={Play} onPress={() => accion('reanudar')} loading={busy} />
               <Button title="Cancelar traslado" variant="ghost" onPress={confirmCancelar} disabled={busy} />
             </>
-          )}
-          {activo.estado === 'EN_DESTINO' && (
+          ) : (
             <>
-              <Button title="REGRESAR AL ORIGEN" icon={CornerUpLeft} onPress={() => accion('regreso')} loading={busy} />
-              <Button title="Finalizar (sin retorno)" variant="secondary" onPress={() => accion('finalizar', { stop: true })} disabled={busy} />
+              {activo.estado === 'EN_RUTA_IDA' && (
+                <Button title="LLEGUÉ AL DESTINO" icon={Flag} onPress={() => accion('llegada')} loading={busy} />
+              )}
+              {activo.estado === 'EN_DESTINO' && (
+                <>
+                  <Button title="REGRESAR AL ORIGEN" icon={CornerUpLeft} onPress={() => accion('regreso')} loading={busy} />
+                  <Button title="Finalizar (sin retorno)" variant="secondary" onPress={() => accion('finalizar', { stop: true })} disabled={busy} />
+                </>
+              )}
+              {activo.estado === 'EN_RUTA_VUELTA' && (
+                <Button title="FINALIZAR RUTA" icon={Flag} onPress={() => accion('finalizar', { stop: true })} loading={busy} />
+              )}
+              {/* Descanso disponible mientras se está en ruta (tramos largos). */}
+              {(activo.estado === 'EN_RUTA_IDA' || activo.estado === 'EN_RUTA_VUELTA') && (
+                <Button title="Tomar descanso" icon={Coffee} variant="secondary" onPress={() => accion('descanso')} disabled={busy} />
+              )}
+              {activo.estado === 'EN_RUTA_IDA' && (
+                <Button title="Cancelar traslado" variant="ghost" onPress={confirmCancelar} disabled={busy} />
+              )}
             </>
-          )}
-          {activo.estado === 'EN_RUTA_VUELTA' && (
-            <Button title="FINALIZAR RUTA" icon={Flag} onPress={() => accion('finalizar', { stop: true })} loading={busy} />
           )}
         </View>
 
-        <Text style={styles.hint}>Tu ubicación se comparte con la central mientras la ruta está activa.</Text>
+        <Text style={styles.hint}>
+          {activo.descanso_desde
+            ? 'Estás en descanso. El supervisor ve que estás pausado; reanuda cuando retomes la ruta.'
+            : 'Tu ubicación se comparte con la central mientras la ruta está activa.'}
+        </Text>
       </Screen>
     );
   }
@@ -212,6 +235,7 @@ export default function MiRutaScreen() {
 const makeStyles = () =>
   StyleSheet.create({
     activeCard: { gap: S.sm, marginTop: S.md, borderWidth: 1, borderColor: C.primary },
+    restingCard: { borderColor: C.warning },
     stateRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
     stateTitle: { fontSize: 18, fontWeight: '800', color: C.text },
     legRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },

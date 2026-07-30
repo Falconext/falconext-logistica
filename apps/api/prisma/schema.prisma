@@ -462,6 +462,11 @@ model Recorrido {
   retorno_en      DateTime?
   finalizado_en   DateTime?
 
+  // Descanso: pausa dentro de un tramo (tramos largos). descanso_desde != null
+  // ⇒ el chofer está descansando ahora; descanso_min acumula el total pausado.
+  descanso_desde  DateTime?
+  descanso_min    Float?   @default(0)
+
   // Métricas por tramo (km / minutos), calculadas al cerrar cada tramo.
   ida_km          Float?
   ida_min         Float?

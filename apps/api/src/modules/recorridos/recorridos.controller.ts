@@ -39,6 +39,16 @@ export class RecorridosController {
         return this.service.llegada(req.user.tenantId, id, req.user.trabajadorId);
     }
 
+    @Post(':id/descanso')
+    descanso(@Param('id') id: string, @Req() req) {
+        return this.service.descanso(req.user.tenantId, id, req.user.trabajadorId);
+    }
+
+    @Post(':id/reanudar')
+    reanudar(@Param('id') id: string, @Req() req) {
+        return this.service.reanudar(req.user.tenantId, id, req.user.trabajadorId);
+    }
+
     @Post(':id/regreso')
     regreso(@Param('id') id: string, @Req() req) {
         return this.service.regreso(req.user.tenantId, id, req.user.trabajadorId);

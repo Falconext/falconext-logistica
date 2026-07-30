@@ -194,6 +194,30 @@ export class RecorridosService {
         });
     }
 
+    /** Tomar descanso: pausa el tramo actual (ida o vuelta). */
+    async descanso(tenantId: string, id: string, trabajadorId: string) {
+        const r = await this.getOwned(tenantId, id, trabajadorId);
+        if (r.estado !== 'EN_RUTA_IDA' && r.estado !== 'EN_RUTA_VUELTA') {
+            throw new BadRequestException('Solo puedes descansar mientras estás en ruta.');
+        }
+        if (r.descanso_desde) throw new BadRequestException('Ya estás descansando.');
+        return this.prisma.recorrido.update({
+            where: { id: r.id },
+            data: { descanso_desde: new Date() },
+        });
+    }
+
+    /** Reanudar: cierra el descanso y acumula el tiempo pausado. */
+    async reanudar(tenantId: string, id: string, trabajadorId: string) {
+        const r = await this.getOwned(tenantId, id, trabajadorId);
+        if (!r.descanso_desde) throw new BadRequestException('No hay un descanso activo.');
+        const min = Math.round((Date.now() - r.descanso_desde.getTime()) / 60000);
+        return this.prisma.recorrido.update({
+            where: { id: r.id },
+            data: { descanso_desde: null, descanso_min: (r.descanso_min || 0) + min },
+        });
+    }
+
     /** Regresar: abre el tramo de vuelta hacia el origen. */
     async regreso(tenantId: string, id: string, trabajadorId: string) {
         const r = await this.getOwned(tenantId, id, trabajadorId);
@@ -275,7 +299,9 @@ export class RecorridosService {
                         : r.estado === 'EN_RUTA_VUELTA' && r.origen_lat != null && r.origen_lng != null
                             ? { lat: r.origen_lat, lng: r.origen_lng }
                             : null;
-                const eta = pos && target ? await this.etaMin(pos, target) : null;
+                // Descansando: el chofer pausó el tramo. Congela ETA/disponibilidad.
+                const descansando = !!r.descanso_desde;
+                const eta = !descansando && pos && target ? await this.etaMin(pos, target) : null;
 
                 const inicioTramo =
                     r.estado === 'EN_RUTA_VUELTA' && r.retorno_en ? r.retorno_en :
@@ -286,7 +312,14 @@ export class RecorridosService {
                     trabajador: trabMap.get(r.trabajador_id)?.nombre_completo || 'Chofer',
                     url_foto: trabMap.get(r.trabajador_id)?.url_foto || null,
                     placa: r.vehiculo_id ? vehMap.get(r.vehiculo_id)?.placa || null : null,
-                    estado: r.estado,
+                    // Estado visible: EN_DESCANSO sobreescribe el tramo mientras está pausado.
+                    estado: descansando ? 'EN_DESCANSO' : r.estado,
+                    tramo: r.estado, // el tramo real (para saber a dónde reanuda)
+                    descansando,
+                    // Minutos del descanso actual (si descansa) o total acumulado.
+                    descansoMin: descansando
+                        ? Math.round((now - new Date(r.descanso_desde!).getTime()) / 60000)
+                        : Math.round(r.descanso_min || 0),
                     origen: r.origen_label,
                     destino: r.destino_label,
                     origen_lat: r.origen_lat, origen_lng: r.origen_lng,
@@ -295,10 +328,10 @@ export class RecorridosService {
                     iniciado_en: r.iniciado_en,
                     // Minutos en el tramo actual.
                     enTramoMin: Math.round((now - new Date(inicioTramo).getTime()) / 60000),
-                    // ETA al objetivo del tramo (min). En EN_DESTINO no aplica.
+                    // ETA al objetivo del tramo (min). Null si descansa o en destino.
                     etaMin: eta,
-                    // Cuándo estará disponible (min): el ETA del tramo actual si va en ruta.
-                    disponibleEnMin: r.estado === 'EN_DESTINO' ? null : eta,
+                    // Cuándo estará disponible (min): ETA del tramo, null si descansa/en destino.
+                    disponibleEnMin: descansando || r.estado === 'EN_DESTINO' ? null : eta,
                     posicion: pos ? { lat: pos.lat, lng: pos.lng, timestamp: pos.timestamp } : null,
                     ida_km: r.ida_km, ida_min: r.ida_min,
                 };
