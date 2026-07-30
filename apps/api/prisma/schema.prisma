@@ -34,6 +34,9 @@ model Trabajador {
   // Al activarse se auto-provisiona un Device con token para este trabajador.
   trackable        Boolean @default(false)
 
+  // Panel DHL: disponibilidad operativa (DISPONIBLE / NO DISPONIBLE). Toggle manual.
+  disponible       Boolean @default(true)
+
   // Documentación Personal
   numero_pasaporte            String?
   fecha_vencimiento_pasaporte DateTime?
@@ -95,6 +98,9 @@ model Vehiculo {
   tipo_unidad         String? // 'DHL', 'Farmacia', etc.
   estado_vehiculo     String? // 'Activo', 'Mantenimiento'
   aislamiento_termico String? // 'COIBENTAZI'
+
+  // Panel DHL: disponibilidad operativa del vehículo (DISPONIBLE / NO DISPONIBLE). Toggle manual.
+  disponible          Boolean @default(true)
 
   // Documentación
   tarjeta_circulacion      String? // 'LIBRETO'

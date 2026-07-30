@@ -16,6 +16,7 @@ import { PeajesModule } from './modules/peajes/peajes.module';
 import { CombustibleModule } from './modules/combustible/combustible.module';
 import { UsuariosModule } from './modules/usuarios/usuarios.module';
 import { RolesModule } from './modules/roles/roles.module';
+import { PanelModule } from './modules/panel/panel.module';
 
 @Module({
     imports: [
@@ -36,6 +37,7 @@ import { RolesModule } from './modules/roles/roles.module';
         SheetsModule,
         UsuariosModule,
         RolesModule,
+        PanelModule,
     ],
     controllers: [],
     providers: [],

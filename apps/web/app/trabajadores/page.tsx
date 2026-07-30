@@ -133,7 +133,7 @@ export default function TrabajadoresPage() {
                     <table className="w-full text-left text-sm">
                         <thead>
                             <tr className="border-b border-slate-100 text-slate-400">
-                                {['Empleado', 'ID / Cargo', 'Área', 'Contacto', 'Sueldo base', 'Estado'].map((h) => (
+                                {['Empleado', 'Cargo', 'Área', 'Contacto', 'Sueldo base', 'Estado'].map((h) => (
                                     <th key={h} className="px-5 py-3.5 font-medium">
                                         <span className="inline-flex items-center gap-1">{h} <ChevronsUpDown size={13} className="text-slate-300" /></span>
                                     </th>
@@ -172,8 +172,7 @@ export default function TrabajadoresPage() {
                                             </div>
                                         </td>
                                         <td className="px-5 py-3.5">
-                                            <div className="font-mono text-xs text-blue-600">{w.id_trabajador || '-'}</div>
-                                            <div className="text-xs text-slate-500">{w.cargo}</div>
+                                            <div className="text-sm text-slate-700">{w.cargo || '-'}</div>
                                         </td>
                                         <td className="px-5 py-3.5 text-slate-600">{w.area_trabajo || '-'}</td>
                                         <td className="px-5 py-3.5">

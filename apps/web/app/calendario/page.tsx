@@ -190,7 +190,7 @@ export default function CalendarioPage() {
                                                             key={i}
                                                             className="text-xs px-2 py-1 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 truncate"
                                                         >
-                                                            <span className="font-medium">{ruta.trabajador_id?.substring(0, 6) || 'Sin asignar'}</span>
+                                                            <span className="font-medium">{ruta.trabajador_nombre || ruta.trabajador_id || 'Sin asignar'}</span>
                                                         </div>
                                                     ))
                                                 ) : (
@@ -254,7 +254,7 @@ export default function CalendarioPage() {
                                                         {ruta.vehiculo_id || 'Sin vehículo'}
                                                     </p>
                                                     <p className="text-xs text-slate-500 flex items-center gap-1">
-                                                        <User size={12} /> {ruta.trabajador_id || 'Sin asignar'}
+                                                        <User size={12} /> {ruta.trabajador_nombre || ruta.trabajador_id || 'Sin asignar'}
                                                     </p>
                                                 </div>
                                             </div>

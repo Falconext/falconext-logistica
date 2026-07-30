@@ -90,7 +90,7 @@ function RouteDetailCard({ selected, format, onEdit, onDelete }: {
             </div>
             <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-4 text-xs text-slate-500 flex-wrap">
                 <span className="flex items-center gap-1.5"><Truck size={13} /> {selected.vehiculo_id || '—'}</span>
-                <span className="flex items-center gap-1.5 truncate"><User size={13} /> {selected.trabajador_id || 'Sin asignar'}</span>
+                <span className="flex items-center gap-1.5 truncate"><User size={13} /> {selected.trabajador_nombre || selected.trabajador_id || 'Sin asignar'}</span>
                 {selected.ingreso_estimado != null && (
                     <span className="ml-auto font-semibold text-slate-900 tabular-nums">{format(selected.ingreso_estimado)}</span>
                 )}
@@ -253,7 +253,7 @@ export default function OperacionesPage() {
             const xlsx = await import('xlsx');
             const ws = xlsx.utils.json_to_sheet(data.map(r => ({
                 ID: r.id_programacion, Fecha: new Date(r.fecha).toLocaleDateString(), Cliente: r.cliente,
-                Vehículo: r.vehiculo_id, Conductor: r.trabajador_id, Estado: r.estado,
+                Vehículo: r.vehiculo_id, Conductor: r.trabajador_nombre || r.trabajador_id, Estado: r.estado,
                 Origen: r.lugar_retiro, Destino: r.lugar_entrega
             })));
             const wb = xlsx.utils.book_new();
@@ -539,7 +539,7 @@ const RouteCard = memo(function RouteCard({ ruta, isSelected, onSelect }: {
 
             <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center gap-3 text-xs text-slate-500">
                 <span className="flex items-center gap-1"><Truck size={12} /> {ruta.vehiculo_id || '—'}</span>
-                <span className="flex items-center gap-1 truncate"><User size={12} /> {ruta.trabajador_id || 'Sin asignar'}</span>
+                <span className="flex items-center gap-1 truncate"><User size={12} /> {ruta.trabajador_nombre || ruta.trabajador_id || 'Sin asignar'}</span>
             </div>
         </button>
     );

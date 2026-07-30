@@ -15,6 +15,34 @@ interface NewRouteModalProps {
     initialData?: Programacion | null;
 }
 
+// Descompone un ISO en fecha/hora LOCALES (para que redondee con el submit, que
+// interpreta `fecha`T`hora` en zona local). Devuelve '' si el valor es inválido/vacío.
+const isoToDate = (iso?: string): string => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+};
+const isoToTime = (iso?: string): string => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const h = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${h}:${min}`;
+};
+
+// Los datos legacy guardan vehiculo_id como "PLACA - MODELO" ("FG133WJ - FIAT FIORINO");
+// el Select usa solo la placa como value. Extraemos la placa (primer token) para que
+// preseleccione y, al guardar, quede normalizado a la placa.
+const extractPlaca = (raw?: string): string => {
+    if (!raw) return '';
+    return raw.trim().split(/\s+/)[0];
+};
+
 export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData }: NewRouteModalProps) {
     const [vehicles, setVehicles] = useState<any[]>([]);
     const [workers, setWorkers] = useState<any[]>([]);
@@ -58,6 +86,43 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData 
             fetchData();
         }
     }, [isOpen]);
+
+    // Precargar el formulario al abrir: en modo edición con los datos de la operación,
+    // en modo creación con los valores por defecto (reset). El ISO guardado se descompone
+    // en fecha (YYYY-MM-DD) y hora (HH:mm) locales para que redondee bien al reenviar.
+    useEffect(() => {
+        if (!isOpen) return;
+        const today = new Date().toISOString().split('T')[0];
+        if (initialData?.id) {
+            setFormData({
+                vehiculo_id: extractPlaca(initialData.vehiculo_id),
+                // trabajador_id guarda el código (id_trabajador, ej. 'G059'), que es el value
+                // de las opciones del Select de conductor. Se usa tal cual.
+                trabajador_id: initialData.trabajador_id || '',
+                cliente: initialData.cliente || '',
+                retiro_lugar: initialData.lugar_retiro || '',
+                retiro_fecha: isoToDate(initialData.fecha_retiro) || today,
+                retiro_hora: initialData.hora_retiro || isoToTime(initialData.fecha_retiro),
+                entrega_lugar: initialData.lugar_entrega || '',
+                entrega_fecha: isoToDate(initialData.fecha_entrega) || today,
+                entrega_hora: isoToTime(initialData.fecha_entrega),
+                nota: initialData.nota || '',
+            });
+        } else {
+            setFormData({
+                vehiculo_id: '',
+                trabajador_id: '',
+                cliente: '',
+                retiro_lugar: '',
+                retiro_fecha: today,
+                retiro_hora: '',
+                entrega_lugar: '',
+                entrega_fecha: today,
+                entrega_hora: '',
+                nota: '',
+            });
+        }
+    }, [isOpen, initialData]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -125,8 +190,8 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData 
                 {/* Modal Header */}
                 <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center sticky top-0 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md z-10">
                     <div>
-                        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Nueva Ruta</h2>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">Programar viaje y asignar recursos</p>
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white">{initialData?.id ? 'Editar Ruta' : 'Nueva Ruta'}</h2>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">{initialData?.id ? 'Actualizar viaje y recursos asignados' : 'Programar viaje y asignar recursos'}</p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-500 transition-colors">
                         <X size={24} />
@@ -155,7 +220,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData 
                                 placeholder="-- Seleccionar --"
                                 value={formData.trabajador_id}
                                 onChange={(v) => setFormData({ ...formData, trabajador_id: v })}
-                                options={workers.map(w => ({ value: w.nombre_completo, label: w.nombre_completo }))}
+                                options={workers.map(w => ({ value: w.id_trabajador || w.nombre_completo, label: w.nombre_completo }))}
                             />
                             <div className="col-span-1 md:col-span-2 space-y-1.5">
                                 <label className="text-xs font-bold text-slate-500 uppercase">Cliente / Destinatario</label>
@@ -295,7 +360,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData 
                             className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition flex items-center gap-2 disabled:opacity-70 disabled:pointer-events-none"
                         >
                             {submitting ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
-                            Crear Ruta
+                            {initialData?.id ? 'Guardar Cambios' : 'Crear Ruta'}
                         </button>
                     </div>
                 </form>

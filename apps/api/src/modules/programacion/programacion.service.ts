@@ -79,7 +79,33 @@ export class ProgramacionService {
         const counts: Record<string, number> = {};
         grouped.forEach((g) => { counts[g.estado] = g._count._all; });
 
-        return { items, total, counts };
+        // Enriquecer cada operación con el NOMBRE del trabajador. En BD sólo se guarda
+        // el código (`trabajador_id` = id_trabajador tipo 'G001'); resolvemos código → nombre
+        // para que la UI muestre la persona en vez del código. Se acepta tanto id_trabajador
+        // (código) como el UUID por robustez, igual que el dashboard.
+        const codes = Array.from(
+            new Set(items.map((i) => i.trabajador_id).filter((c): c is string => !!c)),
+        );
+        const nameByCode = new Map<string, string>();
+        if (codes.length) {
+            const trabajadores = await this.prisma.trabajador.findMany({
+                where: {
+                    tenant_id: tenantId,
+                    OR: [{ id: { in: codes } }, { id_trabajador: { in: codes } }],
+                },
+                select: { id: true, id_trabajador: true, nombre_completo: true },
+            });
+            trabajadores.forEach((t) => {
+                nameByCode.set(t.id, t.nombre_completo);
+                if (t.id_trabajador) nameByCode.set(t.id_trabajador, t.nombre_completo);
+            });
+        }
+        const enrichedItems = items.map((i) => ({
+            ...i,
+            trabajador_nombre: (i.trabajador_id && nameByCode.get(i.trabajador_id)) || null,
+        }));
+
+        return { items: enrichedItems, total, counts };
     }
 
     async findOne(id: string) {

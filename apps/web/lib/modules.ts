@@ -10,6 +10,7 @@ export interface ModuleDef {
 
 export const MODULES: ModuleDef[] = [
   { key: 'dashboard', name: 'Dashboard', href: '/' },
+  { key: 'panel', name: 'Panel de Control', href: '/panel' },
   { key: 'operaciones', name: 'Operaciones', href: '/operaciones' },
   { key: 'trabajadores', name: 'Trabajadores', href: '/trabajadores' },
   { key: 'vehiculos', name: 'Vehículos', href: '/vehiculos' },

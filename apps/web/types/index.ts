@@ -58,6 +58,7 @@ export interface Programacion {
 
     vehiculo_id?: string;
     trabajador_id?: string;
+    trabajador_nombre?: string | null; // Nombre del trabajador resuelto por el backend (para mostrar en vez del código)
 
     cliente?: string;
     lugar_retiro?: string;

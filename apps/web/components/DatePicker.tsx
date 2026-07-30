@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Calendar, ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 /**
@@ -65,28 +66,68 @@ export default function DatePicker({
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<Date>(() => selected ?? new Date());
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
 
-  // Al abrir, posicionar el calendario en el mes de la fecha seleccionada.
+  // El calendario se renderiza en un portal a <body> (posición fixed) para
+  // escapar de contenedores con overflow-hidden/scroll (p.ej. el modal y las
+  // tarjetas de itinerario), que si no lo recortarían y no se vería.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const [coords, setCoords] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+
+  const POP_W = 280;
+  const POP_H = 340; // alto aprox. del popover para decidir arriba/abajo
+
+  const computePosition = () => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const gap = 8;
+    const vh = window.innerHeight;
+    const vw = window.innerWidth;
+    // Abrir hacia abajo; si no cabe y sí cabe arriba, abrir hacia arriba.
+    let top = r.bottom + gap;
+    if (top + POP_H > vh && r.top - gap - POP_H > 0) top = r.top - gap - POP_H;
+    // Alinear a la izquierda del trigger, sin salirse del viewport.
+    let left = r.left;
+    if (left + POP_W > vw - 8) left = vw - 8 - POP_W;
+    if (left < 8) left = 8;
+    setCoords({ top, left });
+  };
+
+  // Al abrir, posicionar el calendario en el mes de la fecha seleccionada y calcular coords.
   useEffect(() => {
-    if (open) setView(selected ?? new Date());
+    if (open) {
+      setView(selected ?? new Date());
+      computePosition();
+    }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Cerrar al hacer clic fuera o con Escape.
+  // Cerrar al hacer clic fuera o con Escape; reposicionar en scroll/resize.
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (ref.current?.contains(t)) return;
+      if (popRef.current?.contains(t)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
     };
+    const onReposition = () => computePosition();
     document.addEventListener('mousedown', onDoc);
     document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onReposition, true);
+    window.addEventListener('resize', onReposition);
     return () => {
       document.removeEventListener('mousedown', onDoc);
       document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onReposition, true);
+      window.removeEventListener('resize', onReposition);
     };
-  }, [open]);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const label_ = selected
     ? `${selected.getDate()} ${MESES_CORTO[selected.getMonth()]} ${selected.getFullYear()}`
@@ -133,6 +174,7 @@ export default function DatePicker({
 
         {/* Trigger */}
         <button
+          ref={triggerRef}
           type="button"
           disabled={disabled}
           onClick={() => setOpen((o) => !o)}
@@ -155,9 +197,13 @@ export default function DatePicker({
         </button>
       </div>
 
-      {/* Popover calendario */}
-      {open && (
-        <div className="absolute z-50 mt-2 w-[280px] rounded-2xl border border-slate-200 bg-white shadow-xl p-3 animate-in fade-in zoom-in-95 duration-150">
+      {/* Popover calendario — en portal a <body> con posición fixed para no ser
+          recortado por contenedores con overflow (modal, tarjetas de itinerario). */}
+      {open && mounted && createPortal(
+        <div
+          ref={popRef}
+          style={{ position: 'fixed', top: coords.top, left: coords.left, width: POP_W }}
+          className="z-[100] rounded-2xl border border-slate-200 bg-white shadow-xl p-3 animate-in fade-in zoom-in-95 duration-150">
           {/* Header mes/año */}
           <div className="flex items-center justify-between mb-2 px-1">
             <button type="button" onClick={() => changeMonth(-1)} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition">
@@ -212,7 +258,8 @@ export default function DatePicker({
               </button>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

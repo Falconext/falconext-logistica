@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Truck, Map, Wrench, ShieldCheck, LogOut, Bell, CalendarDays, BarChart3, FileSpreadsheet, MessageSquare, PlayCircle, HelpCircle, Briefcase, ChevronsLeft, Receipt, Fuel, UserCog, KeyRound, Radio, Navigation, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, Users, Truck, Map, Wrench, ShieldCheck, LogOut, Bell, CalendarDays, BarChart3, FileSpreadsheet, MessageSquare, PlayCircle, HelpCircle, Briefcase, ChevronsLeft, Receipt, Fuel, UserCog, KeyRound, Radio, Navigation, Sun, Moon, Boxes } from 'lucide-react';
 import clsx from 'clsx';
 import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
@@ -11,6 +11,7 @@ import { canAccessModule, isAdmin as isAdminUser } from '../lib/modules';
 
 const primaryItems = [
     { key: 'dashboard', name: 'Dashboard', href: '/', icon: LayoutDashboard },
+    { key: 'panel', name: 'Panel de Control', href: '/panel', icon: Boxes },
     { key: 'operaciones', name: 'Operaciones', href: '/operaciones', icon: Map },
     { key: 'trabajadores', name: 'Trabajadores', href: '/trabajadores', icon: Users },
     { key: 'vehiculos', name: 'Vehículos', href: '/vehiculos', icon: Truck },
