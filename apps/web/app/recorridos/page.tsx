@@ -58,6 +58,21 @@ export default function RecorridosPage() {
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
     const [, setTick] = useState(0);
     const [mapRec, setMapRec] = useState<RecorridoActivo | null>(null);
+    const [confirmClose, setConfirmClose] = useState<string | null>(null);
+    const [closing, setClosing] = useState<string | null>(null);
+
+    const cerrar = useCallback(async (id: string) => {
+        setClosing(id);
+        try {
+            await api.post(`/recorridos/${id}/cerrar`);
+            setConfirmClose(null);
+            await load(true);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setClosing(null);
+        }
+    }, []);
 
     const load = useCallback(async (silent = false) => {
         if (silent) setRefreshing(true); else setLoading(true);
@@ -219,9 +234,24 @@ export default function RecorridosPage() {
                                     </div>
                                 </div>
 
-                                <button onClick={() => setMapRec(r)} className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
-                                    <MapPinned size={13} /> Ver en el mapa
-                                </button>
+                                <div className="flex border-t border-slate-100 dark:border-slate-800 divide-x divide-slate-100 dark:divide-slate-800">
+                                    <button onClick={() => setMapRec(r)} className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+                                        <MapPinned size={13} /> Ver en el mapa
+                                    </button>
+                                    {confirmClose === r.id ? (
+                                        <div className="flex-1 flex items-center justify-center gap-2 px-2 py-1.5">
+                                            <span className="text-[11px] text-slate-500">¿Cerrar?</span>
+                                            <button onClick={() => cerrar(r.id)} disabled={closing === r.id} className="px-2 py-1 rounded-md text-[11px] font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-60">
+                                                {closing === r.id ? '…' : 'Sí'}
+                                            </button>
+                                            <button onClick={() => setConfirmClose(null)} className="px-2 py-1 rounded-md text-[11px] font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">No</button>
+                                        </div>
+                                    ) : (
+                                        <button onClick={() => setConfirmClose(r.id)} title="Cerrar recorrido atascado" className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition">
+                                            <X size={13} /> Cerrar
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         );
                     })}

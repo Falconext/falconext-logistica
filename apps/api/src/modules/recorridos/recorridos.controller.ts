@@ -18,6 +18,12 @@ export class RecorridosController {
         return this.service.detalle(req.user.tenantId, id);
     }
 
+    // Cierre forzado por el supervisor de un recorrido atascado.
+    @Post(':id/cerrar')
+    cerrar(@Param('id') id: string, @Req() req) {
+        return this.service.cerrarPorSupervisor(req.user.tenantId, id);
+    }
+
     // ---- Chofer (app móvil) ----
     @Get('mias/operaciones')
     operaciones(@Req() req) {

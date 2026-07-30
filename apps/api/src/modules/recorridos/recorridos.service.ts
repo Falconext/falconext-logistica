@@ -270,6 +270,23 @@ export class RecorridosService {
         return updated;
     }
 
+    /** Cierre forzado por el supervisor (recorrido atascado/olvidado). No exige
+     *  ser el dueño; cierra como CANCELADO y libera al chofer y su vehículo. */
+    async cerrarPorSupervisor(tenantId: string, id: string) {
+        const r = await this.prisma.recorrido.findFirst({ where: { id, tenant_id: tenantId } });
+        if (!r) throw new NotFoundException('Recorrido no encontrado.');
+        if (!ACTIVOS.includes(r.estado)) throw new BadRequestException('El recorrido ya está cerrado.');
+        const updated = await this.prisma.recorrido.update({
+            where: { id: r.id },
+            data: { estado: 'CANCELADO', finalizado_en: new Date(), descanso_desde: null },
+        });
+        await this.prisma.trabajador.updateMany({ where: { id: r.trabajador_id, tenant_id: tenantId }, data: { disponible: true } });
+        if (r.vehiculo_id) {
+            await this.prisma.vehiculo.updateMany({ where: { id: r.vehiculo_id, tenant_id: tenantId }, data: { disponible: true } });
+        }
+        return updated;
+    }
+
     /** Tablero del supervisor: recorridos en curso con ETA y tiempo transcurrido. */
     async activos(tenantId: string) {
         const recorridos = await this.prisma.recorrido.findMany({
