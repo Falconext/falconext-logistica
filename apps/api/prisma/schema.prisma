@@ -467,6 +467,10 @@ model Recorrido {
   descanso_desde  DateTime?
   descanso_min    Float?   @default(0)
 
+  // ETA estimada de la ida (min), calculada por carretera al iniciar → base del
+  // "esperado vs real" (se compara con ida_min real).
+  esperado_ida_min Float?
+
   // Métricas por tramo (km / minutos), calculadas al cerrar cada tramo.
   ida_km          Float?
   ida_min         Float?

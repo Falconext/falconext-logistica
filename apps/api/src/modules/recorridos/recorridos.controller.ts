@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, UseGuards, Req, Query } from '@nestjs/common';
 import { RecorridosService } from './recorridos.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -11,6 +11,11 @@ export class RecorridosController {
     @Get('activos')
     activos(@Req() req) {
         return this.service.activos(req.user.tenantId);
+    }
+
+    @Get('historial')
+    historial(@Req() req, @Query('limit') limit?: string) {
+        return this.service.historial(req.user.tenantId, limit ? parseInt(limit, 10) : 30);
     }
 
     @Get(':id')

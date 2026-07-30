@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Navigation, MapPin, CornerUpLeft, Clock, Timer, RefreshCw, Loader2, Route as RouteIcon, User, X, MapPinned, Coffee
+    Navigation, MapPin, CornerUpLeft, Clock, Timer, RefreshCw, Loader2, Route as RouteIcon, User, X, MapPinned, Coffee,
+    WifiOff, History, ArrowUp, ArrowDown, Minus, Radio
 } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../../lib/api';
@@ -29,8 +30,29 @@ interface RecorridoActivo {
     etaMin: number | null;
     disponibleEnMin: number | null;
     posicion: { lat: number; lng: number; timestamp: string } | null;
+    sinGps: boolean;
     ida_km: number | null;
     ida_min: number | null;
+}
+
+interface RecorridoHistorial {
+    id: string;
+    trabajador: string;
+    placa: string | null;
+    cliente: string | null;
+    origen: string | null;
+    destino: string | null;
+    estado: 'COMPLETADO' | 'CANCELADO';
+    iniciado_en: string;
+    finalizado_en: string | null;
+    duracionMin: number | null;
+    ida_min: number | null;
+    ida_km: number | null;
+    vuelta_min: number | null;
+    vuelta_km: number | null;
+    descanso_min: number;
+    esperadoMin: number | null;
+    desvioMin: number | null;
 }
 
 const REFRESH_MS = 20000;
@@ -60,6 +82,22 @@ export default function RecorridosPage() {
     const [mapRec, setMapRec] = useState<RecorridoActivo | null>(null);
     const [confirmClose, setConfirmClose] = useState<string | null>(null);
     const [closing, setClosing] = useState<string | null>(null);
+    const [view, setView] = useState<'activos' | 'historial'>('activos');
+    const [historial, setHistorial] = useState<RecorridoHistorial[]>([]);
+    const [loadingHist, setLoadingHist] = useState(false);
+
+    const loadHistorial = useCallback(async () => {
+        setLoadingHist(true);
+        try {
+            const res = await api.get<RecorridoHistorial[]>('/recorridos/historial', { params: { limit: 50 } });
+            setHistorial(Array.isArray(res.data) ? res.data : []);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoadingHist(false);
+        }
+    }, []);
+    useEffect(() => { if (view === 'historial') loadHistorial(); }, [view, loadHistorial]);
 
     const cerrar = useCallback(async (id: string) => {
         setClosing(id);
@@ -140,15 +178,35 @@ export default function RecorridosPage() {
                         </p>
                     </div>
                 </div>
-                <button
-                    onClick={() => load(true)}
-                    disabled={refreshing}
-                    className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-60"
-                >
-                    <RefreshCw size={15} className={clsx(refreshing && 'animate-spin')} /> Actualizar
-                </button>
+                <div className="flex items-center gap-2">
+                    {/* Toggle Activos | Historial */}
+                    <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60">
+                        <button
+                            onClick={() => setView('activos')}
+                            className={clsx('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition',
+                                view === 'activos' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200')}
+                        >
+                            <Radio size={14} /> Activos
+                        </button>
+                        <button
+                            onClick={() => setView('historial')}
+                            className={clsx('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition',
+                                view === 'historial' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200')}
+                        >
+                            <History size={14} /> Historial
+                        </button>
+                    </div>
+                    <button
+                        onClick={() => (view === 'activos' ? load(true) : loadHistorial())}
+                        disabled={refreshing || loadingHist}
+                        className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-60"
+                    >
+                        <RefreshCw size={15} className={clsx((refreshing || loadingHist) && 'animate-spin')} /> Actualizar
+                    </button>
+                </div>
             </div>
 
+            {view === 'activos' && <>
             {/* Resumen */}
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
                 <Kpi label="En curso" value={resumen.total} tone="slate" icon={RouteIcon} />
@@ -181,7 +239,14 @@ export default function RecorridosPage() {
                                     </div>
                                     <div className="min-w-0 flex-1">
                                         <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{r.trabajador}</p>
-                                        <p className="text-[11px] text-slate-400 truncate">{r.placa || 'Sin vehículo'}</p>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-[11px] text-slate-400 truncate">{r.placa || 'Sin vehículo'}</span>
+                                            {r.sinGps && (
+                                                <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-500/10 dark:text-red-400" title="El chofer no está compartiendo su ubicación">
+                                                    <WifiOff size={10} /> Sin GPS
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <span className={clsx('shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold', meta.chip)}>
                                         <Icon size={12} /> {meta.label}
@@ -257,9 +322,94 @@ export default function RecorridosPage() {
                     })}
                 </div>
             )}
+            </>}
+
+            {view === 'historial' && <HistorialSection items={historial} loading={loadingHist} />}
 
             {mapRec && <RecorridoMapModal rec={mapRec} onClose={() => setMapRec(null)} />}
         </div>
+    );
+}
+
+/* ---------- Historial: recorridos cerrados con esperado vs real ---------- */
+function HistorialSection({ items, loading }: { items: RecorridoHistorial[]; loading: boolean }) {
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center py-16 text-slate-400 gap-2">
+                <Loader2 className="animate-spin" size={18} /> Cargando historial...
+            </div>
+        );
+    }
+    if (items.length === 0) {
+        return (
+            <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 py-16 flex flex-col items-center justify-center text-center gap-2 text-slate-400">
+                <History size={26} className="opacity-50" />
+                <p className="text-sm">Aún no hay recorridos finalizados.</p>
+            </div>
+        );
+    }
+    return (
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 overflow-hidden">
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                    <thead>
+                        <tr className="text-left text-[11px] uppercase text-slate-400 border-b border-slate-100 dark:border-slate-800">
+                            <th className="px-4 py-3 font-medium">Chofer</th>
+                            <th className="px-4 py-3 font-medium">Ruta</th>
+                            <th className="px-4 py-3 font-medium">Estado</th>
+                            <th className="px-4 py-3 font-medium text-right">Real (ida)</th>
+                            <th className="px-4 py-3 font-medium text-right">Esperado</th>
+                            <th className="px-4 py-3 font-medium text-right">Desvío</th>
+                            <th className="px-4 py-3 font-medium text-right">Distancia</th>
+                            <th className="px-4 py-3 font-medium text-right">Descanso</th>
+                            <th className="px-4 py-3 font-medium text-right">Finalizó</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 dark:divide-slate-800/60">
+                        {items.map((r) => (
+                            <tr key={r.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition">
+                                <td className="px-4 py-3">
+                                    <p className="font-medium text-slate-800 dark:text-slate-100 truncate max-w-[160px]">{r.trabajador}</p>
+                                    <p className="text-[11px] text-slate-400 truncate max-w-[160px]">{r.placa || (r.cliente || '—')}</p>
+                                </td>
+                                <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
+                                    <p className="truncate max-w-[220px]">{r.origen || '—'}</p>
+                                    <p className="truncate max-w-[220px] text-slate-400">→ {r.destino || '—'}</p>
+                                </td>
+                                <td className="px-4 py-3">
+                                    <span className={clsx('px-2 py-0.5 rounded-md text-[11px] font-semibold',
+                                        r.estado === 'COMPLETADO' ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-500 bg-slate-100 dark:bg-slate-800')}>
+                                        {r.estado === 'COMPLETADO' ? 'Completado' : 'Cancelado'}
+                                    </span>
+                                </td>
+                                <td className="px-4 py-3 text-right tabular-nums text-slate-700 dark:text-slate-200">{fmtMin(r.ida_min)}</td>
+                                <td className="px-4 py-3 text-right tabular-nums text-slate-500">{r.esperadoMin != null ? fmtMin(r.esperadoMin) : '—'}</td>
+                                <td className="px-4 py-3 text-right"><Desvio min={r.desvioMin} /></td>
+                                <td className="px-4 py-3 text-right tabular-nums text-slate-500">{r.ida_km != null ? `${r.ida_km} km` : '—'}</td>
+                                <td className="px-4 py-3 text-right tabular-nums text-slate-500">{r.descanso_min ? fmtMin(r.descanso_min) : '—'}</td>
+                                <td className="px-4 py-3 text-right text-[11px] text-slate-400 whitespace-nowrap">
+                                    {r.finalizado_en ? new Date(r.finalizado_en).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
+
+// Desvío esperado vs real: verde si llegó antes/igual, rojo si tardó más.
+function Desvio({ min }: { min: number | null }) {
+    if (min == null) return <span className="text-slate-300">—</span>;
+    if (min === 0) return <span className="inline-flex items-center gap-1 text-slate-500 tabular-nums"><Minus size={12} /> 0m</span>;
+    const late = min > 0;
+    return (
+        <span className={clsx('inline-flex items-center gap-1 tabular-nums font-semibold',
+            late ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400')}>
+            {late ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+            {fmtMin(Math.abs(min))}
+        </span>
     );
 }
 

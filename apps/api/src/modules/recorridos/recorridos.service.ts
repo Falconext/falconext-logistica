@@ -142,6 +142,8 @@ export class RecorridosService {
             this.geocode(prog.lugar_retiro),
             this.geocode(prog.lugar_entrega),
         ]);
+        // "Esperado": ETA por carretera origen→destino al iniciar (base del esperado vs real).
+        const esperadoIda = oGeo && dGeo ? await this.etaMin(oGeo, dGeo) : null;
 
         const recorrido = await this.prisma.recorrido.create({
             data: {
@@ -156,6 +158,7 @@ export class RecorridosService {
                 origen_lng: oGeo?.lng ?? null,
                 destino_lat: dGeo?.lat ?? null,
                 destino_lng: dGeo?.lng ?? null,
+                esperado_ida_min: esperadoIda,
                 estado: 'EN_RUTA_IDA',
             },
         });
@@ -350,6 +353,9 @@ export class RecorridosService {
                     // Cuándo estará disponible (min): ETA del tramo, null si descansa/en destino.
                     disponibleEnMin: descansando || r.estado === 'EN_DESTINO' ? null : eta,
                     posicion: pos ? { lat: pos.lat, lng: pos.lng, timestamp: pos.timestamp } : null,
+                    // Sin GPS: sin posición o última posición vieja (>5 min) → el
+                    // supervisor sabe que no se está compartiendo ubicación (ETA no fiable).
+                    sinGps: !pos || (now - new Date(pos.timestamp).getTime() > 5 * 60000),
                     ida_km: r.ida_km, ida_min: r.ida_min,
                 };
             }),
@@ -358,5 +364,63 @@ export class RecorridosService {
 
     async detalle(tenantId: string, id: string) {
         return this.getOwned(tenantId, id);
+    }
+
+    /** Historial de recorridos cerrados con comparativa esperado vs real. */
+    async historial(tenantId: string, limit = 30) {
+        const recorridos = await this.prisma.recorrido.findMany({
+            where: { tenant_id: tenantId, estado: { in: ['COMPLETADO', 'CANCELADO'] } },
+            orderBy: { finalizado_en: 'desc' },
+            take: Math.min(Math.max(limit, 1), 200),
+        });
+        if (recorridos.length === 0) return [];
+
+        // Resolver nombres/placas y las programaciones (para el tiempo esperado).
+        const trabIds = Array.from(new Set(recorridos.map((r) => r.trabajador_id)));
+        const vehIds = Array.from(new Set(recorridos.map((r) => r.vehiculo_id).filter(Boolean) as string[]));
+        const progIds = Array.from(new Set(recorridos.map((r) => r.programacion_id).filter(Boolean) as string[]));
+        const [trabs, vehs, progs] = await Promise.all([
+            this.prisma.trabajador.findMany({ where: { id: { in: trabIds } }, select: { id: true, nombre_completo: true } }),
+            vehIds.length ? this.prisma.vehiculo.findMany({ where: { id: { in: vehIds } }, select: { id: true, placa: true } }) : Promise.resolve([]),
+            progIds.length ? this.prisma.programacion.findMany({ where: { id: { in: progIds } }, select: { id: true, fecha_retiro: true, fecha_entrega: true, cliente: true } }) : Promise.resolve([]),
+        ]);
+        const trabMap = new Map(trabs.map((t) => [t.id, t.nombre_completo]));
+        const vehMap = new Map(vehs.map((v) => [v.id, v.placa]));
+        const progMap = new Map(progs.map((p) => [p.id, p]));
+
+        return recorridos.map((r) => {
+            const prog = r.programacion_id ? progMap.get(r.programacion_id) : null;
+            // Esperado (min): ETA por carretera guardada al iniciar; si falta, cae al
+            // planificado de la operación (retiro → entrega).
+            const esperadoMin =
+                r.esperado_ida_min != null
+                    ? Math.round(r.esperado_ida_min)
+                    : prog?.fecha_retiro && prog?.fecha_entrega
+                        ? Math.round((new Date(prog.fecha_entrega).getTime() - new Date(prog.fecha_retiro).getTime()) / 60000)
+                        : null;
+            // Real de la ida (min): del inicio a la llegada al destino.
+            const realIdaMin = r.ida_min ?? null;
+            const desvioMin = esperadoMin != null && realIdaMin != null ? realIdaMin - esperadoMin : null;
+            const duracionMin =
+                r.finalizado_en ? Math.round((new Date(r.finalizado_en).getTime() - new Date(r.iniciado_en).getTime()) / 60000) : null;
+
+            return {
+                id: r.id,
+                trabajador: trabMap.get(r.trabajador_id) || 'Chofer',
+                placa: r.vehiculo_id ? vehMap.get(r.vehiculo_id) || null : null,
+                cliente: prog?.cliente || null,
+                origen: r.origen_label,
+                destino: r.destino_label,
+                estado: r.estado, // COMPLETADO | CANCELADO
+                iniciado_en: r.iniciado_en,
+                finalizado_en: r.finalizado_en,
+                duracionMin,
+                ida_min: r.ida_min, ida_km: r.ida_km,
+                vuelta_min: r.vuelta_min, vuelta_km: r.vuelta_km,
+                descanso_min: Math.round(r.descanso_min || 0),
+                esperadoMin,
+                desvioMin, // + = tardó más de lo planificado
+            };
+        });
     }
 }
