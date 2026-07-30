@@ -1,13 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import api from '../../lib/api';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
     Users, Truck, Package, RefreshCw, Loader2, MapPin, Clock, AlertTriangle,
-    CheckCircle2, XCircle, Navigation, Boxes, PauseCircle
+    CheckCircle2, XCircle, Navigation, PauseCircle, Search
 } from 'lucide-react';
 import { toast } from 'sonner';
 import clsx from 'clsx';
+import api from '../../lib/api';
+import { PanelLiveMap } from '../../components/tracking/PanelLiveMap';
 
 /* ---------- Tipos del endpoint /panel/status ---------- */
 interface Trabajador {
@@ -54,8 +56,7 @@ function fmtRestante(min: number | null): { text: string; tone: 'late' | 'soon' 
     return { text: `En ${parts}`, tone: 'ok' };
 }
 
-// Recalcula minutos restantes en el cliente desde fecha_entrega (para que la cuenta
-// regresiva avance sin refetch). Cae al valor del server si no hay fecha.
+// Recalcula minutos restantes en el cliente para que la cuenta regresiva avance sin refetch.
 function restanteFrom(e: Entrega, nowMs: number): number | null {
     if (e.fecha_entrega) return Math.round((new Date(e.fecha_entrega).getTime() - nowMs) / 60000);
     return e.restanteMin;
@@ -70,6 +71,8 @@ export default function PanelPage() {
     const [now, setNow] = useState<number>(() => Date.now());
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
     const [busyToggle, setBusyToggle] = useState<Set<string>>(new Set());
+    const [tab, setTab] = useState<'consegna' | 'sospeso'>('consegna');
+    const [zonaQuery, setZonaQuery] = useState('');
 
     const load = useCallback(async (silent = false) => {
         if (silent) setRefreshing(true); else setLoading(true);
@@ -89,13 +92,11 @@ export default function PanelPage() {
 
     useEffect(() => { load(); }, [load]);
 
-    // Auto-refresh cada 30s (silencioso).
+    // Auto-refresh + tick de reloj cada 30s (la cuenta regresiva avanza sola).
     useEffect(() => {
         const id = setInterval(() => load(true), REFRESH_MS);
         return () => clearInterval(id);
     }, [load]);
-
-    // Tick del reloj cada 30s para que la cuenta regresiva avance sola.
     useEffect(() => {
         const id = setInterval(() => setNow(Date.now()), REFRESH_MS);
         return () => clearInterval(id);
@@ -104,7 +105,6 @@ export default function PanelPage() {
     // Toggle de disponibilidad (personal o vehículo). Optimista.
     const toggleDisponible = useCallback(async (kind: 'trabajador' | 'vehiculo', id: string, next: boolean) => {
         setBusyToggle((s) => new Set(s).add(id));
-        // Optimista
         setData((prev) => {
             if (!prev) return prev;
             if (kind === 'trabajador') {
@@ -124,13 +124,26 @@ export default function PanelPage() {
         } catch (err) {
             console.error(err);
             toast.error('No se pudo actualizar la disponibilidad');
-            load(true); // revertir con datos reales
+            load(true);
         } finally {
             setBusyToggle((s) => { const n = new Set(s); n.delete(id); return n; });
         }
     }, [load]);
 
     const r = data?.resumen;
+    const enConsegna = data?.entregas.enConsegna ?? [];
+    const enSospeso = data?.entregas.enSospeso ?? [];
+    // Placas en ruta → para realzar esos vehículos en el mini-mapa.
+    const enConsegnaPlacas = useMemo(() => enConsegna.map((e) => e.targa || '').filter(Boolean), [enConsegna]);
+
+    const zonasFiltradas = useMemo(() => {
+        const q = zonaQuery.trim().toLowerCase();
+        const base = data?.personal ?? [];
+        if (!q) return base;
+        return base
+            .map((z) => ({ ...z, trabajadores: z.trabajadores.filter((t) => t.nombre_completo.toLowerCase().includes(q) || z.zona.toLowerCase().includes(q)) }))
+            .filter((z) => z.trabajadores.length > 0);
+    }, [data?.personal, zonaQuery]);
 
     if (loading) {
         return (
@@ -140,16 +153,27 @@ export default function PanelPage() {
         );
     }
 
+    const entregasTab = tab === 'consegna' ? enConsegna : enSospeso;
+
     return (
         <div className="space-y-5 pb-8">
             {/* Header */}
             <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-[#FFC933] text-[#1a1a1c] flex items-center justify-center shrink-0">
-                        <Boxes size={20} />
+                    <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#FFCC00] to-[#F5A800] text-[#3a2c00] flex items-center justify-center shrink-0 shadow-sm">
+                        <Navigation size={20} />
                     </div>
                     <div>
-                        <h1 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">Panel de Control</h1>
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">Panel de Control</h1>
+                            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/20">
+                                <span className="relative flex h-1.5 w-1.5">
+                                    <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+                                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                </span>
+                                <span className="text-[10px] font-bold tracking-wide text-emerald-600 dark:text-emerald-400">EN VIVO</span>
+                            </span>
+                        </div>
                         <p className="text-sm text-slate-500 dark:text-slate-400">
                             Torre operativa · disponibilidad y entregas
                             {lastUpdated && <span className="ml-1.5">· actualizado {lastUpdated.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>}
@@ -170,30 +194,92 @@ export default function PanelPage() {
                 <KpiCard icon={Users} label="Personal disponible" value={`${r?.personalDisponible ?? 0}/${r?.personalTotal ?? 0}`} tone="emerald" />
                 <KpiCard icon={Truck} label="Flota disponible" value={`${r?.flotaDisponible ?? 0}/${r?.flotaTotal ?? 0}`} tone="blue" />
                 <KpiCard icon={Package} label="Entregas activas" value={r?.entregasActivas ?? 0} tone="amber" />
-                <KpiCard icon={Navigation} label="En consegna" value={data?.entregas.enConsegna.length ?? 0} tone="indigo" />
-                <KpiCard icon={PauseCircle} label="In sospeso" value={data?.entregas.enSospeso.length ?? 0} tone="slate" />
+                <KpiCard icon={Navigation} label="En consegna" value={enConsegna.length} tone="indigo" />
+                <KpiCard icon={PauseCircle} label="In sospeso" value={enSospeso.length} tone="slate" />
             </div>
 
-            {/* Entregas activas */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <EntregasColumn
-                    title="In Consegna" subtitle="En ruta / entregando" icon={Navigation}
-                    accent="indigo" entregas={data?.entregas.enConsegna ?? []} now={now}
-                />
-                <EntregasColumn
-                    title="In Sospeso" subtitle="Pendiente / reprogramado" icon={PauseCircle}
-                    accent="amber" entregas={data?.entregas.enSospeso ?? []} now={now}
-                />
+            {/* Héroe: mapa en vivo (Rastreo) + entregas activas */}
+            <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
+                {/* Mapa en vivo */}
+                <div className="xl:col-span-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 overflow-hidden flex flex-col">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                        <div className="flex items-center gap-2">
+                            <MapPin size={17} className="text-indigo-500" />
+                            <h2 className="font-bold text-slate-900 dark:text-white leading-tight">Flota en vivo</h2>
+                        </div>
+                        <Link href="/rastreo" className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline">Ver rastreo →</Link>
+                    </div>
+                    <div className="h-[360px] sm:h-[420px]">
+                        <PanelLiveMap enConsegnaPlacas={enConsegnaPlacas} />
+                    </div>
+                </div>
+
+                {/* Entregas activas con pestañas */}
+                <div className="xl:col-span-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 overflow-hidden flex flex-col">
+                    <div className="flex items-center gap-1 p-1.5 border-b border-slate-100 dark:border-slate-800">
+                        <TabButton active={tab === 'consegna'} onClick={() => setTab('consegna')} icon={Navigation} label="In Consegna" count={enConsegna.length} accent="indigo" />
+                        <TabButton active={tab === 'sospeso'} onClick={() => setTab('sospeso')} icon={PauseCircle} label="In Sospeso" count={enSospeso.length} accent="amber" />
+                    </div>
+                    <div className="flex-1 divide-y divide-slate-50 dark:divide-slate-800/60 overflow-y-auto max-h-[420px]">
+                        {entregasTab.length === 0 ? (
+                            <div className="py-16 flex flex-col items-center justify-center text-center gap-2 text-slate-400">
+                                <Package size={22} className="opacity-50" />
+                                <p className="text-sm">Sin entregas {tab === 'consegna' ? 'en ruta' : 'pendientes'}.</p>
+                            </div>
+                        ) : entregasTab.map((e) => {
+                            const rest = fmtRestante(restanteFrom(e, now));
+                            return (
+                                <div key={e.id} className="px-4 py-3 flex items-center gap-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition">
+                                    <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center shrink-0">
+                                        <Package size={16} />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-semibold text-slate-800 dark:text-slate-100 text-sm truncate">{soloPlaca(e.targa)}</span>
+                                            <span className="text-xs text-slate-400 truncate">{e.autista || 'Sin conductor'}</span>
+                                        </div>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                                            {e.cliente ? `${e.cliente} · ` : ''}{e.lugar_entrega || 'Sin destino'}
+                                        </p>
+                                    </div>
+                                    <span className={clsx(
+                                        'shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap',
+                                        rest.tone === 'late' ? 'text-red-600 bg-red-50 dark:bg-red-500/10 dark:text-red-400'
+                                            : rest.tone === 'soon' ? 'text-amber-600 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-400'
+                                                : rest.tone === 'ok' ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400'
+                                                    : 'text-slate-400 bg-slate-100 dark:bg-slate-800'
+                                    )}>
+                                        {rest.tone === 'late' ? <AlertTriangle size={12} /> : <Clock size={12} />}
+                                        {rest.text}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
             </div>
 
             {/* Personal por zona */}
             <section className="space-y-3">
-                <div className="flex items-center gap-2">
-                    <Users size={18} className="text-slate-500" />
-                    <h2 className="font-bold text-slate-900 dark:text-white">Personal por zona</h2>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2">
+                        <Users size={18} className="text-slate-500" />
+                        <h2 className="font-bold text-slate-900 dark:text-white">Personal por zona</h2>
+                    </div>
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 w-full sm:w-64">
+                        <Search size={14} className="text-slate-400 shrink-0" />
+                        <input
+                            value={zonaQuery}
+                            onChange={(e) => setZonaQuery(e.target.value)}
+                            placeholder="Buscar persona o zona"
+                            className="w-full bg-transparent outline-none text-sm text-slate-900 dark:text-white placeholder:text-slate-400"
+                        />
+                    </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {(data?.personal ?? []).map((z) => (
+                    {zonasFiltradas.length === 0 ? (
+                        <p className="text-sm text-slate-400 py-6">Sin resultados.</p>
+                    ) : zonasFiltradas.map((z) => (
                         <div key={z.zona} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 overflow-hidden">
                             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30">
                                 <div className="flex items-center gap-2 min-w-0">
@@ -233,18 +319,20 @@ export default function PanelPage() {
 
 /* ---------- Subcomponentes ---------- */
 
-const KPI_TONES: Record<string, string> = {
-    emerald: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400',
-    blue: 'text-blue-600 bg-blue-50 dark:bg-blue-500/10 dark:text-blue-400',
-    amber: 'text-amber-600 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-400',
-    indigo: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-500/10 dark:text-indigo-400',
-    slate: 'text-slate-600 bg-slate-100 dark:bg-slate-500/10 dark:text-slate-300',
+const KPI_TONES: Record<string, { chip: string; bar: string }> = {
+    emerald: { chip: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400', bar: 'bg-emerald-500' },
+    blue: { chip: 'text-blue-600 bg-blue-50 dark:bg-blue-500/10 dark:text-blue-400', bar: 'bg-blue-500' },
+    amber: { chip: 'text-amber-600 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-400', bar: 'bg-amber-500' },
+    indigo: { chip: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-500/10 dark:text-indigo-400', bar: 'bg-indigo-500' },
+    slate: { chip: 'text-slate-600 bg-slate-100 dark:bg-slate-500/10 dark:text-slate-300', bar: 'bg-slate-400' },
 };
 
 function KpiCard({ icon: Icon, label, value, tone }: { icon: any; label: string; value: string | number; tone: string }) {
+    const t = KPI_TONES[tone];
     return (
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4 flex items-center gap-3">
-            <div className={clsx('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', KPI_TONES[tone])}>
+        <div className="relative rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4 flex items-center gap-3 overflow-hidden">
+            <span className={clsx('absolute left-0 top-0 bottom-0 w-1', t.bar)} />
+            <div className={clsx('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', t.chip)}>
                 <Icon size={18} />
             </div>
             <div className="min-w-0">
@@ -255,66 +343,30 @@ function KpiCard({ icon: Icon, label, value, tone }: { icon: any; label: string;
     );
 }
 
-const ACCENTS: Record<string, { bar: string; chip: string; icon: string }> = {
-    indigo: { bar: 'bg-indigo-500', chip: 'text-indigo-700 bg-indigo-50 dark:bg-indigo-500/10 dark:text-indigo-300', icon: 'text-indigo-500' },
-    amber: { bar: 'bg-amber-500', chip: 'text-amber-700 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-300', icon: 'text-amber-500' },
+const TAB_ACCENT: Record<string, string> = {
+    indigo: 'text-indigo-700 bg-indigo-50 dark:bg-indigo-500/15 dark:text-indigo-300',
+    amber: 'text-amber-700 bg-amber-50 dark:bg-amber-500/15 dark:text-amber-300',
 };
 
-function EntregasColumn({ title, subtitle, icon: Icon, accent, entregas, now }: {
-    title: string; subtitle: string; icon: any; accent: 'indigo' | 'amber'; entregas: Entrega[]; now: number;
+function TabButton({ active, onClick, icon: Icon, label, count, accent }: {
+    active: boolean; onClick: () => void; icon: any; label: string; count: number; accent: 'indigo' | 'amber';
 }) {
-    const a = ACCENTS[accent];
     return (
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-2.5">
-                    <span className={clsx('w-1.5 h-8 rounded-full', a.bar)} />
-                    <Icon size={17} className={a.icon} />
-                    <div>
-                        <h3 className="font-bold text-slate-900 dark:text-white leading-tight">{title}</h3>
-                        <p className="text-[11px] text-slate-400">{subtitle}</p>
-                    </div>
-                </div>
-                <span className={clsx('px-2.5 py-1 rounded-lg text-xs font-bold', a.chip)}>{entregas.length}</span>
-            </div>
-            <div className="divide-y divide-slate-50 dark:divide-slate-800/60 max-h-[380px] overflow-y-auto">
-                {entregas.length === 0 ? (
-                    <div className="py-10 text-center text-sm text-slate-400">Sin entregas.</div>
-                ) : entregas.map((e) => {
-                    const rest = fmtRestante(restanteFrom(e, now));
-                    return (
-                        <div key={e.id} className="px-4 py-3 flex items-center gap-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition">
-                            <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center shrink-0">
-                                <Package size={16} />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                    <span className="font-semibold text-slate-800 dark:text-slate-100 text-sm truncate">{soloPlaca(e.targa)}</span>
-                                    <span className="text-xs text-slate-400 truncate">{e.autista || 'Sin conductor'}</span>
-                                </div>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                                    {e.cliente ? `${e.cliente} · ` : ''}{e.lugar_entrega || 'Sin destino'}
-                                </p>
-                            </div>
-                            <span className={clsx(
-                                'shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap',
-                                rest.tone === 'late' ? 'text-red-600 bg-red-50 dark:bg-red-500/10 dark:text-red-400'
-                                    : rest.tone === 'soon' ? 'text-amber-600 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-400'
-                                        : rest.tone === 'ok' ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400'
-                                            : 'text-slate-400 bg-slate-100 dark:bg-slate-800'
-                            )}>
-                                {rest.tone === 'late' ? <AlertTriangle size={12} /> : <Clock size={12} />}
-                                {rest.text}
-                            </span>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
+        <button
+            onClick={onClick}
+            className={clsx(
+                'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition',
+                active ? TAB_ACCENT[accent] : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+            )}
+        >
+            <Icon size={15} />
+            <span className="truncate">{label}</span>
+            <span className={clsx('px-1.5 py-0.5 rounded-md text-[11px] font-bold tabular-nums', active ? 'bg-white/70 dark:bg-black/20' : 'bg-slate-100 dark:bg-slate-800')}>{count}</span>
+        </button>
     );
 }
 
-// Pill de disponibilidad clickable (verde disponible / rojo no disponible / azul en ruta).
+// Pill de disponibilidad clickable (verde disponible / rojo no disponible).
 function AvailabilityPill({ disponible, enOperacion, busy, onToggle }: {
     disponible: boolean; enOperacion: boolean; busy: boolean; onToggle: (next: boolean) => void;
 }) {
