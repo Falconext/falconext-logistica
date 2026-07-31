@@ -1,34 +1,39 @@
 {
-    "cli": {
-        "version": ">= 7.0.0"
+  "cli": {
+    "version": ">= 7.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
     },
-    "build": {
-        "development": {
-            "developmentClient": true,
-            "distribution": "internal"
-        },
-        "preview": {
-            "distribution": "internal",
-            "android": {
-                "buildType": "apk"
-            },
-            "ios": {
-                "simulator": true
-            },
-            "env": {
-                "EXPO_PUBLIC_API_URL": "https://falconext-logistica-api.vercel.app/api",
-                "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyB3laErCPuFftGUhzTXgLWcQHJ_O7NYj6I"
-            }
-        },
-        "production": {
-            "autoIncrement": true,
-            "env": {
-                "EXPO_PUBLIC_API_URL": "https://falconext-logistica-api.vercel.app/api",
-                "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyB3laErCPuFftGUhzTXgLWcQHJ_O7NYj6I"
-            }
-        }
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://falconext-logistica-api.vercel.app/api",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyB3laErCPuFftGUhzTXgLWcQHJ_O7NYj6I"
+      }
     },
-    "submit": {
-        "production": {}
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://falconext-logistica-api.vercel.app/api",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyB3laErCPuFftGUhzTXgLWcQHJ_O7NYj6I"
+      }
     }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "6796650368"
+      }
+    }
+  }
 }
