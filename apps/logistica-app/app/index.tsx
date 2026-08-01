@@ -10,7 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Truck, Lock, User, ArrowRight } from 'lucide-react-native';
+import { Truck, Lock, User, ArrowRight, Eye, EyeOff } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Theme } from '../constants/theme';
@@ -26,6 +26,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
   // Si ya hay sesión activa, saltar directo.
@@ -42,7 +43,7 @@ export default function LoginScreen() {
     setSubmitting(true);
     setError('');
     try {
-      await loginUser(email.trim(), password);
+      await loginUser(email.trim().toLowerCase(), password);
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Correo o contraseña incorrectos');
     } finally {
@@ -91,10 +92,22 @@ export default function LoginScreen() {
               style={styles.input}
               placeholder="Contraseña"
               placeholderTextColor={C.textFaint}
-              secureTextEntry
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
               value={password}
               onChangeText={setPassword}
             />
+            <TouchableOpacity
+              onPress={() => setShowPassword((v) => !v)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityLabel={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+            >
+              {showPassword ? (
+                <EyeOff size={20} color={C.textFaint} />
+              ) : (
+                <Eye size={20} color={C.textFaint} />
+              )}
+            </TouchableOpacity>
           </View>
 
           {!!error && <Text style={styles.error}>{error}</Text>}

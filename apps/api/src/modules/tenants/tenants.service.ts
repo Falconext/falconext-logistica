@@ -14,7 +14,10 @@ export class TenantsService {
         if (existing) throw new ConflictException('Slug already exists');
 
         // Check if user exists
-        const userExists = await this.prisma.user.findUnique({ where: { email: data.adminEmail } });
+        const adminEmail = data.adminEmail.trim().toLowerCase();
+        const userExists = await this.prisma.user.findFirst({
+            where: { email: { equals: adminEmail, mode: 'insensitive' } },
+        });
         if (userExists) throw new ConflictException('Admin email already exists');
 
         const hashedPassword = await bcrypt.hash(data.adminPassword, 10);
@@ -31,7 +34,7 @@ export class TenantsService {
 
             const user = await tx.user.create({
                 data: {
-                    email: data.adminEmail,
+                    email: adminEmail,
                     password: hashedPassword,
                     role: 'ADMIN',
                     tenant_id: tenant.id
