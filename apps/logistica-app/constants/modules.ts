@@ -48,7 +48,7 @@ export function isChofer(user: UserLike | null | undefined): boolean {
 }
 
 // Pantallas personales: solo tienen sentido con un trabajador vinculado.
-const CHOFER_ONLY = ['mi-resumen', 'mi-perfil'];
+const CHOFER_ONLY = ['mi-resumen', 'mi-perfil', 'parte-diario'];
 // Todo lo que un chofer puede abrir (el backend ya filtra a "solo lo suyo").
 const CHOFER_ALLOWED = [...CHOFER_ONLY, 'mi-ruta', 'rastreo', 'historial', 'operaciones', 'peajes', 'combustible'];
 

@@ -13,7 +13,6 @@ export interface Trabajador {
     email_supervisor?: string;
     area_trabajo?: string;
     sueldo_base?: string | number;
-    tarifa_hora?: string | number; // pago por hora de manejo (ganancia estimada del chofer)
     direccion?: string;
     // Docs
     numero_pasaporte?: string;

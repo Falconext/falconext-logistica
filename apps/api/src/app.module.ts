@@ -17,6 +17,7 @@ import { UsuariosModule } from './modules/usuarios/usuarios.module';
 import { RolesModule } from './modules/roles/roles.module';
 import { PanelModule } from './modules/panel/panel.module';
 import { RecorridosModule } from './modules/recorridos/recorridos.module';
+import { RegistrosModule } from './modules/registros/registros.module';
 
 @Module({
     imports: [
@@ -38,6 +39,7 @@ import { RecorridosModule } from './modules/recorridos/recorridos.module';
         RolesModule,
         PanelModule,
         RecorridosModule,
+        RegistrosModule,
     ],
     controllers: [],
     providers: [],

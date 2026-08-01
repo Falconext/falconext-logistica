@@ -46,7 +46,6 @@ const emptyForm = {
     codigo_fiscal: '',
     fecha_vencimiento_fiscal: '',
     sueldo_base: '' as string | number,
-    tarifa_hora: '' as string | number,
     url_foto: '',
     trackable: false,
 };
@@ -108,7 +107,6 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                 codigo_fiscal: initialData.codigo_fiscal || '',
                 fecha_vencimiento_fiscal: toDateInput(initialData.fecha_vencimiento_fiscal),
                 sueldo_base: initialData.sueldo_base ?? '',
-                tarifa_hora: initialData.tarifa_hora ?? '',
                 url_foto: initialData.url_foto || '',
                 trackable: initialData.trackable ?? false,
             });
@@ -150,7 +148,6 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                 codigo_fiscal: form.codigo_fiscal || null,
                 fecha_vencimiento_fiscal: toIso(form.fecha_vencimiento_fiscal) ?? null,
                 sueldo_base: form.sueldo_base === '' ? null : Number(form.sueldo_base),
-                tarifa_hora: form.tarifa_hora === '' ? null : Number(form.tarifa_hora),
                 url_foto: form.url_foto || null,
                 trackable: form.trackable,
             };
@@ -282,15 +279,6 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                                     onChange={(e) => set('sueldo_base', e.target.value)} placeholder="0.00" />
                                 {form.sueldo_base !== '' && !isNaN(Number(form.sueldo_base)) && (
                                     <p className="text-xs text-slate-400">{format(Number(form.sueldo_base))}</p>
-                                )}
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className={labelCls}>Tarifa por hora de manejo</label>
-                                <input type="number" step="0.01" min="0" className={inputCls}
-                                    value={form.tarifa_hora}
-                                    onChange={(e) => set('tarifa_hora', e.target.value)} placeholder="0.00" />
-                                {form.tarifa_hora !== '' && !isNaN(Number(form.tarifa_hora)) && (
-                                    <p className="text-xs text-slate-400">{format(Number(form.tarifa_hora))} / hora — base de la ganancia estimada del chofer en la app</p>
                                 )}
                             </div>
                             <div className="sm:col-span-2">

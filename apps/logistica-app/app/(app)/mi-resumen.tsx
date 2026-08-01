@@ -8,13 +8,14 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import {
   Clock,
   Route,
-  CheckCircle2,
-  Coffee,
+  Moon,
+  ClipboardList,
   Navigation,
   MapPinned,
   ChevronRight,
   Package,
   CircleUser,
+  PlusCircle,
 } from 'lucide-react-native';
 import {
   Screen,
@@ -38,14 +39,15 @@ const F = Theme.font;
 const R = Theme.radius;
 
 interface Resumen {
-  totalRecorridos: number;
-  completados: number;
-  minutosManejo: number;
+  moneda?: string;
+  tarifas?: { giorno: number; notte: number; corte: number };
+  totalPartes: number;
   km: number;
-  descansoMin: number;
-  tarifaHora: number;
+  oreMattina: number;
+  oreSera: number;
+  oreTotal: number;
   gananciaEstimada: number;
-  recientes: { id: string; destino?: string | null; estado: string; iniciado_en: string; km: number; minutos: number }[];
+  recientes: { id: string; fecha: string; operacion: string; targa?: string | null; km: number; oreMattina: number; oreSera: number; ganancia: number }[];
 }
 
 interface Consegna {
@@ -60,10 +62,11 @@ interface Consegna {
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
-function horasLabel(min: number): string {
-  const h = Math.floor(min / 60);
-  const m = Math.round(min % 60);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+// Las horas de manejo (ore guida) se registran en decimales (p. ej. 5.5 = 5h 30m).
+function horasLabel(h: number): string {
+  const horas = Math.floor(h);
+  const min = Math.round((h - horas) * 60);
+  return min > 0 ? `${horas}h ${min}m` : `${horas}h`;
 }
 
 function estadoBadge(estado?: string | null): { label: string; variant: 'success' | 'warning' | 'info' | 'neutral' } {
@@ -99,7 +102,7 @@ export default function MiResumenScreen() {
   const load = useCallback(async () => {
     try {
       const [resRes, progRes] = await Promise.all([
-        api.get('/recorridos/mias/resumen'),
+        api.get('/registros/mias/resumen'),
         api.get('/programacion', { params: { estados: 'PENDING,PENDIENTE,IN_TRANSIT,REPROGRAMADO', take: 5 } }),
       ]);
       setResumen(resRes.data ?? null);
@@ -134,7 +137,8 @@ export default function MiResumenScreen() {
 
   const nombre = (user?.nombre || user?.email?.split('@')[0] || 'Chofer').split(' ')[0];
   const mes = MESES[new Date().getMonth()];
-  const sinTarifa = !resumen?.tarifaHora;
+  const moneda = resumen?.moneda || user?.moneda;
+  const tarifas = resumen?.tarifas;
 
   return (
     <Screen
@@ -144,29 +148,33 @@ export default function MiResumenScreen() {
     >
       <AppHeader title={`Hola, ${nombre}`} subtitle={`Tu resumen de ${mes}`} />
 
-      {/* Ganancia estimada del mes */}
+      {/* Ganancia del mes (horas de manejo × tarifa) */}
       <Card style={styles.earningsCard}>
         <Text style={styles.earningsLabel}>Ganancia estimada · {mes}</Text>
-        <Text style={styles.earningsValue}>{formatMoney(resumen?.gananciaEstimada ?? 0, user?.moneda)}</Text>
-        {sinTarifa ? (
+        <Text style={styles.earningsValue}>{formatMoney(resumen?.gananciaEstimada ?? 0, moneda)}</Text>
+        {tarifas ? (
           <Text style={styles.earningsHint}>
-            Aún no tienes tarifa por hora configurada. Pídele a tu supervisor que la registre para ver tu ganancia.
+            {horasLabel(resumen?.oreMattina ?? 0)} día × {formatMoney(tarifas.giorno, moneda)}  +  {horasLabel(resumen?.oreSera ?? 0)} noche × {formatMoney(tarifas.notte, moneda)}
           </Text>
         ) : (
-          <Text style={styles.earningsHint}>
-            {horasLabel(resumen?.minutosManejo ?? 0)} de manejo × {formatMoney(resumen?.tarifaHora, user?.moneda)}/h
-          </Text>
+          <Text style={styles.earningsHint}>Registra tus partes del día para ver tu ganancia.</Text>
         )}
       </Card>
 
+      {/* Registrar parte del día */}
+      <TouchableOpacity style={styles.parteBtn} activeOpacity={0.85} onPress={() => router.push('/(app)/parte-diario' as any)}>
+        <PlusCircle size={20} color="#fff" />
+        <Text style={styles.parteBtnText}>Registrar parte del día</Text>
+      </TouchableOpacity>
+
       {/* Métricas personales */}
       <View style={styles.statsRow}>
-        <StatCard label="Horas de manejo" value={horasLabel(resumen?.minutosManejo ?? 0)} icon={Clock} color={C.primary} style={{ flex: 1 }} />
-        <StatCard label="Km recorridos" value={`${resumen?.km ?? 0} km`} icon={Route} color={C.info} style={{ flex: 1 }} />
+        <StatCard label="Horas de manejo" value={horasLabel(resumen?.oreTotal ?? 0)} icon={Clock} color={C.primary} style={{ flex: 1 }} />
+        <StatCard label="Km del mes" value={`${resumen?.km ?? 0} km`} icon={Route} color={C.info} style={{ flex: 1 }} />
       </View>
       <View style={styles.statsRow}>
-        <StatCard label="Traslados completados" value={resumen?.completados ?? 0} icon={CheckCircle2} color={C.success} style={{ flex: 1 }} />
-        <StatCard label="Descanso" value={horasLabel(resumen?.descansoMin ?? 0)} icon={Coffee} color={C.warning} style={{ flex: 1 }} />
+        <StatCard label="Horas noche" value={horasLabel(resumen?.oreSera ?? 0)} icon={Moon} color={C.accent} style={{ flex: 1 }} />
+        <StatCard label="Partes registrados" value={resumen?.totalPartes ?? 0} icon={ClipboardList} color={C.success} style={{ flex: 1 }} />
       </View>
 
       {/* Accesos rápidos */}
@@ -212,24 +220,26 @@ export default function MiResumenScreen() {
         })
       )}
 
-      {/* Recorridos recientes */}
+      {/* Partes recientes */}
       {!!resumen?.recientes?.length && (
         <>
-          <SectionTitle style={{ marginTop: S.lg }}>Recorridos recientes</SectionTitle>
-          {resumen.recientes.map((r) => {
-            const b = estadoBadge(r.estado);
-            return (
-              <Card key={r.id} style={styles.consegna}>
+          <SectionTitle style={{ marginTop: S.lg }}>Mis partes recientes</SectionTitle>
+          {resumen.recientes.map((r) => (
+            <TouchableOpacity key={r.id} activeOpacity={0.7} onPress={() => router.push({ pathname: '/(app)/parte-diario', params: { id: r.id } } as any)}>
+              <Card style={styles.consegna}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.consegnaCliente} numberOfLines={1}>{r.destino || 'Recorrido'}</Text>
+                  <Text style={styles.consegnaCliente} numberOfLines={1}>
+                    {new Date(r.fecha).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' })} · {r.operacion}{r.targa ? ` · ${r.targa}` : ''}
+                  </Text>
                   <Text style={styles.consegnaRuta}>
-                    {new Date(r.iniciado_en).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' })} · {r.km} km · {horasLabel(r.minutos)}
+                    {r.km} km · {horasLabel(r.oreMattina)} día + {horasLabel(r.oreSera)} noche
                   </Text>
                 </View>
-                <Badge label={b.label} variant={b.variant} />
+                <Text style={styles.parteGanancia}>{formatMoney(r.ganancia, moneda)}</Text>
+                <ChevronRight size={18} color={C.textFaint} />
               </Card>
-            );
-          })}
+            </TouchableOpacity>
+          ))}
         </>
       )}
     </Screen>
@@ -245,6 +255,18 @@ const makeStyles = () => StyleSheet.create({
   earningsLabel: { color: '#ffffffCC', fontSize: F.size.sm, fontWeight: '600', textTransform: 'capitalize' },
   earningsValue: { color: '#fff', fontSize: 34, fontWeight: '800', marginTop: 4 },
   earningsHint: { color: '#ffffffB3', fontSize: F.size.sm, marginTop: 6, lineHeight: 18 },
+  parteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: C.accent,
+    borderRadius: R.lg,
+    paddingVertical: 14,
+    marginTop: S.md,
+  },
+  parteBtnText: { color: '#fff', fontSize: F.size.md, fontWeight: '700' },
+  parteGanancia: { fontSize: F.size.md, fontWeight: '800', color: C.success },
   statsRow: { flexDirection: 'row', gap: S.sm, marginTop: S.sm },
   quickRow: { flexDirection: 'row', gap: S.sm, marginTop: S.md },
   quick: {

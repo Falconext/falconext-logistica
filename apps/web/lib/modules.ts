@@ -12,6 +12,7 @@ export const MODULES: ModuleDef[] = [
   { key: 'dashboard', name: 'Dashboard', href: '/' },
   { key: 'panel', name: 'Panel de Control', href: '/panel' },
   { key: 'operaciones', name: 'Operaciones', href: '/operaciones' },
+  { key: 'servicios', name: 'DHL / Farmacia', href: '/servicios' },
   { key: 'trabajadores', name: 'Trabajadores', href: '/trabajadores' },
   { key: 'vehiculos', name: 'Vehículos', href: '/vehiculos' },
   { key: 'mantenimiento', name: 'Mantenimiento', href: '/mantenimiento' },

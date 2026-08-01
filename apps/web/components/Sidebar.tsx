@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Truck, Map, Wrench, ShieldCheck, LogOut, Bell, CalendarDays, BarChart3, FileSpreadsheet, MessageSquare, PlayCircle, HelpCircle, Briefcase, ChevronsLeft, Receipt, Fuel, UserCog, KeyRound, Radio, Navigation, Sun, Moon, Boxes, Route, CalendarClock } from 'lucide-react';
+import { LayoutDashboard, Users, Truck, Map, Wrench, ShieldCheck, LogOut, Bell, CalendarDays, BarChart3, FileSpreadsheet, MessageSquare, PlayCircle, HelpCircle, Briefcase, ChevronsLeft, Receipt, Fuel, UserCog, KeyRound, Radio, Navigation, Sun, Moon, Boxes, Route, CalendarClock, Package } from 'lucide-react';
 import clsx from 'clsx';
 import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
@@ -16,6 +16,7 @@ const primaryItems = [
     { key: 'dashboard', href: '/', icon: LayoutDashboard },
     { key: 'panel', href: '/panel', icon: Boxes },
     { key: 'operaciones', href: '/operaciones', icon: Map },
+    { key: 'servicios', href: '/servicios', icon: Package },
     { key: 'trabajadores', href: '/trabajadores', icon: Users },
     { key: 'vehiculos', href: '/vehiculos', icon: Truck },
     { key: 'mantenimiento', href: '/mantenimiento', icon: Wrench },
