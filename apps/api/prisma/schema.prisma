@@ -512,8 +512,10 @@ model RegistroServicio {
   km            Float?   @default(0) // KM TOTAL de la jornada
   ore_mattina   Float?   @default(0) // Ore guida diurnas (tarifa diurna)
   ore_sera      Float?   @default(0) // Ore guida nocturnas (desde hora_corte_notte, tarifa nocturna)
+  ore_attesa    Float?   @default(0) // Ore attesa: horas de espera (no de manejo)
 
   repibilita    Boolean  @default(false) // Reperibilità (disponibilidad on-call) SI/NO
+  citta_destino String?  // CITTA / DESTINAZIONE (ciudad o destino del servicio)
   cliente       String?  // CLIENTE
   spedizione    String?  // SPEDIZIONE
   comentario    String?  // COMENTARIO FINAL

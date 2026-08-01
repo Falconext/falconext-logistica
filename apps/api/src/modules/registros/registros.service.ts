@@ -55,7 +55,9 @@ export class RegistrosService {
             km: data.km !== undefined && data.km !== '' ? num(data.km) : 0,
             ore_mattina: data.ore_mattina !== undefined && data.ore_mattina !== '' ? num(data.ore_mattina) : 0,
             ore_sera: data.ore_sera !== undefined && data.ore_sera !== '' ? num(data.ore_sera) : 0,
+            ore_attesa: data.ore_attesa !== undefined && data.ore_attesa !== '' ? num(data.ore_attesa) : 0,
             repibilita: data.repibilita === true || data.repibilita === 'true' || data.repibilita === 'SI',
+            citta_destino: data.citta_destino || null,
             cliente: data.cliente || null,
             spedizione: data.spedizione || null,
             comentario: data.comentario || null,
@@ -76,12 +78,14 @@ export class RegistrosService {
 
     async findAll(
         tenantId: string,
-        opts: { operacion?: string; anio?: number; mes?: number; q?: string; skip?: number; take?: number; ownerTrabajadorId?: string } = {},
+        opts: { operacion?: string; anio?: number; mes?: number; trabajadorId?: string; q?: string; skip?: number; take?: number; ownerTrabajadorId?: string } = {},
     ) {
-        const { operacion, anio, mes, q, skip = 0, take = 60, ownerTrabajadorId } = opts;
+        const { operacion, anio, mes, trabajadorId, q, skip = 0, take = 60, ownerTrabajadorId } = opts;
 
         const where: Prisma.RegistroServicioWhereInput = { tenant_id: tenantId };
+        // El chofer (solo_propios) queda fijo a lo suyo; el admin puede filtrar por chofer.
         if (ownerTrabajadorId) where.trabajador_id = ownerTrabajadorId;
+        else if (trabajadorId) where.trabajador_id = trabajadorId;
         if (operacion) where.operacion = this.normalizarOperacion(operacion);
         if (anio) {
             const desde = mes ? inicioMesUTC(anio, mes) : inicioMesUTC(anio, 1);
@@ -269,6 +273,65 @@ export class RegistrosService {
         const reg = await this.assertPropietario(id, ctx.tenantId, ctx.ownerTrabajadorId);
         const tar = await this.tarifas(ctx.tenantId);
         return { ...reg, ganancia: this.ganancia(reg, tar) };
+    }
+
+    // Árbol año → mes → chofer con suma de km en cada nivel (panel de navegación
+    // tipo el sistema viejo). Usa la fecha en UTC para agrupar por día/mes/año.
+    async arbol(tenantId: string, operacion?: string) {
+        const where: Prisma.RegistroServicioWhereInput = { tenant_id: tenantId };
+        if (operacion) where.operacion = this.normalizarOperacion(operacion);
+
+        const registros = await this.prisma.registroServicio.findMany({
+            where,
+            select: { fecha: true, km: true, trabajador_id: true },
+        });
+
+        const ids = [...new Set(registros.map((r) => r.trabajador_id).filter(Boolean))];
+        const trabajadores = ids.length
+            ? await this.prisma.trabajador.findMany({
+                where: { id: { in: ids }, tenant_id: tenantId },
+                select: { id: true, nombre_completo: true, url_foto: true },
+            })
+            : [];
+        const porId = new Map(trabajadores.map((t) => [t.id, t]));
+
+        // anio -> mes -> trabajador_id -> km
+        const anios = new Map<number, { km: number; meses: Map<number, { km: number; choferes: Map<string, number> }> }>();
+        for (const r of registros) {
+            const f = new Date(r.fecha);
+            const anio = f.getUTCFullYear();
+            const mes = f.getUTCMonth() + 1;
+            const km = num(r.km);
+            if (!anios.has(anio)) anios.set(anio, { km: 0, meses: new Map() });
+            const A = anios.get(anio)!;
+            A.km += km;
+            if (!A.meses.has(mes)) A.meses.set(mes, { km: 0, choferes: new Map() });
+            const M = A.meses.get(mes)!;
+            M.km += km;
+            M.choferes.set(r.trabajador_id, (M.choferes.get(r.trabajador_id) || 0) + km);
+        }
+
+        const round1 = (n: number) => Math.round(n * 10) / 10;
+        return [...anios.entries()]
+            .sort((a, b) => b[0] - a[0])
+            .map(([anio, A]) => ({
+                anio,
+                km: round1(A.km),
+                meses: [...A.meses.entries()]
+                    .sort((a, b) => b[0] - a[0])
+                    .map(([mes, M]) => ({
+                        mes,
+                        km: round1(M.km),
+                        choferes: [...M.choferes.entries()]
+                            .map(([tid, km]) => ({
+                                trabajador_id: tid,
+                                nombre: porId.get(tid)?.nombre_completo ?? tid,
+                                foto: porId.get(tid)?.url_foto ?? null,
+                                km: round1(km),
+                            }))
+                            .sort((a, b) => b.km - a.km),
+                    })),
+            }));
     }
 
     private async assertPropietario(id: string, tenantId: string, ownerTrabajadorId?: string) {

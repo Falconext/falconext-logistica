@@ -5,7 +5,9 @@
 // sistema anterior. Dos vistas: lista de partes y resumen mensual por chofer.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Package, Search, Settings2, X, Sun, Moon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Package, Search, Settings2, X, Sun, Moon, Timer, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+
+const ChevronRightIcon = ChevronRight;
 import api from '../../lib/api';
 import { useT, useI18n } from '../../lib/i18n';
 import { useCurrency } from '../../lib/useCurrency';
@@ -23,14 +25,20 @@ interface Parte {
     id: string;
     fecha: string;
     targa?: string | null;
+    citta_destino?: string | null;
     km?: number;
     ore_mattina?: number;
     ore_sera?: number;
+    ore_attesa?: number;
     ganancia?: number;
     cliente?: string | null;
     trabajador_nombre?: string | null;
     trabajador_foto?: string | null;
 }
+
+interface ArbolChofer { trabajador_id: string; nombre: string; foto?: string | null; km: number; }
+interface ArbolMes { mes: number; km: number; choferes: ArbolChofer[]; }
+interface ArbolAnio { anio: number; km: number; meses: ArbolMes[]; }
 
 interface FilaResumen {
     trabajador_id: string;
@@ -64,9 +72,12 @@ export default function ServiciosPage() {
     const [anio, setAnio] = useState(now.getFullYear());
     const [mes, setMes] = useState(now.getMonth() + 1); // 1-12
     const [q, setQ] = useState('');
+    const [trabajadorId, setTrabajadorId] = useState<string | null>(null);
 
     const [partes, setPartes] = useState<Parte[]>([]);
     const [resumen, setResumen] = useState<{ filas: FilaResumen[]; totales: any } | null>(null);
+    const [arbol, setArbol] = useState<ArbolAnio[]>([]);
+    const [abiertos, setAbiertos] = useState<Record<string, boolean>>({});
     const [loading, setLoading] = useState(true);
 
     // Config de tarifas (para el modal admin)
@@ -78,7 +89,7 @@ export default function ServiciosPage() {
         setLoading(true);
         try {
             if (vista === 'partes') {
-                const { data } = await api.get('/registros', { params: { operacion, anio, mes, q: q || undefined, take: 500 } });
+                const { data } = await api.get('/registros', { params: { operacion, anio, mes, trabajadorId: trabajadorId || undefined, q: q || undefined, take: 500 } });
                 setPartes(data?.items ?? []);
             } else {
                 const { data } = await api.get('/registros/resumen-mes', { params: { operacion, anio, mes } });
@@ -89,9 +100,16 @@ export default function ServiciosPage() {
         } finally {
             setLoading(false);
         }
-    }, [vista, operacion, anio, mes, q]);
+    }, [vista, operacion, anio, mes, trabajadorId, q]);
 
     useEffect(() => { load(); }, [load]);
+
+    // Árbol de navegación (año → mes → chofer): se recarga al cambiar de operación.
+    useEffect(() => {
+        api.get('/registros/arbol', { params: { operacion } })
+            .then(({ data }) => setArbol(Array.isArray(data) ? data : []))
+            .catch(() => setArbol([]));
+    }, [operacion]);
 
     const abrirTarifas = async () => {
         try {
@@ -121,10 +139,17 @@ export default function ServiciosPage() {
         let a = anio;
         if (m < 1) { m = 12; a -= 1; }
         if (m > 12) { m = 1; a += 1; }
-        setMes(m); setAnio(a);
+        setMes(m); setAnio(a); setTrabajadorId(null);
     };
 
     const meses = MESES[locale] ?? MESES.es;
+    const kmFmt = (n: number) => new Intl.NumberFormat(locale === 'it' ? 'it-IT' : 'es-PE').format(Math.round(n));
+    const toggle = (k: string) => setAbiertos((s) => ({ ...s, [k]: !s[k] }));
+
+    // Clic en un mes del árbol → posiciona el período y limpia el filtro de chofer.
+    const irAMes = (a: number, m: number) => { setAnio(a); setMes(m); setTrabajadorId(null); setVista('partes'); };
+    // Clic en un chofer → además filtra la lista a ese chofer.
+    const irAChofer = (a: number, m: number, tid: string) => { setAnio(a); setMes(m); setTrabajadorId(tid); setVista('partes'); };
 
     const fmtFecha = (v: string) => {
         const d = new Date(v);
@@ -163,7 +188,7 @@ export default function ServiciosPage() {
                 {/* Operación */}
                 <div className="inline-flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1">
                     {OPERACIONES.map((op) => (
-                        <button key={op} onClick={() => setOperacion(op)}
+                        <button key={op} onClick={() => { setOperacion(op); setTrabajadorId(null); }}
                             className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${operacion === op ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500'}`}>
                             {op}
                         </button>
@@ -192,8 +217,57 @@ export default function ServiciosPage() {
                 )}
             </div>
 
-            {/* Contenido */}
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+            {/* Árbol de navegación + contenido */}
+            <div className="grid grid-cols-1 xl:grid-cols-[260px_1fr] gap-6 items-start">
+                {/* Árbol año → mes → chofer con suma de km */}
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 max-h-[70vh] overflow-y-auto text-sm">
+                    {arbol.length === 0 ? (
+                        <p className="px-2 py-4 text-slate-400 text-xs">{t('servicios.vacio')}</p>
+                    ) : arbol.map((A) => {
+                        const aKey = `a${A.anio}`;
+                        const aOpen = abiertos[aKey] ?? true;
+                        return (
+                            <div key={A.anio}>
+                                <button onClick={() => toggle(aKey)} className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 font-bold text-slate-800 dark:text-slate-100">
+                                    {aOpen ? <ChevronDown size={14} /> : <ChevronRightIcon size={14} />}
+                                    <span className="flex-1 text-left">{A.anio}</span>
+                                    <span className="text-[11px] font-semibold text-slate-400">{kmFmt(A.km)}</span>
+                                </button>
+                                {aOpen && A.meses.map((M) => {
+                                    const mKey = `${aKey}m${M.mes}`;
+                                    const mOpen = abiertos[mKey] ?? false;
+                                    return (
+                                        <div key={M.mes} className="ml-2">
+                                            <div className="flex items-center gap-1">
+                                                <button onClick={() => toggle(mKey)} className="p-1 text-slate-400 hover:text-slate-700">
+                                                    {mOpen ? <ChevronDown size={13} /> : <ChevronRightIcon size={13} />}
+                                                </button>
+                                                <button onClick={() => irAMes(A.anio, M.mes)}
+                                                    className={`flex-1 flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 ${anio === A.anio && mes === M.mes && !trabajadorId ? 'bg-amber-50 dark:bg-amber-900/20' : ''}`}>
+                                                    <span className="flex-1 text-left font-semibold text-slate-700 dark:text-slate-200">{M.mes}. {meses[M.mes - 1]}</span>
+                                                    <span className="text-[11px] font-semibold text-slate-400">{kmFmt(M.km)}</span>
+                                                </button>
+                                            </div>
+                                            {mOpen && M.choferes.map((c) => (
+                                                <button key={c.trabajador_id} onClick={() => irAChofer(A.anio, M.mes, c.trabajador_id)}
+                                                    className={`w-full ml-6 flex items-center gap-2 pl-2 pr-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 ${trabajadorId === c.trabajador_id && mes === M.mes ? 'bg-amber-50 dark:bg-amber-900/20' : ''}`} style={{ width: 'calc(100% - 1.5rem)' }}>
+                                                    {c.foto
+                                                        ? <img src={c.foto} alt="" className="w-5 h-5 rounded-full object-cover bg-slate-100" />
+                                                        : <span className="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[9px] font-bold text-slate-500">{c.nombre[0]}</span>}
+                                                    <span className="flex-1 text-left text-slate-600 dark:text-slate-300 truncate">{c.nombre}</span>
+                                                    <span className="text-[11px] font-semibold text-slate-400">{kmFmt(c.km)}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Contenido */}
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
                 {loading ? (
                     <div className="py-16 flex justify-center"><div className="h-9 w-9 rounded-full border-4 border-amber-500/30 border-t-amber-500 animate-spin" /></div>
                 ) : vista === 'partes' ? (
@@ -207,13 +281,15 @@ export default function ServiciosPage() {
                                     <th className={`${thCls} text-right`}>{t('servicios.col.km')}</th>
                                     <th className={`${thCls} text-right`}>{t('servicios.col.oreDia')}</th>
                                     <th className={`${thCls} text-right`}>{t('servicios.col.oreNoche')}</th>
+                                    <th className={`${thCls} text-right`}>{t('servicios.col.oreEspera')}</th>
+                                    <th className={thCls}>{t('servicios.col.destino')}</th>
                                     <th className={thCls}>{t('servicios.col.cliente')}</th>
                                     <th className={`${thCls} text-right`}>{t('servicios.col.ganancia')}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {partes.length === 0 && (
-                                    <tr><td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-400">{t('servicios.vacio')}</td></tr>
+                                    <tr><td colSpan={10} className="px-4 py-10 text-center text-sm text-slate-400">{t('servicios.vacio')}</td></tr>
                                 )}
                                 {partes.map((p) => (
                                     <tr key={p.id} className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
@@ -228,6 +304,8 @@ export default function ServiciosPage() {
                                         <td className={`${tdCls} text-right`}>{p.km ?? 0}</td>
                                         <td className={`${tdCls} text-right`}><span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400"><Sun size={13} />{hLabel(p.ore_mattina)}</span></td>
                                         <td className={`${tdCls} text-right`}><span className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400"><Moon size={13} />{hLabel(p.ore_sera)}</span></td>
+                                        <td className={`${tdCls} text-right`}>{(p.ore_attesa ?? 0) > 0 ? <span className="inline-flex items-center gap-1 text-pink-600 dark:text-pink-400"><Timer size={13} />{hLabel(p.ore_attesa)}</span> : <span className="text-slate-300 dark:text-slate-600">—</span>}</td>
+                                        <td className={tdCls}>{p.citta_destino || '—'}</td>
                                         <td className={tdCls}>{p.cliente || '—'}</td>
                                         <td className={`${tdCls} text-right font-bold text-emerald-600 dark:text-emerald-400`}>{format(p.ganancia ?? 0)}</td>
                                     </tr>
@@ -284,6 +362,7 @@ export default function ServiciosPage() {
                         </table>
                     </div>
                 )}
+                </div>
             </div>
 
             {/* Modal tarifas */}

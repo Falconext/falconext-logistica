@@ -55,9 +55,11 @@ export default function ParteDiarioScreen() {
     operacion: 'DHL' as (typeof OPERACIONES)[number],
     fecha: hoyISO(),
     targa: '',
+    citta_destino: '',
     km: '',
     ore_mattina: '',
     ore_sera: '',
+    ore_attesa: '',
     repibilita: false,
     cliente: '',
     spedizione: '',
@@ -79,8 +81,10 @@ export default function ParteDiarioScreen() {
           fecha: data.fecha ? String(data.fecha).split('T')[0] : hoyISO(),
           targa: data.targa || '',
           km: data.km != null ? String(data.km) : '',
+          citta_destino: data.citta_destino || '',
           ore_mattina: data.ore_mattina != null ? String(data.ore_mattina) : '',
           ore_sera: data.ore_sera != null ? String(data.ore_sera) : '',
+          ore_attesa: data.ore_attesa != null ? String(data.ore_attesa) : '',
           repibilita: !!data.repibilita,
           cliente: data.cliente || '',
           spedizione: data.spedizione || '',
@@ -114,9 +118,11 @@ export default function ParteDiarioScreen() {
         operacion: form.operacion,
         fecha: form.fecha,
         targa: form.targa.trim().toUpperCase() || null,
+        citta_destino: form.citta_destino.trim() || null,
         km: numOr0(form.km),
         ore_mattina: numOr0(form.ore_mattina),
         ore_sera: numOr0(form.ore_sera),
+        ore_attesa: numOr0(form.ore_attesa),
         repibilita: form.repibilita,
         cliente: form.cliente.trim() || null,
         spedizione: form.spedizione.trim() || null,
@@ -181,6 +187,8 @@ export default function ParteDiarioScreen() {
 
         <FormField label="Targa del furgón" value={form.targa} onChangeText={(t) => set('targa', t)} placeholder="Ej: GB502TP" autoCapitalize="characters" />
 
+        <FormField label="Ciudad / destino" value={form.citta_destino} onChangeText={(t) => set('citta_destino', t)} placeholder="Ej: Roma, Gidonia..." />
+
         <FormField label="KM total" value={form.km} onChangeText={(t) => set('km', t)} placeholder="0" keyboardType="numeric" />
 
         {/* Horas de manejo: día y noche (se suman) */}
@@ -201,7 +209,9 @@ export default function ParteDiarioScreen() {
           </View>
         </View>
 
-        {/* Ganancia calculada en vivo */}
+        <FormField label="Horas de espera (ore attesa)" value={form.ore_attesa} onChangeText={(t) => set('ore_attesa', t)} placeholder="0.0" keyboardType="numeric" />
+
+        {/* Ganancia calculada en vivo (solo horas de manejo; la espera no se paga) */}
         <Card style={styles.previewCard}>
           <Text style={styles.previewLabel}>Ganancia de este parte</Text>
           <Text style={styles.previewValue}>{formatMoney(gananciaPreview, moneda)}</Text>

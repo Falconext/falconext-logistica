@@ -36,6 +36,7 @@ export class RegistrosController {
             operacion: query.operacion,
             anio: query.anio ? parseInt(query.anio, 10) : undefined,
             mes: query.mes ? parseInt(query.mes, 10) : undefined,
+            trabajadorId: query.trabajadorId,
             q: query.q,
             skip: query.skip ? parseInt(query.skip, 10) || 0 : 0,
             take: query.take ? Math.min(parseInt(query.take, 10) || 60, 500) : 60,
@@ -49,6 +50,12 @@ export class RegistrosController {
     @Get('mias/resumen')
     miResumen(@Req() req, @Query('from') from?: string, @Query('to') to?: string) {
         return this.registrosService.resumenChofer(req.user.tenantId, req.user.trabajadorId, from, to);
+    }
+
+    // Árbol de navegación (año → mes → chofer) con suma de km en cada nivel.
+    @Get('arbol')
+    arbol(@Req() req, @Query('operacion') operacion?: string) {
+        return this.registrosService.arbol(req.user.tenantId, operacion);
     }
 
     // Resumen mensual por chofer (para el panel web "Resumen mes DHL"). Solo flota/RRHH.
