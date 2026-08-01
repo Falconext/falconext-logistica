@@ -1,15 +1,16 @@
 import { Tabs } from 'expo-router';
-import { LayoutDashboard, Map, Truck, Users, LayoutGrid } from 'lucide-react-native';
+import { LayoutDashboard, Map, Truck, Users, LayoutGrid, Navigation, CircleUser } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Theme } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
-import { canAccessModule } from '../../constants/modules';
+import { canAccessModule, isChofer } from '../../constants/modules';
 
 const C = Theme.colors;
 
 export default function AppTabsLayout() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const chofer = isChofer(user);
   // href:null oculta la pestaña de la barra si el usuario no tiene el módulo.
   const gate = (key: string) => (canAccessModule(user, key) ? undefined : null);
 
@@ -33,8 +34,12 @@ export default function AppTabsLayout() {
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
       }}
     >
+      {/* Modo chofer: Inicio personal (Mi Resumen), Mi Ruta y Mi Perfil en la barra */}
+      <Tabs.Screen name="mi-resumen" options={{ title: 'Inicio', href: chofer ? undefined : null, tabBarIcon: ({ color, size }) => <LayoutDashboard color={color} size={size} /> }} />
       <Tabs.Screen name="dashboard" options={{ title: 'Inicio', href: gate('dashboard'), tabBarIcon: ({ color, size }) => <LayoutDashboard color={color} size={size} /> }} />
-      <Tabs.Screen name="operaciones" options={{ title: 'Operaciones', href: gate('operaciones'), tabBarIcon: ({ color, size }) => <Map color={color} size={size} /> }} />
+      <Tabs.Screen name="operaciones" options={{ title: chofer ? 'Consegnas' : 'Operaciones', href: gate('operaciones'), tabBarIcon: ({ color, size }) => <Map color={color} size={size} /> }} />
+      <Tabs.Screen name="mi-ruta" options={{ title: 'Mi Ruta', href: chofer ? undefined : null, tabBarIcon: ({ color, size }) => <Navigation color={color} size={size} /> }} />
+      <Tabs.Screen name="mi-perfil" options={{ title: 'Mi Perfil', href: chofer ? undefined : null, tabBarIcon: ({ color, size }) => <CircleUser color={color} size={size} /> }} />
       <Tabs.Screen name="vehiculos" options={{ title: 'Vehículos', href: gate('vehiculos'), tabBarIcon: ({ color, size }) => <Truck color={color} size={size} /> }} />
       <Tabs.Screen name="trabajadores" options={{ title: 'Trabajadores', href: gate('trabajadores'), tabBarIcon: ({ color, size }) => <Users color={color} size={size} /> }} />
       <Tabs.Screen name="mas" options={{ title: 'Más', tabBarIcon: ({ color, size }) => <LayoutGrid color={color} size={size} /> }} />
@@ -49,7 +54,6 @@ export default function AppTabsLayout() {
       <Tabs.Screen name="reportes" options={{ href: null }} />
       <Tabs.Screen name="alertas" options={{ href: null }} />
       <Tabs.Screen name="flota" options={{ href: null }} />
-      <Tabs.Screen name="mi-ruta" options={{ href: null }} />
       <Tabs.Screen name="rastreo" options={{ href: null }} />
       <Tabs.Screen name="dispositivos" options={{ href: null }} />
       <Tabs.Screen name="historial" options={{ href: null }} />

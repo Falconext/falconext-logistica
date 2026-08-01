@@ -8,6 +8,15 @@
     "scheme": "logisticaapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/8b90e1d5-547f-4bc8-82a6-fb248c71feea",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "ios": {
       "supportsTablet": true,
       "infoPlist": {

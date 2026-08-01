@@ -40,6 +40,13 @@ export class RecorridosController {
         return this.service.operacionesDisponibles(req.user.tenantId, req.user.trabajadorId);
     }
 
+    // Resumen personal del chofer: horas de manejo, km y ganancia estimada
+    // (horas × tarifa_hora del trabajador). Por defecto, el mes en curso.
+    @Get('mias/resumen')
+    miResumen(@Req() req, @Query('from') from?: string, @Query('to') to?: string) {
+        return this.service.miResumen(req.user.tenantId, req.user.trabajadorId, from, to);
+    }
+
     @Get('mio/activo')
     miActivo(@Req() req) {
         return this.service.activoDeTrabajador(req.user.tenantId, req.user.trabajadorId);

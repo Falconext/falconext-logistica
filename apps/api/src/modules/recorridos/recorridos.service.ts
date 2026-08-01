@@ -460,4 +460,63 @@ export class RecorridosService {
             };
         });
     }
+    // Resumen personal del chofer para "Mi Resumen": agrega horas de manejo,
+    // km y descansos de sus recorridos, y estima la ganancia del período con
+    // la tarifa_hora del trabajador. Período por defecto: mes en curso.
+    async miResumen(tenantId: string, trabajadorId: string | null, from?: string, to?: string) {
+        if (!trabajadorId) throw new BadRequestException('Tu usuario no está vinculado a un trabajador.');
+
+        const ahora = new Date();
+        const desde = from ? new Date(from) : new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+        const hasta = to ? new Date(to) : ahora;
+
+        const [recorridos, trabajador] = await Promise.all([
+            this.prisma.recorrido.findMany({
+                where: {
+                    tenant_id: tenantId,
+                    trabajador_id: trabajadorId,
+                    iniciado_en: { gte: desde, lte: hasta },
+                },
+                orderBy: { iniciado_en: 'desc' },
+            }),
+            this.prisma.trabajador.findFirst({
+                where: { id: trabajadorId, tenant_id: tenantId },
+                select: { tarifa_hora: true, nombre_completo: true },
+            }),
+        ]);
+
+        let minutosManejo = 0;
+        let km = 0;
+        let descansoMin = 0;
+        let completados = 0;
+        for (const r of recorridos) {
+            minutosManejo += (r.ida_min ?? 0) + (r.vuelta_min ?? 0);
+            km += (r.ida_km ?? 0) + (r.vuelta_km ?? 0);
+            descansoMin += r.descanso_min ?? 0;
+            if (r.estado === 'COMPLETADO') completados++;
+        }
+
+        const tarifaHora = Number(trabajador?.tarifa_hora ?? 0);
+        const gananciaEstimada = Math.round((minutosManejo / 60) * tarifaHora * 100) / 100;
+
+        return {
+            desde,
+            hasta,
+            totalRecorridos: recorridos.length,
+            completados,
+            minutosManejo: Math.round(minutosManejo),
+            km: Math.round(km * 10) / 10,
+            descansoMin: Math.round(descansoMin),
+            tarifaHora,
+            gananciaEstimada,
+            recientes: recorridos.slice(0, 5).map((r) => ({
+                id: r.id,
+                destino: r.destino_label,
+                estado: r.estado,
+                iniciado_en: r.iniciado_en,
+                km: Math.round(((r.ida_km ?? 0) + (r.vuelta_km ?? 0)) * 10) / 10,
+                minutos: Math.round((r.ida_min ?? 0) + (r.vuelta_min ?? 0)),
+            })),
+        };
+    }
 }

@@ -72,6 +72,7 @@ model Trabajador {
   
   // Financiero
   sueldo_base        Decimal? @default(0) // Added for payroll tracking
+  tarifa_hora        Decimal? @default(0) // Pago por hora de manejo (ganancia estimada del chofer)
 
   // Otros
   permiso_univex     String?

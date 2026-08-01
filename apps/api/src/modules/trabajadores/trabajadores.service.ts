@@ -1,5 +1,5 @@
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 import { CreateTrabajadorDto } from './dto/create-trabajador.dto';
 
@@ -73,6 +73,16 @@ export class TrabajadoresService {
         return this.prisma.trabajador.findUnique({
             where: { id },
         });
+    }
+
+    // Perfil propio del chofer (User.trabajador_id del JWT).
+    async miPerfil(trabajadorId: string | null | undefined, tenantId: string) {
+        if (!trabajadorId) throw new NotFoundException('Tu usuario no está vinculado a un trabajador');
+        const trabajador = await this.prisma.trabajador.findFirst({
+            where: { id: trabajadorId, tenant_id: tenantId },
+        });
+        if (!trabajador) throw new NotFoundException('Trabajador no encontrado');
+        return trabajador;
     }
 
     async update(id: string, data: any) {

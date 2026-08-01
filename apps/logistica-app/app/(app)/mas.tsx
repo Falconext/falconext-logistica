@@ -49,6 +49,8 @@ const items: Item[] = [
   { key: 'combustible', label: 'Combustible', desc: 'Cargas de combustible', href: '/(app)/combustible', icon: Fuel, color: '#0D9488' },
   { key: 'calendario', label: 'Calendario', desc: 'Vista de programación', href: '/(app)/calendario', icon: CalendarDays, color: '#8B5CF6' },
   { key: 'reportes', label: 'Reportes', desc: 'Indicadores y KPIs', href: '/(app)/reportes', icon: BarChart3, color: '#F59E0B' },
+  { key: 'mi-resumen', label: 'Mi Resumen', desc: 'Tus horas, km y ganancia estimada', href: '/(app)/mi-resumen', icon: BarChart3, color: '#16A34A' },
+  { key: 'mi-perfil', label: 'Mi Perfil', desc: 'Tus datos y documentos', href: '/(app)/mi-perfil', icon: UserCog, color: '#0EA5E9' },
   { key: 'mi-ruta', label: 'Mi Ruta', desc: 'Inicia y controla tu traslado', href: '/(app)/mi-ruta', icon: Navigation, color: '#4F46E5' },
   { key: 'rastreo', label: 'Rastreo', desc: 'Comparte tu ubicación GPS', href: '/(app)/rastreo', icon: Navigation, color: '#4F46E5' },
   { key: 'alertas', label: 'Alertas', desc: 'Vencimientos de documentos', href: '/(app)/alertas', icon: Bell, color: '#DC2626' },

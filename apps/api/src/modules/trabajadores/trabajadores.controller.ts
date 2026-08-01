@@ -23,6 +23,12 @@ export class TrabajadoresController {
         return this.trabajadoresService.findAll(req.user.tenantId);
     }
 
+    // Perfil propio del chofer logueado (vinculado vía User.trabajador_id).
+    @Get('mi/perfil')
+    miPerfil(@Req() req) {
+        return this.trabajadoresService.miPerfil(req.user.trabajadorId, req.user.tenantId);
+    }
+
     @Get(':id/historial')
     async getHistory(@Param('id') id: string, @Req() req) {
         return this.trabajadoresService.getHistorial(id, req.user.tenantId);
