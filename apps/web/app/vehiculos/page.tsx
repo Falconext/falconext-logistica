@@ -36,6 +36,7 @@ export default function VehiculosPage() {
     const [showFilters, setShowFilters] = useState(false);
     const [estadoFilter, setEstadoFilter] = useState<Set<string>>(new Set());
     const [tipoFilter, setTipoFilter] = useState<Set<string>>(new Set());
+    const [areaFilter, setAreaFilter] = useState<Set<string>>(new Set());
     // GPS por vehículo: ¿tiene dispositivo? ¿está en línea (posición <5 min)?
     const [gpsByVeh, setGpsByVeh] = useState<Record<string, { deviceId: string; online: boolean; hasPos: boolean }>>({});
 
@@ -96,8 +97,12 @@ export default function VehiculosPage() {
         () => Array.from(new Set(vehiculos.map(v => v.tipo_unidad).filter(Boolean) as string[])).sort(),
         [vehiculos]
     );
+    const areaOptions = useMemo(
+        () => Array.from(new Set(vehiculos.map(v => v.area).filter(Boolean) as string[])).sort(),
+        [vehiculos]
+    );
 
-    const activeFilterCount = estadoFilter.size + tipoFilter.size;
+    const activeFilterCount = estadoFilter.size + tipoFilter.size + areaFilter.size;
 
     const toggleSetValue = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, value: string) => {
         setter(prev => {
@@ -107,7 +112,7 @@ export default function VehiculosPage() {
         });
     };
 
-    const clearFilters = () => { setEstadoFilter(new Set()); setTipoFilter(new Set()); };
+    const clearFilters = () => { setEstadoFilter(new Set()); setTipoFilter(new Set()); setAreaFilter(new Set()); };
 
     const filtered = useMemo(() => vehiculos.filter(v => {
         const matchesQuery =
@@ -115,10 +120,11 @@ export default function VehiculosPage() {
             v.marca_modelo?.toLowerCase().includes(query.toLowerCase());
         const matchesEstado = estadoFilter.size === 0 || (v.estado_vehiculo ? estadoFilter.has(v.estado_vehiculo) : false);
         const matchesTipo = tipoFilter.size === 0 || (v.tipo_unidad ? tipoFilter.has(v.tipo_unidad) : false);
-        return matchesQuery && matchesEstado && matchesTipo;
-    }), [vehiculos, query, estadoFilter, tipoFilter]);
+        const matchesArea = areaFilter.size === 0 || (v.area ? areaFilter.has(v.area) : false);
+        return matchesQuery && matchesEstado && matchesTipo && matchesArea;
+    }), [vehiculos, query, estadoFilter, tipoFilter, areaFilter]);
 
-    useEffect(() => setPage(1), [query, estadoFilter, tipoFilter]);
+    useEffect(() => setPage(1), [query, estadoFilter, tipoFilter, areaFilter]);
 
     const exportToExcel = () => {
         if (filtered.length === 0) return toast.error(t('vehiculos.lista.toastErrorExportarVacio'));
@@ -224,6 +230,26 @@ export default function VehiculosPage() {
                                                         {on && <Check size={11} className="text-[#1a1a1c]" />}
                                                     </span>
                                                     <span className="text-sm text-slate-700 flex-1 truncate">{t}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400 mb-1.5 mt-3">{t('vehiculos.lista.area')}</p>
+                                    <div className="space-y-1">
+                                        {areaOptions.length === 0 && <p className="text-xs text-slate-400">{t('vehiculos.lista.sinDatos')}</p>}
+                                        {areaOptions.map((a) => {
+                                            const on = areaFilter.has(a);
+                                            return (
+                                                <button
+                                                    key={a}
+                                                    onClick={() => toggleSetValue(setAreaFilter, a)}
+                                                    className="w-full flex items-center gap-2.5 px-1.5 py-1.5 rounded-lg hover:bg-slate-50 transition text-left"
+                                                >
+                                                    <span className={`w-4 h-4 rounded flex items-center justify-center border ${on ? 'bg-[#FFC933] border-[#FFC933]' : 'border-slate-300'}`}>
+                                                        {on && <Check size={11} className="text-[#1a1a1c]" />}
+                                                    </span>
+                                                    <span className="text-sm text-slate-700 flex-1 truncate">{a}</span>
                                                 </button>
                                             );
                                         })}

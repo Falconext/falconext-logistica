@@ -53,7 +53,8 @@ export class AlertsService {
             where: {
                 tenant_id: tenantId,
                 ...(restrictToOwner ? { id: ownerTrabajadorId } : {}),
-                estado_laboral: 'Activo',
+                // En prod hay 'Activo' y 'ACTIVO' (import del Excel): comparar sin case.
+                estado_laboral: { equals: 'Activo', mode: 'insensitive' },
                 OR: [
                     { fecha_vencimiento_pasaporte: { lte: futureDate, gte: now } },
                     { fecha_vencimiento_identidad: { lte: futureDate, gte: now } },
@@ -111,42 +112,56 @@ export class AlertsService {
         }
 
         // ------------------------------------------------------------------
-        // 2) Vencimientos de VEHÍCULOS (seguro).
-        //    revision_tecnica es String en el schema (no es fecha) => no aplica.
+        // 2) Vencimientos de VEHÍCULOS (seguro, revisión técnica y deroghe).
         //    Los vehículos son de flota: si el usuario está restringido a sus
         //    propios registros, NO se incluyen alertas de vehículos.
         // ------------------------------------------------------------------
+        const ventanaVenc = { lte: futureDate, gte: now };
         const vehiculos = restrictToOwner ? [] : await this.prisma.vehiculo.findMany({
             where: {
                 tenant_id: tenantId,
-                fecha_vencimiento_seguro: { lte: futureDate, gte: now },
+                OR: [
+                    { fecha_vencimiento_seguro: ventanaVenc },
+                    { fecha_vencimiento_revision: ventanaVenc },
+                    { fecha_vencimiento_deroghe: ventanaVenc },
+                ],
             },
             select: {
                 id: true,
                 placa: true,
                 marca_modelo: true,
                 fecha_vencimiento_seguro: true,
+                fecha_vencimiento_revision: true,
+                fecha_vencimiento_deroghe: true,
             }
         });
 
+        const VEHICULO_VENCS: [keyof (typeof vehiculos)[number], string, string][] = [
+            ['fecha_vencimiento_seguro', 'insurance', 'Seguro del Vehículo'],
+            ['fecha_vencimiento_revision', 'revision', 'Revisión Técnica'],
+            ['fecha_vencimiento_deroghe', 'deroghe', 'Permisos Especiales (Deroghe)'],
+        ];
+
         for (const v of vehiculos) {
-            const expDate = v.fecha_vencimiento_seguro as Date | null;
-            if (expDate && expDate <= futureDate && expDate >= now) {
-                const daysRemaining = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                const nombre = v.marca_modelo ? `${v.placa} · ${v.marca_modelo}` : v.placa;
-                alerts.push({
-                    trabajadorId: v.id,
-                    trabajadorNombre: nombre,
-                    cargo: 'Vehículo',
-                    documentType: 'insurance',
-                    documentLabel: 'Seguro del Vehículo',
-                    expirationDate: expDate,
-                    daysRemaining,
-                    severity: this.computeSeverity(daysRemaining),
-                    entityType: 'VEHICULO',
-                    entityId: v.id,
-                    entityName: nombre,
-                });
+            const nombre = v.marca_modelo ? `${v.placa} · ${v.marca_modelo}` : v.placa;
+            for (const [campo, tipo, label] of VEHICULO_VENCS) {
+                const expDate = v[campo] as Date | null;
+                if (expDate && expDate <= futureDate && expDate >= now) {
+                    const daysRemaining = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                    alerts.push({
+                        trabajadorId: v.id,
+                        trabajadorNombre: nombre,
+                        cargo: 'Vehículo',
+                        documentType: tipo,
+                        documentLabel: label,
+                        expirationDate: expDate,
+                        daysRemaining,
+                        severity: this.computeSeverity(daysRemaining),
+                        entityType: 'VEHICULO',
+                        entityId: v.id,
+                        entityName: nombre,
+                    });
+                }
             }
         }
 
@@ -236,6 +251,76 @@ export class AlertsService {
             warning: alerts.filter(a => a.severity === 'warning').length,
             info: alerts.filter(a => a.severity === 'info').length,
             total: alerts.length
+        };
+    }
+    // Vista "Scadenze": todos los furgones y trabajadores con sus fechas de
+    // vencimiento, listos para agrupar por área en la web. El vencimiento del
+    // Unilav y de la 13ma/14ma viven en Documento (adjuntos), no en Trabajador.
+    async getScadenze(tenantId: string) {
+        const [vehiculos, trabajadores, docsTrab] = await Promise.all([
+            this.prisma.vehiculo.findMany({
+                where: { tenant_id: tenantId },
+                select: {
+                    id: true,
+                    placa: true,
+                    marca_modelo: true,
+                    tipo_unidad: true,
+                    area: true,
+                    url_foto: true,
+                    fecha_vencimiento_seguro: true,
+                    fecha_vencimiento_revision: true,
+                    fecha_vencimiento_deroghe: true,
+                },
+                orderBy: { placa: 'asc' },
+            }),
+            this.prisma.trabajador.findMany({
+                where: { tenant_id: tenantId },
+                select: {
+                    id: true,
+                    id_trabajador: true,
+                    nombre_completo: true,
+                    cargo: true,
+                    area_trabajo: true,
+                    url_foto: true,
+                    fecha_nacimiento: true,
+                    fecha_vencimiento_pasaporte: true,
+                    fecha_vencimiento_identidad: true,
+                    fecha_vencimiento_residencia: true,
+                    fecha_vencimiento_licencia: true,
+                    fecha_vencimiento_traduccion: true,
+                    fecha_vencimiento_fiscal: true,
+                    fecha_vencimiento_contrato: true,
+                },
+                orderBy: { nombre_completo: 'asc' },
+            }),
+            this.prisma.documento.findMany({
+                where: {
+                    tenant_id: tenantId,
+                    entidad: 'TRABAJADOR',
+                    tipo: { in: ['UNILAV', 'TREDICESIMA_QUATTORDICESIMA'] },
+                },
+                select: { entidad_id: true, tipo: true, fecha_vencimiento: true, url: true },
+            }),
+        ]);
+
+        // Vencimiento de Unilav / 13ma por trabajador (si hay varios, el más reciente).
+        const unilavPorTrabajador = new Map<string, Date | null>();
+        const tredicesimaPorTrabajador = new Map<string, Date | null>();
+        for (const d of docsTrab) {
+            const mapa = d.tipo === 'UNILAV' ? unilavPorTrabajador : tredicesimaPorTrabajador;
+            const prev = mapa.get(d.entidad_id);
+            if (prev === undefined || (d.fecha_vencimiento && (!prev || d.fecha_vencimiento > prev))) {
+                mapa.set(d.entidad_id, d.fecha_vencimiento ?? null);
+            }
+        }
+
+        return {
+            vehiculos,
+            trabajadores: trabajadores.map((t) => ({
+                ...t,
+                fecha_vencimiento_unilav: unilavPorTrabajador.get(t.id) ?? null,
+                fecha_vencimiento_tredicesima: tredicesimaPorTrabajador.get(t.id) ?? null,
+            })),
         };
     }
 }

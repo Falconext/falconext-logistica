@@ -20,6 +20,14 @@ export interface Trabajador {
     fecha_vencimiento_pasaporte?: string;
     licencia_conducir?: string;
     fecha_vencimiento_licencia?: string;
+    traduccion_licencia?: string;
+    fecha_vencimiento_traduccion?: string;
+    documento_identidad?: string;
+    fecha_vencimiento_identidad?: string;
+    permiso_residencia?: string;
+    fecha_vencimiento_residencia?: string;
+    codigo_fiscal?: string;
+    fecha_vencimiento_fiscal?: string;
     trackable?: boolean;
     // ... other fields
 }
@@ -36,7 +44,10 @@ export interface Vehiculo {
     poliza_seguro?: string;
     fecha_vencimiento_seguro?: string;
     revision_tecnica?: string;
+    fecha_vencimiento_revision?: string;
     permisos_especiales?: string;
+    fecha_vencimiento_deroghe?: string;
+    area?: string;
     id_interno_furgon?: string;
     kilometraje_actual?: number;
     url_foto?: string;

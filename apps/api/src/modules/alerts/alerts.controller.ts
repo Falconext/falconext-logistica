@@ -21,4 +21,12 @@ export class AlertsController {
         const ownerTrabajadorId = req.user.soloPropios ? req.user.trabajadorId : undefined;
         return this.alertsService.getAlertsSummary(tenantId, ownerTrabajadorId);
     }
+
+    // Vista "Scadenze": furgones y trabajadores con TODOS sus vencimientos,
+    // agrupables por área (Milano Nord/Sud, Personal, Roma). Solo flota/RRHH:
+    // los usuarios solo_propios no la necesitan (tienen Mi Perfil).
+    @Get('scadenze')
+    async getScadenze(@Req() req: any) {
+        return this.alertsService.getScadenze(req.user.tenantId);
+    }
 }

@@ -26,13 +26,18 @@ const EMPTY = {
     poliza_seguro: '',
     fecha_vencimiento_seguro: '',
     revision_tecnica: '',
+    fecha_vencimiento_revision: '',
     permisos_especiales: '',
+    fecha_vencimiento_deroghe: '',
+    area: '',
     id_interno_furgon: '',
     kilometraje_actual: '',
 };
 
 const inputCls =
     'w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900 placeholder:text-slate-400 transition';
+import { AREA_OPTIONS } from '../../lib/areas';
+
 const labelCls = 'text-xs font-bold text-slate-500 uppercase';
 
 export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData }: VehiculoModalProps) {
@@ -57,7 +62,14 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                     ? initialData.fecha_vencimiento_seguro.split('T')[0]
                     : '',
                 revision_tecnica: initialData.revision_tecnica || '',
+                fecha_vencimiento_revision: initialData.fecha_vencimiento_revision
+                    ? initialData.fecha_vencimiento_revision.split('T')[0]
+                    : '',
                 permisos_especiales: initialData.permisos_especiales || '',
+                fecha_vencimiento_deroghe: initialData.fecha_vencimiento_deroghe
+                    ? initialData.fecha_vencimiento_deroghe.split('T')[0]
+                    : '',
+                area: initialData.area || '',
                 id_interno_furgon: initialData.id_interno_furgon || '',
                 kilometraje_actual: initialData.kilometraje_actual?.toString() || '',
             });
@@ -85,7 +97,14 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                 tarjeta_circulacion: form.tarjeta_circulacion || null,
                 poliza_seguro: form.poliza_seguro || null,
                 revision_tecnica: form.revision_tecnica || null,
+                fecha_vencimiento_revision: form.fecha_vencimiento_revision
+                    ? new Date(form.fecha_vencimiento_revision).toISOString()
+                    : null,
                 permisos_especiales: form.permisos_especiales || null,
+                fecha_vencimiento_deroghe: form.fecha_vencimiento_deroghe
+                    ? new Date(form.fecha_vencimiento_deroghe).toISOString()
+                    : null,
+                area: form.area || null,
                 id_interno_furgon: form.id_interno_furgon || null,
                 anio_fabricacion: form.anio_fabricacion ? parseInt(form.anio_fabricacion, 10) : null,
                 kilometraje_actual: form.kilometraje_actual ? parseInt(form.kilometraje_actual, 10) : null,
@@ -195,6 +214,12 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                                     { value: 'INACTIVO', label: 'Inactivo' },
                                 ]}
                             />
+                            <Select
+                                label="Área"
+                                value={form.area}
+                                onChange={(v) => set('area', v)}
+                                options={AREA_OPTIONS}
+                            />
                             <div className="space-y-1.5">
                                 <label className={labelCls}>Kilometraje actual</label>
                                 <input
@@ -257,19 +282,33 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <label className={labelCls}>Revisión técnica</label>
+                                <label className={labelCls}>Revisión técnica (nota)</label>
                                 <input
                                     className={inputCls}
                                     value={form.revision_tecnica}
                                     onChange={(e) => set('revision_tecnica', e.target.value)}
                                 />
                             </div>
-                            <div className="space-y-1.5 sm:col-span-2">
-                                <label className={labelCls}>Permisos especiales</label>
+                            <div className="space-y-1.5">
+                                <DatePicker
+                                    label="Venc. revisión técnica"
+                                    value={form.fecha_vencimiento_revision}
+                                    onChange={(v) => set('fecha_vencimiento_revision', v)}
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className={labelCls}>Permisos especiales (nota)</label>
                                 <input
                                     className={inputCls}
                                     value={form.permisos_especiales}
                                     onChange={(e) => set('permisos_especiales', e.target.value)}
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <DatePicker
+                                    label="Venc. deroghe"
+                                    value={form.fecha_vencimiento_deroghe}
+                                    onChange={(v) => set('fecha_vencimiento_deroghe', v)}
                                 />
                             </div>
                         </div>

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Truck, Map, Wrench, ShieldCheck, LogOut, Bell, CalendarDays, BarChart3, FileSpreadsheet, MessageSquare, PlayCircle, HelpCircle, Briefcase, ChevronsLeft, Receipt, Fuel, UserCog, KeyRound, Radio, Navigation, Sun, Moon, Boxes, Route } from 'lucide-react';
+import { LayoutDashboard, Users, Truck, Map, Wrench, ShieldCheck, LogOut, Bell, CalendarDays, BarChart3, FileSpreadsheet, MessageSquare, PlayCircle, HelpCircle, Briefcase, ChevronsLeft, Receipt, Fuel, UserCog, KeyRound, Radio, Navigation, Sun, Moon, Boxes, Route, CalendarClock } from 'lucide-react';
 import clsx from 'clsx';
 import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
@@ -29,6 +29,8 @@ const trackingItems = [
     { key: 'recorridos', href: '/recorridos', icon: Route },
     { key: 'rastreo', href: '/rastreo', icon: Navigation },
     { key: 'alertas', href: '/alertas', icon: Bell },
+    // Scadenze pertenece al módulo Alertas (gateKey): no es un permiso propio.
+    { key: 'scadenze', gateKey: 'alertas', href: '/scadenze', icon: CalendarClock },
     { key: 'dispositivos', href: '/dispositivos', icon: ShieldCheck },
     { key: 'geocercas', href: '/geocercas', icon: Map },
 ];
@@ -46,7 +48,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
     const isAdmin = user?.role === 'SUPERADMIN';
     const isManager = isAdminUser(user); // rol con es_admin o SUPERADMIN
     const visiblePrimary = primaryItems.filter((i) => canAccessModule(user, i.key));
-    const visibleTracking = trackingItems.filter((i) => canAccessModule(user, i.key));
+    const visibleTracking = trackingItems.filter((i) => canAccessModule(user, (i as any).gateKey ?? i.key));
 
     const NavLink = ({ href, name, Icon, badge }: { href: string; name: string; Icon: any; badge?: number }) => {
         const isActive = pathname === href;

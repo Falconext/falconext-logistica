@@ -14,6 +14,7 @@ import * as combustible from './dicts/combustible';
 import * as calendario from './dicts/calendario';
 import * as reportes from './dicts/reportes';
 import * as alertas from './dicts/alertas';
+import * as scadenze from './dicts/scadenze';
 import * as dispositivos from './dicts/dispositivos';
 import * as geocercas from './dicts/geocercas';
 import * as panel from './dicts/panel';
@@ -35,6 +36,7 @@ const NAMESPACES: Record<string, NsModule> = {
     calendario,
     reportes,
     alertas,
+    scadenze,
     dispositivos,
     geocercas,
     panel,

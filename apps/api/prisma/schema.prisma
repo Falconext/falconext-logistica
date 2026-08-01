@@ -99,6 +99,7 @@ model Vehiculo {
   tipo_unidad         String? // 'DHL', 'Farmacia', etc.
   estado_vehiculo     String? // 'Activo', 'Mantenimiento'
   aislamiento_termico String? // 'COIBENTAZI'
+  area                String? // Área operativa: MILANO NORD | MILANO SUD | PERSONAL | ROMA
 
   // Panel DHL: disponibilidad operativa del vehículo (DISPONIBLE / NO DISPONIBLE). Toggle manual.
   disponible          Boolean @default(true)
@@ -107,8 +108,10 @@ model Vehiculo {
   tarjeta_circulacion      String? // 'LIBRETO'
   poliza_seguro            String? // 'ASEGURAZIONE'
   fecha_vencimiento_seguro DateTime? // Segunda columna de segurazione?
-  revision_tecnica         String? // 'R.TECNICA'
-  permisos_especiales      String? // 'DEROGHE'
+  revision_tecnica         String? // 'R.TECNICA' (texto legacy del Excel)
+  fecha_vencimiento_revision DateTime? // Vencimiento real de la revisión técnica
+  permisos_especiales      String? // 'DEROGHE' (texto legacy del Excel)
+  fecha_vencimiento_deroghe  DateTime? // Vencimiento real de los permisos especiales
   id_interno_furgon        String? // 'ID_FURGON'
   url_foto                 String? // Foto de la unidad (Cloudinary)
 

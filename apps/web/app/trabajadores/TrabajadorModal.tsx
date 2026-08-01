@@ -8,6 +8,7 @@ import { useCurrency } from '../../lib/useCurrency';
 import FileUpload from '../../components/FileUpload';
 import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
+import { AREA_OPTIONS } from '../../lib/areas';
 
 interface TrabajadorModalProps {
     isOpen: boolean;
@@ -28,12 +29,22 @@ const emptyForm = {
     cargo: '',
     estado_laboral: 'Activo',
     area_trabajo: '',
+    id_trabajador: '',
+    fecha_nacimiento: '',
     telefono: '',
     email_personal: '',
     licencia_conducir: '',
     fecha_vencimiento_licencia: '',
+    traduccion_licencia: '',
+    fecha_vencimiento_traduccion: '',
     numero_pasaporte: '',
     fecha_vencimiento_pasaporte: '',
+    documento_identidad: '',
+    fecha_vencimiento_identidad: '',
+    permiso_residencia: '',
+    fecha_vencimiento_residencia: '',
+    codigo_fiscal: '',
+    fecha_vencimiento_fiscal: '',
     sueldo_base: '' as string | number,
     tarifa_hora: '' as string | number,
     url_foto: '',
@@ -82,10 +93,20 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                 area_trabajo: initialData.area_trabajo || '',
                 telefono: initialData.telefono || '',
                 email_personal: initialData.email_personal || '',
+                id_trabajador: initialData.id_trabajador || '',
+                fecha_nacimiento: toDateInput(initialData.fecha_nacimiento),
                 licencia_conducir: initialData.licencia_conducir || '',
                 fecha_vencimiento_licencia: toDateInput(initialData.fecha_vencimiento_licencia),
+                traduccion_licencia: initialData.traduccion_licencia || '',
+                fecha_vencimiento_traduccion: toDateInput(initialData.fecha_vencimiento_traduccion),
                 numero_pasaporte: initialData.numero_pasaporte || '',
                 fecha_vencimiento_pasaporte: toDateInput(initialData.fecha_vencimiento_pasaporte),
+                documento_identidad: initialData.documento_identidad || '',
+                fecha_vencimiento_identidad: toDateInput(initialData.fecha_vencimiento_identidad),
+                permiso_residencia: initialData.permiso_residencia || '',
+                fecha_vencimiento_residencia: toDateInput(initialData.fecha_vencimiento_residencia),
+                codigo_fiscal: initialData.codigo_fiscal || '',
+                fecha_vencimiento_fiscal: toDateInput(initialData.fecha_vencimiento_fiscal),
                 sueldo_base: initialData.sueldo_base ?? '',
                 tarifa_hora: initialData.tarifa_hora ?? '',
                 url_foto: initialData.url_foto || '',
@@ -114,10 +135,20 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                 area_trabajo: form.area_trabajo || null,
                 telefono: form.telefono || null,
                 email_personal: form.email_personal || null,
+                id_trabajador: form.id_trabajador || null,
+                fecha_nacimiento: toIso(form.fecha_nacimiento) ?? null,
                 licencia_conducir: form.licencia_conducir || null,
                 fecha_vencimiento_licencia: toIso(form.fecha_vencimiento_licencia) ?? null,
+                traduccion_licencia: form.traduccion_licencia || null,
+                fecha_vencimiento_traduccion: toIso(form.fecha_vencimiento_traduccion) ?? null,
                 numero_pasaporte: form.numero_pasaporte || null,
                 fecha_vencimiento_pasaporte: toIso(form.fecha_vencimiento_pasaporte) ?? null,
+                documento_identidad: form.documento_identidad || null,
+                fecha_vencimiento_identidad: toIso(form.fecha_vencimiento_identidad) ?? null,
+                permiso_residencia: form.permiso_residencia || null,
+                fecha_vencimiento_residencia: toIso(form.fecha_vencimiento_residencia) ?? null,
+                codigo_fiscal: form.codigo_fiscal || null,
+                fecha_vencimiento_fiscal: toIso(form.fecha_vencimiento_fiscal) ?? null,
                 sueldo_base: form.sueldo_base === '' ? null : Number(form.sueldo_base),
                 tarifa_hora: form.tarifa_hora === '' ? null : Number(form.tarifa_hora),
                 url_foto: form.url_foto || null,
@@ -231,9 +262,18 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                                     options={ESTADOS.map((s) => ({ value: s, label: s }))} />
                             </div>
                             <div className="space-y-1.5">
-                                <label className={labelCls}>Área de trabajo</label>
-                                <input className={inputCls} value={form.area_trabajo}
-                                    onChange={(e) => set('area_trabajo', e.target.value)} placeholder="Ej: Operaciones" />
+                                <Select label="Área" value={form.area_trabajo}
+                                    onChange={(v) => set('area_trabajo', v)}
+                                    options={AREA_OPTIONS} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className={labelCls}>ID trabajador</label>
+                                <input className={inputCls} value={form.id_trabajador}
+                                    onChange={(e) => set('id_trabajador', e.target.value)} placeholder="Ej: G027" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <DatePicker label="Fecha de nacimiento" value={form.fecha_nacimiento}
+                                    onChange={(v) => set('fecha_nacimiento', v)} />
                             </div>
                             <div className="space-y-1.5">
                                 <label className={labelCls}>Sueldo base</label>
@@ -311,6 +351,42 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                             <div className="space-y-1.5">
                                 <DatePicker label="Vencimiento pasaporte" value={form.fecha_vencimiento_pasaporte}
                                     onChange={(v) => set('fecha_vencimiento_pasaporte', v)} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className={labelCls}>Documento de identidad</label>
+                                <input className={inputCls} value={form.documento_identidad}
+                                    onChange={(e) => set('documento_identidad', e.target.value)} placeholder="N° carta d'identità" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <DatePicker label="Venc. identidad" value={form.fecha_vencimiento_identidad}
+                                    onChange={(v) => set('fecha_vencimiento_identidad', v)} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className={labelCls}>Permiso de residencia (soggiorno)</label>
+                                <input className={inputCls} value={form.permiso_residencia}
+                                    onChange={(e) => set('permiso_residencia', e.target.value)} placeholder="N° permesso" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <DatePicker label="Venc. soggiorno" value={form.fecha_vencimiento_residencia}
+                                    onChange={(v) => set('fecha_vencimiento_residencia', v)} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className={labelCls}>Traducción de licencia</label>
+                                <input className={inputCls} value={form.traduccion_licencia}
+                                    onChange={(e) => set('traduccion_licencia', e.target.value)} placeholder="N° traduzione" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <DatePicker label="Venc. traducción" value={form.fecha_vencimiento_traduccion}
+                                    onChange={(v) => set('fecha_vencimiento_traduccion', v)} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className={labelCls}>Código fiscal</label>
+                                <input className={inputCls} value={form.codigo_fiscal}
+                                    onChange={(e) => set('codigo_fiscal', e.target.value)} placeholder="Codice fiscale" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <DatePicker label="Venc. código fiscal" value={form.fecha_vencimiento_fiscal}
+                                    onChange={(v) => set('fecha_vencimiento_fiscal', v)} />
                             </div>
                         </div>
                     </div>
