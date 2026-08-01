@@ -8,9 +8,10 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Truck, Lock, User, ArrowRight, Eye, EyeOff } from 'lucide-react-native';
+import { Lock, User, ArrowRight, Eye, EyeOff } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Theme } from '../constants/theme';
@@ -66,10 +67,12 @@ export default function LoginScreen() {
     >
       <View style={styles.content}>
         <View style={styles.brand}>
-          <View style={styles.logo}>
-            <Truck size={32} color="#fff" />
-          </View>
-          <Text style={styles.title}>Logística Pro</Text>
+          <Image
+            source={require('../assets/images/splash-icon.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Text style={styles.title}>Gamonal Trasporti</Text>
           <Text style={styles.subtitle}>Gestión de flota y operaciones</Text>
         </View>
 
@@ -125,7 +128,7 @@ export default function LoginScreen() {
         </View>
       </View>
 
-      <Text style={styles.footer}>v1.0.0 • Logística Pro</Text>
+      <Text style={styles.footer}>v1.0.0 • Gamonal Trasporti</Text>
     </KeyboardAvoidingView>
   );
 }
@@ -135,14 +138,9 @@ const makeStyles = () => StyleSheet.create({
   content: { flex: 1, justifyContent: 'center' },
   brand: { alignItems: 'center', marginBottom: 32 },
   logo: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    backgroundColor: C.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 96,
+    height: 96,
     marginBottom: 16,
-    ...Theme.shadow.floating,
   },
   title: { fontSize: 28, fontWeight: '700', color: C.text },
   subtitle: { fontSize: 15, color: C.textMuted, marginTop: 4 },
