@@ -65,7 +65,7 @@ export function MapboxFleetMap() {
   useEffect(() => {
     if (!isLoaded || !containerRef.current || mapRef.current) return;
     const map = new google.maps.Map(containerRef.current, {
-      center: { lat: -12.0464, lng: -77.0428 },
+      center: { lat: 45.4642, lng: 9.1900 },
       zoom: 5,
       disableDefaultUI: true,
       zoomControl: true,

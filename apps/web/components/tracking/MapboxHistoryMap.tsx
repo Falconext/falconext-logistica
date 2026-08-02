@@ -99,7 +99,7 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
     useEffect(() => {
         if (!isLoaded || !containerRef.current || mapRef.current) return;
         mapRef.current = new google.maps.Map(containerRef.current, {
-            center: { lat: -12.0464, lng: -77.0428 },
+            center: { lat: 45.4642, lng: 9.1900 },
             zoom: 11,
             disableDefaultUI: true,
             zoomControl: true,

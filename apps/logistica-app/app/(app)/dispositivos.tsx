@@ -145,7 +145,7 @@ export default function DispositivosScreen() {
 
   const initialRegion = useMemo(() => {
     if (located.length === 0) {
-      return { latitude: -12.0464, longitude: -77.0428, latitudeDelta: 0.5, longitudeDelta: 0.5 };
+      return { latitude: 45.4642, longitude: 9.1900, latitudeDelta: 0.5, longitudeDelta: 0.5 };
     }
     const lats = located.map((x) => x.pos.latitude);
     const lngs = located.map((x) => x.pos.longitude);

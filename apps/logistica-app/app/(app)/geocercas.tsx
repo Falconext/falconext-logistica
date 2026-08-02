@@ -45,8 +45,8 @@ interface FormState {
 const empty: FormState = {
   name: '',
   description: '',
-  latitude: '-12.0464', // Lima por defecto
-  longitude: '-77.0428',
+  latitude: '45.4642', // Milano por defecto
+  longitude: '9.1900',
   radius: '500',
 };
 
@@ -118,7 +118,7 @@ export default function GeocercasScreen() {
 
   const initialRegion = useMemo(() => {
     if (located.length === 0) {
-      return { latitude: -12.0464, longitude: -77.0428, latitudeDelta: 0.5, longitudeDelta: 0.5 };
+      return { latitude: 45.4642, longitude: 9.1900, latitudeDelta: 0.5, longitudeDelta: 0.5 };
     }
     const lats = located.map((g) => g.latitude);
     const lngs = located.map((g) => g.longitude);
@@ -291,14 +291,14 @@ export default function GeocercasScreen() {
           label="Latitud"
           value={form.latitude}
           onChangeText={(t) => setForm({ ...form, latitude: t })}
-          placeholder="-12.0464"
+          placeholder="45.4642"
           keyboardType="numeric"
         />
         <FormField
           label="Longitud"
           value={form.longitude}
           onChangeText={(t) => setForm({ ...form, longitude: t })}
-          placeholder="-77.0428"
+          placeholder="9.1900"
           keyboardType="numeric"
         />
         <FormField
