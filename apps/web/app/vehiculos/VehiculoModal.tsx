@@ -7,6 +7,7 @@ import api from '../../lib/api';
 import { toast } from 'sonner';
 import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
+import FileUpload from '../../components/FileUpload';
 
 interface VehiculoModalProps {
     isOpen: boolean;
@@ -32,6 +33,7 @@ const EMPTY = {
     area: '',
     id_interno_furgon: '',
     kilometraje_actual: '',
+    url_foto: '',
 };
 
 const inputCls =
@@ -72,6 +74,7 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                 area: initialData.area || '',
                 id_interno_furgon: initialData.id_interno_furgon || '',
                 kilometraje_actual: initialData.kilometraje_actual?.toString() || '',
+                url_foto: initialData.url_foto || '',
             });
         } else {
             setForm(EMPTY);
@@ -106,6 +109,7 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                     : null,
                 area: form.area || null,
                 id_interno_furgon: form.id_interno_furgon || null,
+                url_foto: form.url_foto || null,
                 anio_fabricacion: form.anio_fabricacion ? parseInt(form.anio_fabricacion, 10) : null,
                 kilometraje_actual: form.kilometraje_actual ? parseInt(form.kilometraje_actual, 10) : null,
                 fecha_vencimiento_seguro: form.fecha_vencimiento_seguro
@@ -159,6 +163,15 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6 overflow-y-auto">
+                    {/* Foto del vehículo */}
+                    <FileUpload
+                        label="Subir foto del vehículo"
+                        accept="image/*"
+                        value={form.url_foto || undefined}
+                        onChange={(url) => set('url_foto', url)}
+                        onClear={() => set('url_foto', '')}
+                    />
+
                     {/* Datos generales */}
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 text-slate-800 font-bold border-b border-slate-100 pb-2">
