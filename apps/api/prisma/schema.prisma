@@ -515,6 +515,7 @@ model RegistroServicio {
   ore_attesa    Float?   @default(0) // Ore attesa: horas de espera (no de manejo)
 
   repibilita    Boolean  @default(false) // Reperibilità (disponibilidad on-call) SI/NO
+  consegna_realizada Boolean @default(true) // "Se realizó consegna" SI/NO
   citta_destino String?  // CITTA / DESTINAZIONE (ciudad o destino del servicio)
   cliente       String?  // CLIENTE
   spedizione    String?  // SPEDIZIONE

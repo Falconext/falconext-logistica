@@ -61,6 +61,7 @@ export default function ParteDiarioScreen() {
     ore_sera: '',
     ore_attesa: '',
     repibilita: false,
+    consegna_realizada: true,
     cliente: '',
     spedizione: '',
     comentario: '',
@@ -86,6 +87,7 @@ export default function ParteDiarioScreen() {
           ore_sera: data.ore_sera != null ? String(data.ore_sera) : '',
           ore_attesa: data.ore_attesa != null ? String(data.ore_attesa) : '',
           repibilita: !!data.repibilita,
+          consegna_realizada: data.consegna_realizada !== false,
           cliente: data.cliente || '',
           spedizione: data.spedizione || '',
           comentario: data.comentario || '',
@@ -124,6 +126,7 @@ export default function ParteDiarioScreen() {
         ore_sera: numOr0(form.ore_sera),
         ore_attesa: numOr0(form.ore_attesa),
         repibilita: form.repibilita,
+        consegna_realizada: form.consegna_realizada,
         cliente: form.cliente.trim() || null,
         spedizione: form.spedizione.trim() || null,
         comentario: form.comentario.trim() || null,
@@ -224,6 +227,15 @@ export default function ParteDiarioScreen() {
             <Text style={styles.switchHint}>Estuviste disponible on-call</Text>
           </View>
           <Switch value={form.repibilita} onValueChange={(v) => set('repibilita', v)} trackColor={{ true: C.primary }} />
+        </View>
+
+        {/* ¿Se realizó la consegna? */}
+        <View style={styles.switchRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.switchLabel}>¿Se realizó la consegna?</Text>
+            <Text style={styles.switchHint}>Marca si se completó la entrega</Text>
+          </View>
+          <Switch value={form.consegna_realizada} onValueChange={(v) => set('consegna_realizada', v)} trackColor={{ true: C.success }} />
         </View>
 
         <FormField label="Cliente" value={form.cliente} onChangeText={(t) => set('cliente', t)} placeholder="Ej: DHL, OTRO..." />

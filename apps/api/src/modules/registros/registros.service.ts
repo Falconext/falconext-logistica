@@ -57,6 +57,9 @@ export class RegistrosService {
             ore_sera: data.ore_sera !== undefined && data.ore_sera !== '' ? num(data.ore_sera) : 0,
             ore_attesa: data.ore_attesa !== undefined && data.ore_attesa !== '' ? num(data.ore_attesa) : 0,
             repibilita: data.repibilita === true || data.repibilita === 'true' || data.repibilita === 'SI',
+            consegna_realizada: data.consegna_realizada === undefined
+                ? true
+                : (data.consegna_realizada === true || data.consegna_realizada === 'true' || data.consegna_realizada === 'SI'),
             citta_destino: data.citta_destino || null,
             cliente: data.cliente || null,
             spedizione: data.spedizione || null,

@@ -31,6 +31,7 @@ interface Parte {
     ore_sera?: number;
     ore_attesa?: number;
     ganancia?: number;
+    consegna_realizada?: boolean;
     cliente?: string | null;
     trabajador_nombre?: string | null;
     trabajador_foto?: string | null;
@@ -306,7 +307,14 @@ export default function ServiciosPage() {
                                         <td className={`${tdCls} text-right`}><span className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400"><Moon size={13} />{hLabel(p.ore_sera)}</span></td>
                                         <td className={`${tdCls} text-right`}>{(p.ore_attesa ?? 0) > 0 ? <span className="inline-flex items-center gap-1 text-pink-600 dark:text-pink-400"><Timer size={13} />{hLabel(p.ore_attesa)}</span> : <span className="text-slate-300 dark:text-slate-600">—</span>}</td>
                                         <td className={tdCls}>{p.citta_destino || '—'}</td>
-                                        <td className={tdCls}>{p.cliente || '—'}</td>
+                                        <td className={tdCls}>
+                                            <span className="flex items-center gap-2">
+                                                {p.cliente || '—'}
+                                                {p.consegna_realizada === false && (
+                                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">No entregado</span>
+                                                )}
+                                            </span>
+                                        </td>
                                         <td className={`${tdCls} text-right font-bold text-emerald-600 dark:text-emerald-400`}>{format(p.ganancia ?? 0)}</td>
                                     </tr>
                                 ))}
