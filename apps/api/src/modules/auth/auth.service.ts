@@ -18,7 +18,10 @@ export class AuthService {
             include: { tenant: true, rol: true }
         });
 
-        if (user && await bcrypt.compare(pass, user.password)) {
+        // Recortamos la contraseña recibida: el autorrelleno del navegador/iOS suele
+        // agregar espacios invisibles al inicio/final que rompen bcrypt.compare.
+        // Se valida contra la clave tal cual y también recortada (compatibilidad).
+        if (user && (await bcrypt.compare(pass, user.password) || await bcrypt.compare(pass.trim(), user.password))) {
             const { password, ...result } = user;
             return result;
         }

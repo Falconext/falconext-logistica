@@ -44,7 +44,9 @@ export default function LoginScreen() {
     setSubmitting(true);
     setError('');
     try {
-      await loginUser(email.trim().toLowerCase(), password);
+      // Recortamos la contraseña: el autorrelleno de iOS/Android suele agregar
+      // espacios invisibles al inicio/final que rompen el bcrypt.compare del backend.
+      await loginUser(email.trim().toLowerCase(), password.trim());
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Correo o contraseña incorrectos');
     } finally {
