@@ -9,6 +9,7 @@ export const es = {
         estado: 'Estado',
         sinDatos: 'Sin datos',
         tipoUnidad: 'Tipo de unidad',
+        area: 'Área',
         exportar: 'Exportar',
         nuevoVehiculo: 'Nuevo vehículo',
         columnas: {
@@ -129,6 +130,7 @@ export const it: typeof es = {
         estado: 'Stato',
         sinDatos: 'Nessun dato',
         tipoUnidad: 'Tipo di unità',
+        area: 'Area',
         exportar: 'Esporta',
         nuevoVehiculo: 'Nuovo veicolo',
         columnas: {

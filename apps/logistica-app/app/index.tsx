@@ -8,9 +8,10 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Truck, Lock, User, ArrowRight } from 'lucide-react-native';
+import { Lock, User, ArrowRight, Eye, EyeOff } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Theme } from '../constants/theme';
@@ -26,6 +27,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
   // Si ya hay sesión activa, saltar directo.
@@ -42,7 +44,9 @@ export default function LoginScreen() {
     setSubmitting(true);
     setError('');
     try {
-      await loginUser(email.trim(), password);
+      // Recortamos la contraseña: el autorrelleno de iOS/Android suele agregar
+      // espacios invisibles al inicio/final que rompen el bcrypt.compare del backend.
+      await loginUser(email.trim().toLowerCase(), password.trim());
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Correo o contraseña incorrectos');
     } finally {
@@ -65,10 +69,12 @@ export default function LoginScreen() {
     >
       <View style={styles.content}>
         <View style={styles.brand}>
-          <View style={styles.logo}>
-            <Truck size={32} color="#fff" />
-          </View>
-          <Text style={styles.title}>Logística Pro</Text>
+          <Image
+            source={require('../assets/images/splash-icon.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Text style={styles.title}>Gamonal Trasporti</Text>
           <Text style={styles.subtitle}>Gestión de flota y operaciones</Text>
         </View>
 
@@ -91,10 +97,22 @@ export default function LoginScreen() {
               style={styles.input}
               placeholder="Contraseña"
               placeholderTextColor={C.textFaint}
-              secureTextEntry
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
               value={password}
               onChangeText={setPassword}
             />
+            <TouchableOpacity
+              onPress={() => setShowPassword((v) => !v)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityLabel={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+            >
+              {showPassword ? (
+                <EyeOff size={20} color={C.textFaint} />
+              ) : (
+                <Eye size={20} color={C.textFaint} />
+              )}
+            </TouchableOpacity>
           </View>
 
           {!!error && <Text style={styles.error}>{error}</Text>}
@@ -112,7 +130,7 @@ export default function LoginScreen() {
         </View>
       </View>
 
-      <Text style={styles.footer}>v1.0.0 • Logística Pro</Text>
+      <Text style={styles.footer}>v1.0.0 • Gamonal Trasporti</Text>
     </KeyboardAvoidingView>
   );
 }
@@ -122,14 +140,9 @@ const makeStyles = () => StyleSheet.create({
   content: { flex: 1, justifyContent: 'center' },
   brand: { alignItems: 'center', marginBottom: 32 },
   logo: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    backgroundColor: C.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 96,
+    height: 96,
     marginBottom: 16,
-    ...Theme.shadow.floating,
   },
   title: { fontSize: 28, fontWeight: '700', color: C.text },
   subtitle: { fontSize: 15, color: C.textMuted, marginTop: 4 },

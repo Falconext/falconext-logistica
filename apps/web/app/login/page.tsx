@@ -22,7 +22,9 @@ export default function LoginPage() {
         setError('');
 
         try {
-            const res = await api.post('/auth/login', { email, password });
+            // Recortamos correo y contraseña: el autorrelleno del navegador puede
+            // agregar espacios invisibles que rompen el bcrypt.compare del backend.
+            const res = await api.post('/auth/login', { email: email.trim().toLowerCase(), password: password.trim() });
             const { access_token, user } = res.data;
             login(access_token, user);
             router.push('/');

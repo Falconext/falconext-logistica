@@ -12,12 +12,16 @@ export class AuthService {
     ) { }
 
     async validateUser(email: string, pass: string): Promise<any> {
-        const user = await this.prisma.user.findUnique({
-            where: { email },
+        // Insensible a mayúsculas: los emails guardados pueden tener casing mixto (datos legacy).
+        const user = await this.prisma.user.findFirst({
+            where: { email: { equals: email.trim(), mode: 'insensitive' } },
             include: { tenant: true, rol: true }
         });
 
-        if (user && await bcrypt.compare(pass, user.password)) {
+        // Recortamos la contraseña recibida: el autorrelleno del navegador/iOS suele
+        // agregar espacios invisibles al inicio/final que rompen bcrypt.compare.
+        // Se valida contra la clave tal cual y también recortada (compatibilidad).
+        if (user && (await bcrypt.compare(pass, user.password) || await bcrypt.compare(pass.trim(), user.password))) {
             const { password, ...result } = user;
             return result;
         }

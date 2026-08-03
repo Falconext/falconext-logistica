@@ -7,7 +7,7 @@ import api from '../../lib/api';
 import { toast } from 'sonner';
 import { useT } from '../../lib/i18n';
 
-const defaultCenter = { lat: -12.0464, lng: -77.0428 }; // Lima
+const defaultCenter = { lat: 45.4642, lng: 9.1900 }; // Milano
 
 // Interfaces
 interface Geofence {

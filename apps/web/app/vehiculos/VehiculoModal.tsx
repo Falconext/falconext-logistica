@@ -7,6 +7,7 @@ import api from '../../lib/api';
 import { toast } from 'sonner';
 import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
+import FileUpload from '../../components/FileUpload';
 
 interface VehiculoModalProps {
     isOpen: boolean;
@@ -26,13 +27,19 @@ const EMPTY = {
     poliza_seguro: '',
     fecha_vencimiento_seguro: '',
     revision_tecnica: '',
+    fecha_vencimiento_revision: '',
     permisos_especiales: '',
+    fecha_vencimiento_deroghe: '',
+    area: '',
     id_interno_furgon: '',
     kilometraje_actual: '',
+    url_foto: '',
 };
 
 const inputCls =
     'w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900 placeholder:text-slate-400 transition';
+import { AREA_OPTIONS } from '../../lib/areas';
+
 const labelCls = 'text-xs font-bold text-slate-500 uppercase';
 
 export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData }: VehiculoModalProps) {
@@ -57,9 +64,17 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                     ? initialData.fecha_vencimiento_seguro.split('T')[0]
                     : '',
                 revision_tecnica: initialData.revision_tecnica || '',
+                fecha_vencimiento_revision: initialData.fecha_vencimiento_revision
+                    ? initialData.fecha_vencimiento_revision.split('T')[0]
+                    : '',
                 permisos_especiales: initialData.permisos_especiales || '',
+                fecha_vencimiento_deroghe: initialData.fecha_vencimiento_deroghe
+                    ? initialData.fecha_vencimiento_deroghe.split('T')[0]
+                    : '',
+                area: initialData.area || '',
                 id_interno_furgon: initialData.id_interno_furgon || '',
                 kilometraje_actual: initialData.kilometraje_actual?.toString() || '',
+                url_foto: initialData.url_foto || '',
             });
         } else {
             setForm(EMPTY);
@@ -85,8 +100,16 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                 tarjeta_circulacion: form.tarjeta_circulacion || null,
                 poliza_seguro: form.poliza_seguro || null,
                 revision_tecnica: form.revision_tecnica || null,
+                fecha_vencimiento_revision: form.fecha_vencimiento_revision
+                    ? new Date(form.fecha_vencimiento_revision).toISOString()
+                    : null,
                 permisos_especiales: form.permisos_especiales || null,
+                fecha_vencimiento_deroghe: form.fecha_vencimiento_deroghe
+                    ? new Date(form.fecha_vencimiento_deroghe).toISOString()
+                    : null,
+                area: form.area || null,
                 id_interno_furgon: form.id_interno_furgon || null,
+                url_foto: form.url_foto || null,
                 anio_fabricacion: form.anio_fabricacion ? parseInt(form.anio_fabricacion, 10) : null,
                 kilometraje_actual: form.kilometraje_actual ? parseInt(form.kilometraje_actual, 10) : null,
                 fecha_vencimiento_seguro: form.fecha_vencimiento_seguro
@@ -140,6 +163,15 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6 overflow-y-auto">
+                    {/* Foto del vehículo */}
+                    <FileUpload
+                        label="Subir foto del vehículo"
+                        accept="image/*"
+                        value={form.url_foto || undefined}
+                        onChange={(url) => set('url_foto', url)}
+                        onClear={() => set('url_foto', '')}
+                    />
+
                     {/* Datos generales */}
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 text-slate-800 font-bold border-b border-slate-100 pb-2">
@@ -194,6 +226,12 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                                     { value: 'MANTENIMIENTO', label: 'Mantenimiento' },
                                     { value: 'INACTIVO', label: 'Inactivo' },
                                 ]}
+                            />
+                            <Select
+                                label="Área"
+                                value={form.area}
+                                onChange={(v) => set('area', v)}
+                                options={AREA_OPTIONS}
                             />
                             <div className="space-y-1.5">
                                 <label className={labelCls}>Kilometraje actual</label>
@@ -257,19 +295,33 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <label className={labelCls}>Revisión técnica</label>
+                                <label className={labelCls}>Revisión técnica (nota)</label>
                                 <input
                                     className={inputCls}
                                     value={form.revision_tecnica}
                                     onChange={(e) => set('revision_tecnica', e.target.value)}
                                 />
                             </div>
-                            <div className="space-y-1.5 sm:col-span-2">
-                                <label className={labelCls}>Permisos especiales</label>
+                            <div className="space-y-1.5">
+                                <DatePicker
+                                    label="Venc. revisión técnica"
+                                    value={form.fecha_vencimiento_revision}
+                                    onChange={(v) => set('fecha_vencimiento_revision', v)}
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className={labelCls}>Permisos especiales (nota)</label>
                                 <input
                                     className={inputCls}
                                     value={form.permisos_especiales}
                                     onChange={(e) => set('permisos_especiales', e.target.value)}
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <DatePicker
+                                    label="Venc. deroghe"
+                                    value={form.fecha_vencimiento_deroghe}
+                                    onChange={(v) => set('fecha_vencimiento_deroghe', v)}
                                 />
                             </div>
                         </div>

@@ -12,6 +12,7 @@ export const MODULES: ModuleDef[] = [
   { key: 'dashboard', name: 'Dashboard', href: '/' },
   { key: 'panel', name: 'Panel de Control', href: '/panel' },
   { key: 'operaciones', name: 'Operaciones', href: '/operaciones' },
+  { key: 'servicios', name: 'DHL / Farmacia', href: '/servicios' },
   { key: 'trabajadores', name: 'Trabajadores', href: '/trabajadores' },
   { key: 'vehiculos', name: 'Vehículos', href: '/vehiculos' },
   { key: 'mantenimiento', name: 'Mantenimiento', href: '/mantenimiento' },
@@ -57,8 +58,17 @@ export function canAccessModule(user: UserLike | null | undefined, key: string):
   return Array.isArray(user.modulos) && user.modulos.includes(key);
 }
 
+// Rutas que no son módulos asignables propios: se gatean con el módulo de otra
+// clave (p. ej. la vista Scadenze pertenece al módulo Alertas).
+const ROUTE_MODULE_ALIASES: { prefix: string; key: string }[] = [
+  { prefix: '/scadenze', key: 'alertas' },
+];
+
 /** Devuelve la clave de módulo correspondiente a una ruta (o null). */
 export function moduleForPath(pathname: string): string | null {
+  for (const a of ROUTE_MODULE_ALIASES) {
+    if (pathname === a.prefix || pathname.startsWith(a.prefix + '/')) return a.key;
+  }
   // Coincidencia por prefijo más específico (evita que '/' capture todo).
   const sorted = [...MODULES].sort((a, b) => b.href.length - a.href.length);
   for (const m of sorted) {

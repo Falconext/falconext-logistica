@@ -4,7 +4,7 @@ import { PrismaService } from '../../prisma.service';
 import { CreateVehiculoDto } from './dto/create-vehiculo.dto';
 
 // Campos DateTime editables del modelo Vehiculo.
-const DATE_FIELDS = ['fecha_vencimiento_seguro'];
+const DATE_FIELDS = ['fecha_vencimiento_seguro', 'fecha_vencimiento_revision', 'fecha_vencimiento_deroghe'];
 
 // Los clientes envían la fecha como 'YYYY-MM-DD' (DatePicker) o '' (vacío). Prisma
 // exige DateTime real: convierte a Date, y '' / inválido a null (si no, rompe con 500).

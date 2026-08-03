@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import {
   Users,
   Truck,
@@ -33,6 +33,7 @@ import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { formatMoney } from '../../constants/currency';
+import { isChofer } from '../../constants/modules';
 
 const C = Theme.colors;
 const S = Theme.spacing;
@@ -84,6 +85,10 @@ export default function DashboardScreen() {
   const styles = useMemo(() => makeStyles(), [themeKey]);
   const router = useRouter();
   const { user } = useAuth();
+
+  // El dashboard muestra datos de la empresa: los choferes van a su resumen
+  // personal. (Condición estable durante toda la sesión: no rompe hooks.)
+  if (isChofer(user)) return <Redirect href={'/(app)/mi-resumen' as any} />;
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [alerts, setAlerts] = useState<DashboardAlert[]>([]);

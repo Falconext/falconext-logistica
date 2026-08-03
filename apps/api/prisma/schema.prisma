@@ -72,6 +72,7 @@ model Trabajador {
   
   // Financiero
   sueldo_base        Decimal? @default(0) // Added for payroll tracking
+  tarifa_hora        Decimal? @default(0) // DEPRECADO: el pago se calcula con las tarifas de empresa (Tenant.tarifa_ore_*). No usar.
 
   // Otros
   permiso_univex     String?
@@ -98,6 +99,7 @@ model Vehiculo {
   tipo_unidad         String? // 'DHL', 'Farmacia', etc.
   estado_vehiculo     String? // 'Activo', 'Mantenimiento'
   aislamiento_termico String? // 'COIBENTAZI'
+  area                String? // Área operativa: MILANO NORD | MILANO SUD | PERSONAL | ROMA
 
   // Panel DHL: disponibilidad operativa del vehículo (DISPONIBLE / NO DISPONIBLE). Toggle manual.
   disponible          Boolean @default(true)
@@ -106,8 +108,10 @@ model Vehiculo {
   tarjeta_circulacion      String? // 'LIBRETO'
   poliza_seguro            String? // 'ASEGURAZIONE'
   fecha_vencimiento_seguro DateTime? // Segunda columna de segurazione?
-  revision_tecnica         String? // 'R.TECNICA'
-  permisos_especiales      String? // 'DEROGHE'
+  revision_tecnica         String? // 'R.TECNICA' (texto legacy del Excel)
+  fecha_vencimiento_revision DateTime? // Vencimiento real de la revisión técnica
+  permisos_especiales      String? // 'DEROGHE' (texto legacy del Excel)
+  fecha_vencimiento_deroghe  DateTime? // Vencimiento real de los permisos especiales
   id_interno_furgon        String? // 'ID_FURGON'
   url_foto                 String? // Foto de la unidad (Cloudinary)
 
@@ -197,6 +201,12 @@ model Tenant {
   plan  String @default("FREE") // FREE, PRO, ENTERPRISE
   moneda String @default("EUR") // PEN | USD | EUR — moneda base de la empresa
 
+  // Pago de choferes por hora de manejo (ore guida). Tarifa de empresa (igual
+  // para todos): diurna hasta la hora de corte, nocturna a partir de ella.
+  tarifa_ore_giorno Decimal @default(10) // €/h de manejo diurno
+  tarifa_ore_notte  Decimal @default(12) // €/h de manejo nocturno (desde hora_corte_notte)
+  hora_corte_notte  Int     @default(19) // hora (0-23) a partir de la cual aplica la tarifa nocturna
+
   creado_en      DateTime @default(now())
   actualizado_en DateTime @updatedAt
 
@@ -211,6 +221,7 @@ model Tenant {
   combustibles   Combustible[]
   documentos     Documento[]
   roles          Rol[]
+  registros      RegistroServicio[]
 
   @@map("tenants")
 }
@@ -479,4 +490,42 @@ model Recorrido {
   @@index([tenant_id, estado])
   @@index([trabajador_id, estado])
   @@map("recorridos")
+}
+
+// Parte diario de servicio (los registros "DHL" y "FARMACIA" del sistema viejo).
+// Una fila por cada jornada/viaje que el chofer reporta: km recorridos y horas
+// de manejo (ore guida), base del pago del chofer. Lo crea el propio chofer
+// desde la app; supervisores/admin pueden verlo y editarlo.
+model RegistroServicio {
+  id            String   @id @default(uuid())
+
+  tenant_id     String
+  tenant        Tenant   @relation(fields: [tenant_id], references: [id])
+
+  trabajador_id String   // Trabajador.id del chofer (ID_AUTISTA)
+  vehiculo_id   String?  // Vehiculo.id o placa/ID_FURGON (targa furgón)
+  targa         String?  // Placa mostrada (denormalizada para el listado)
+
+  fecha         DateTime // FECHA del servicio
+  operacion     String   @default("DHL") // DHL | FARMACIA (las dos operaciones)
+
+  km            Float?   @default(0) // KM TOTAL de la jornada
+  ore_mattina   Float?   @default(0) // Ore guida diurnas (tarifa diurna)
+  ore_sera      Float?   @default(0) // Ore guida nocturnas (desde hora_corte_notte, tarifa nocturna)
+  ore_attesa    Float?   @default(0) // Ore attesa: horas de espera (no de manejo)
+
+  repibilita    Boolean  @default(false) // Reperibilità (disponibilidad on-call) SI/NO
+  consegna_realizada Boolean @default(true) // "Se realizó consegna" SI/NO
+  citta_destino String?  // CITTA / DESTINAZIONE (ciudad o destino del servicio)
+  cliente       String?  // CLIENTE
+  spedizione    String?  // SPEDIZIONE
+  comentario    String?  // COMENTARIO FINAL
+  foto_bolla    String?  // URL de la foto de la bolla (Cloudinary)
+
+  creado_en      DateTime @default(now())
+  actualizado_en DateTime @updatedAt
+
+  @@index([tenant_id, operacion, fecha])
+  @@index([trabajador_id, fecha])
+  @@map("registros_servicio")
 }

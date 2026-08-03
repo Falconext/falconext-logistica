@@ -57,7 +57,10 @@ export class UsuariosService {
     }
 
     async create(dto: CreateUsuarioDto, tenantId: string) {
-        const existente = await this.prisma.user.findUnique({ where: { email: dto.email } });
+        const email = dto.email.trim().toLowerCase();
+        const existente = await this.prisma.user.findFirst({
+            where: { email: { equals: email, mode: 'insensitive' } },
+        });
         if (existente) {
             throw new ConflictException('El email ya está registrado');
         }
@@ -70,7 +73,7 @@ export class UsuariosService {
 
         return this.prisma.user.create({
             data: {
-                email: dto.email,
+                email,
                 password: hash,
                 nombre: dto.nombre,
                 role: roleStr,
