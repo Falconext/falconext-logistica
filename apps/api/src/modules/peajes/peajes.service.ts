@@ -31,15 +31,16 @@ export class PeajesService {
 
     async findAll(
         tenantId: string,
-        opts: { q?: string; estado?: string; skip?: number; take?: number; ownerCodigo?: string } = {},
+        opts: { q?: string; estado?: string; skip?: number; take?: number; ownerIds?: string[] } = {},
     ) {
-        const { q, estado, skip = 0, take = 10, ownerCodigo } = opts;
+        const { q, estado, skip = 0, take = 10, ownerIds } = opts;
 
         // Base scope = tenant + optional search. Estado is applied only to the list
         // (not to the counts) so the tabs keep showing the full per-estado tally.
         const baseWhere: Prisma.PeajeWhereInput = { tenant_id: tenantId };
         // Owner scoping: restricted users (solo_propios) only see their own peajes.
-        if (ownerCodigo) baseWhere.trabajador_id = ownerCodigo;
+        // Aceptamos UUID (nuevo) y código legacy para tolerar data no migrada.
+        if (ownerIds?.length) baseWhere.trabajador_id = { in: ownerIds };
         if (q) {
             baseWhere.OR = [
                 { targa: { contains: q } },
@@ -68,10 +69,58 @@ export class PeajesService {
             itemsWhere.AND = [{ OR: [{ estado: { notIn: [...PAGADO_VALS, ...ANULADO_VALS] } }, { estado: null }] }];
         }
 
-        const [items, total] = await this.prisma.$transaction([
-            this.prisma.peaje.findMany({ where: itemsWhere, orderBy: { fecha: 'desc' }, skip, take }),
-            this.prisma.peaje.count({ where: itemsWhere }),
+        // Gastos de tipo PEAJE registrados por choferes en operaciones. Se fusionan
+        // en esta lista (mapeados a la forma de un peaje) para que aparezcan aquí.
+        // No tienen estado propio → cuentan como PENDIENTE. Se excluyen si el filtro
+        // pide sólo PAGADO/ANULADO.
+        const gastoWhere: Prisma.GastoOperacionWhereInput = { tenant_id: tenantId, tipo: 'PEAJE' };
+        if (ownerIds?.length) gastoWhere.trabajador_id = { in: ownerIds };
+        if (q) gastoWhere.OR = [
+            { targa: { contains: q } },
+            { descripcion: { contains: q } },
+            { numero_mancato: { contains: q } },
+            { programacion: { cliente: { contains: q } } },
+        ];
+        const includeGastos = !estado || estado === 'Todos' || estado === 'PENDIENTE';
+
+        // Traemos los peajes nativos que matchean el filtro (sin paginar) para poder
+        // fusionarlos con los gastos y paginar el conjunto combinado en memoria.
+        const nativeSelect = { id: true, targa: true, estado: true, comentarios: true, fecha: true, hora: true, tipo: true, monto: true, archivo: true } as const;
+        const [nativeItems, gastos, gastoCount] = await this.prisma.$transaction([
+            this.prisma.peaje.findMany({ where: itemsWhere, orderBy: { fecha: 'desc' }, select: nativeSelect }),
+            includeGastos
+                ? this.prisma.gastoOperacion.findMany({
+                    where: gastoWhere,
+                    orderBy: { fecha: 'desc' },
+                    include: { programacion: { select: { id: true, cliente: true, id_programacion: true } } },
+                })
+                : this.prisma.gastoOperacion.findMany({ where: { id: '__none__' } }),
+            this.prisma.gastoOperacion.count({ where: gastoWhere }),
         ]);
+
+        const gastoRows = gastos.map((g: any) => ({
+            id: `gasto:${g.id}`,
+            _origen: 'operacion',
+            programacion_id: g.programacion_id,
+            targa: g.targa,
+            estado: null,
+            comentarios: [
+                g.programacion?.cliente ? `Operación · ${g.programacion.cliente}` : 'Gasto de operación',
+                g.numero_mancato ? `Mancato ${g.numero_mancato}` : null,
+            ].filter(Boolean).join(' · '),
+            numero_mancato: g.numero_mancato || null,
+            fecha: g.fecha,
+            hora: null,
+            tipo: 'PEAJE',
+            monto: g.monto,
+            archivo: (g.comprobantes && g.comprobantes[0]) || null,
+            comprobantes: g.comprobantes || [],
+        }));
+
+        const merged = [...nativeItems.map((i) => ({ ...i, _origen: 'peaje' })), ...gastoRows]
+            .sort((a, b) => new Date(b.fecha || 0).getTime() - new Date(a.fecha || 0).getTime());
+        const total = merged.length;
+        const items = merged.slice(skip, skip + take);
 
         // groupBy cast to any: its `having` mapped type trips a known TS2615.
         const grouped: Array<{ estado: string | null; _count: { _all: number } }> =
@@ -85,6 +134,9 @@ export class PeajesService {
             counts.Todos += g._count._all;
             counts[bucketOf(g.estado)] += g._count._all;
         });
+        // Los gastos de operación cuentan como PENDIENTE (y suman al total).
+        counts.Todos += gastoCount;
+        counts.PENDIENTE += gastoCount;
 
         return { items, total, counts };
     }

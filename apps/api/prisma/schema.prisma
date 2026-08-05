@@ -182,16 +182,61 @@ model Programacion {
   
   nota             String?  // 'NOTA'
 
+  // Datos operativos de consegna
+  km               Float?   @default(0)     // Kilómetros del recorrido
+  ciudad           String?                  // Ciudad
+  app              String?                  // App/plataforma (SENSA APP, MILANO 01..18, APP ROMA)
+  compactado       Boolean? @default(false) // Chofer con dos rutas/consegnas en un mismo viaje (N/Y)
+  estado_consegna  String?                  // CONSEGNATO | IN_CONSEGNA | IN_SOSPESO | RITIRATO | ANNULLATO | RISCHEDULATO
+  attesa           String?                  // Tiempo que el chofer espera al cliente
+  otros_datos      String?                  // Otros datos de consegna (texto pegado desde WhatsApp)
+  foto_bolla       String?                  // URL (S3) de la bolla/DDT de esta operación (la sube el chofer en Editar ruta)
+
   estado           String   @default("PENDING") // PENDING, IN_TRANSIT, COMPLETED, FAILED
   ingreso_estimado Float?   @default(0)
 
+  // Rendición del chofer: anticipo recibido y gastos del trayecto.
+  // Saldo a devolver = anticipo - suma(gastos.monto).
+  anticipo         Float?   @default(0)
+  gastos           GastoOperacion[]
+
   creado_en        DateTime @default(now())
   actualizado_en   DateTime @updatedAt
-  
+
   tenant_id        String
   tenant           Tenant   @relation(fields: [tenant_id], references: [id])
 
   @@map("programacion")
+}
+
+// Gasto que el chofer hace durante el trayecto (peaje, combustible, parking, otro),
+// contra el anticipo recibido. Cada gasto puede tener uno o varios comprobantes.
+// Los de tipo PEAJE/COMBUSTIBLE se listan además en sus módulos respectivos.
+model GastoOperacion {
+  id              String   @id @default(uuid())
+
+  programacion_id String
+  programacion    Programacion @relation(fields: [programacion_id], references: [id], onDelete: Cascade)
+
+  tipo            String   // PEAJE | COMBUSTIBLE | PARKING | OTRO
+  monto           Float    @default(0)
+  fecha           DateTime?
+  descripcion     String?  // detalle libre (obligatorio para OTRO)
+  numero_mancato  String?  // Nº de mancato pagamento (solo PEAJE)
+  comprobantes    String[] // URLs (S3) del/los comprobante(s)
+
+  // Denormalizados de la operación para reportes/módulos (chofer y vehículo).
+  trabajador_id   String?
+  targa           String?
+
+  tenant_id       String
+
+  creado_en       DateTime @default(now())
+  actualizado_en  DateTime @updatedAt
+
+  @@index([programacion_id])
+  @@index([tenant_id, tipo])
+  @@map("gastos_operacion")
 }
 
 model Tenant {

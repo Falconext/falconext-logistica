@@ -81,6 +81,30 @@ export interface Programacion {
     hora_retiro?: string;
     eta?: string;
     nota?: string;
+
+    km?: number;
+    ciudad?: string;
+    app?: string;
+    compactado?: boolean;
+    estado_consegna?: string; // CONSEGNATO | IN_CONSEGNA | IN_SOSPESO | RITIRATO | ANNULLATO | RISCHEDULATO
+    attesa?: string; // Tiempo de espera del chofer al cliente
+    otros_datos?: string; // Otros datos de consegna (pegado desde WhatsApp)
+    foto_bolla?: string | null; // URL (S3) de la bolla/DDT de la operación
+
     estado?: string; // Added for sync status
     ingreso_estimado?: number; // Added
+
+    anticipo?: number; // Monto entregado al chofer para gastos del trayecto
+    gastos?: GastoOperacion[]; // Gastos del chofer (rendición) contra el anticipo
+}
+
+// Gasto del chofer durante el trayecto (peaje, combustible, parking, otro).
+export interface GastoOperacion {
+    id?: string;
+    tipo: string; // PEAJE | COMBUSTIBLE | PARKING | OTRO
+    monto: number;
+    fecha?: string | null;
+    descripcion?: string | null;
+    numero_mancato?: string | null; // Nº de mancato pagamento (solo PEAJE)
+    comprobantes: string[]; // URLs de los comprobantes (uno o varios)
 }

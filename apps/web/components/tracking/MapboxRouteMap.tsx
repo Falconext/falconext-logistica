@@ -11,6 +11,7 @@ interface Props {
   destinationAddress: string;
   mapType?: 'roadmap' | 'satellite';
   statusText?: string;
+  statusDotClass?: string; // clase Tailwind para el color del punto de estado
 }
 
 const geoCache = new Map<string, google.maps.LatLng | null>();
@@ -35,7 +36,7 @@ async function geocode(addr: string): Promise<google.maps.LatLng | null> {
   }
 }
 
-export function MapboxRouteMap({ originAddress, destinationAddress, mapType = 'roadmap', statusText }: Props) {
+export function MapboxRouteMap({ originAddress, destinationAddress, mapType = 'roadmap', statusText, statusDotClass = 'bg-emerald-500' }: Props) {
   const t = useT();
   const resolvedStatusText = statusText ?? t('componentes.routeMap.enTransito');
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -158,7 +159,7 @@ export function MapboxRouteMap({ originAddress, destinationAddress, mapType = 'r
       ) : (
         <div className="absolute top-4 left-4 z-10 flex items-center gap-4 px-4 py-2.5 rounded-xl bg-white/95 dark:bg-[#0f1522]/95 backdrop-blur shadow-lg border border-slate-200 dark:border-[#202a40]">
           <span className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> {resolvedStatusText}
+            <span className={`w-2 h-2 rounded-full ${statusDotClass}`} /> {resolvedStatusText}
           </span>
           {eta && <span className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300"><Clock size={14} /> {eta}</span>}
           {dist && <span className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300"><Navigation size={14} /> {dist}</span>}

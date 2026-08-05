@@ -48,7 +48,16 @@ export default function LoginScreen() {
       // espacios invisibles al inicio/final que rompen el bcrypt.compare del backend.
       await loginUser(email.trim().toLowerCase(), password.trim());
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Correo o contraseña incorrectos');
+      // Distinguimos credenciales incorrectas (401 real del backend) de un fallo
+      // de conexión (sin respuesta): antes ambos mostraban el mismo mensaje y
+      // confundían un problema de red con uno de contraseña.
+      if (err?.response?.status === 401) {
+        setError('Correo o contraseña incorrectos');
+      } else if (err?.response?.data?.message) {
+        setError(err.response.data.message);
+      } else {
+        setError('No se pudo conectar con el servidor. Revisa tu internet e inténtalo de nuevo.');
+      }
     } finally {
       setSubmitting(false);
     }

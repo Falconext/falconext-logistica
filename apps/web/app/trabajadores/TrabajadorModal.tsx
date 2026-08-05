@@ -29,7 +29,6 @@ const emptyForm = {
     cargo: '',
     estado_laboral: 'Activo',
     area_trabajo: '',
-    id_trabajador: '',
     fecha_nacimiento: '',
     telefono: '',
     email_personal: '',
@@ -92,7 +91,6 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                 area_trabajo: initialData.area_trabajo || '',
                 telefono: initialData.telefono || '',
                 email_personal: initialData.email_personal || '',
-                id_trabajador: initialData.id_trabajador || '',
                 fecha_nacimiento: toDateInput(initialData.fecha_nacimiento),
                 licencia_conducir: initialData.licencia_conducir || '',
                 fecha_vencimiento_licencia: toDateInput(initialData.fecha_vencimiento_licencia),
@@ -133,7 +131,6 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                 area_trabajo: form.area_trabajo || null,
                 telefono: form.telefono || null,
                 email_personal: form.email_personal || null,
-                id_trabajador: form.id_trabajador || null,
                 fecha_nacimiento: toIso(form.fecha_nacimiento) ?? null,
                 licencia_conducir: form.licencia_conducir || null,
                 fecha_vencimiento_licencia: toIso(form.fecha_vencimiento_licencia) ?? null,
@@ -262,11 +259,6 @@ export default function TrabajadorModal({ isOpen, onClose, onSuccess, initialDat
                                 <Select label="Área" value={form.area_trabajo}
                                     onChange={(v) => set('area_trabajo', v)}
                                     options={AREA_OPTIONS} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className={labelCls}>ID trabajador</label>
-                                <input className={inputCls} value={form.id_trabajador}
-                                    onChange={(e) => set('id_trabajador', e.target.value)} placeholder="Ej: G027" />
                             </div>
                             <div className="space-y-1.5">
                                 <DatePicker label="Fecha de nacimiento" value={form.fecha_nacimiento}

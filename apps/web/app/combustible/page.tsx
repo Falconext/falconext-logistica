@@ -138,7 +138,6 @@ export default function CombustiblePage() {
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('combustible.colArea')}</th>
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('combustible.colFecha')}</th>
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('combustible.colMetodo')}</th>
-                                <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('combustible.colRegistro')}</th>
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('combustible.colMes')}</th>
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap text-right">{t('combustible.colMonto')}</th>
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('combustible.colArchivo')}</th>
@@ -147,9 +146,9 @@ export default function CombustiblePage() {
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={9} className="text-center py-16 text-slate-400">{t('combustible.loading')}</td></tr>
+                                <tr><td colSpan={8} className="text-center py-16 text-slate-400">{t('combustible.loading')}</td></tr>
                             ) : items.length === 0 ? (
-                                <tr><td colSpan={9} className="text-center py-16 text-slate-400">{t('combustible.emptyState')}</td></tr>
+                                <tr><td colSpan={8} className="text-center py-16 text-slate-400">{t('combustible.emptyState')}</td></tr>
                             ) : pageRows.map((item) => (
                                 <tr key={item.id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
                                     <td className="px-5 py-3.5">
@@ -161,7 +160,9 @@ export default function CombustiblePage() {
                                         </div>
                                     </td>
                                     <td className="px-5 py-3.5">
-                                        {item.area ? (
+                                        {item._origen === 'operacion' ? (
+                                            <span className="px-2.5 py-0.5 rounded-md text-xs font-medium border text-indigo-600 border-indigo-200 bg-indigo-50 whitespace-nowrap">Operación</span>
+                                        ) : item.area ? (
                                             <span className="px-2.5 py-0.5 rounded-md text-xs font-medium border text-blue-600 border-blue-200 bg-blue-50 whitespace-nowrap">
                                                 {item.area}
                                             </span>
@@ -171,7 +172,6 @@ export default function CombustiblePage() {
                                         {item.fecha ? new Date(item.fecha).toLocaleDateString(dateLocale, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                                     </td>
                                     <td className="px-5 py-3.5 text-slate-600 whitespace-nowrap">{item.metodo || '—'}</td>
-                                    <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">{item.id_registro || '—'}</td>
                                     <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">{item.mes || '—'}</td>
                                     <td className="px-5 py-3.5 text-right font-bold text-slate-900 tabular-nums whitespace-nowrap">{format(item.monto || 0)}</td>
                                     <td className="px-5 py-3.5">
@@ -182,22 +182,26 @@ export default function CombustiblePage() {
                                         ) : <span className="text-slate-300">—</span>}
                                     </td>
                                     <td className="px-5 py-3.5">
-                                        <div className="flex items-center justify-end gap-1.5">
-                                            <button
-                                                onClick={() => openEdit(item)}
-                                                title={t('combustible.editar')}
-                                                className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 hover:text-slate-900 transition"
-                                            >
-                                                <Pencil size={15} />
-                                            </button>
-                                            <button
-                                                onClick={() => setDeleting(item)}
-                                                title={t('combustible.eliminar')}
-                                                className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-red-50 hover:border-red-200 flex items-center justify-center text-slate-500 hover:text-red-600 transition"
-                                            >
-                                                <Trash2 size={15} />
-                                            </button>
-                                        </div>
+                                        {item._origen === 'operacion' ? (
+                                            <span className="block text-right text-xs text-slate-400 italic whitespace-nowrap">Desde operación</span>
+                                        ) : (
+                                            <div className="flex items-center justify-end gap-1.5">
+                                                <button
+                                                    onClick={() => openEdit(item)}
+                                                    title={t('combustible.editar')}
+                                                    className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 hover:text-slate-900 transition"
+                                                >
+                                                    <Pencil size={15} />
+                                                </button>
+                                                <button
+                                                    onClick={() => setDeleting(item)}
+                                                    title={t('combustible.eliminar')}
+                                                    className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-red-50 hover:border-red-200 flex items-center justify-center text-slate-500 hover:text-red-600 transition"
+                                                >
+                                                    <Trash2 size={15} />
+                                                </button>
+                                            </div>
+                                        )}
                                     </td>
                                 </tr>
                             ))}

@@ -1,9 +1,9 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Alert, ScrollView } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { View, Text, StyleSheet, Alert, ScrollView, TouchableOpacity } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Navigation, MapPin, CornerUpLeft, Flag, Play, Package, Clock, Coffee } from 'lucide-react-native';
-import { Screen, AppHeader, Card, Button, Badge, LoadingState, EmptyState, Theme } from '../../components/ui';
+import { Navigation, MapPin, CornerUpLeft, Flag, Play, Package, Clock, Coffee, Pencil, Camera, Save } from 'lucide-react-native';
+import { Screen, AppHeader, Card, Button, Badge, FormField, LoadingState, EmptyState, Theme } from '../../components/ui';
 import api, { DEVICE_TOKEN_KEY } from '../../services/api';
 import { startTracking, stopTracking } from '../../services/LocationService';
 import { useTheme } from '../../context/ThemeContext';
@@ -222,25 +222,98 @@ export default function MiRutaScreen() {
       ) : (
         <View style={{ gap: S.sm, marginTop: S.sm }}>
           {operaciones.map((op) => (
-            <Card key={op.id} style={styles.opCard}>
-              <View style={styles.opHeader}>
-                <Text style={styles.opCliente}>{op.cliente || 'Operación'}</Text>
-                {!!op.estado && <Badge label={op.estado === 'REPROGRAMADO' ? 'Reprog.' : 'Pendiente'} variant="warning" />}
-              </View>
-              <View style={styles.legRow}>
-                <MapPin size={15} color={C.success} />
-                <Text style={styles.opAddr} numberOfLines={1}>{op.lugar_retiro || '—'}</Text>
-              </View>
-              <View style={styles.legRow}>
-                <MapPin size={15} color={C.text} />
-                <Text style={styles.opAddr} numberOfLines={1}>{op.lugar_entrega || '—'}</Text>
-              </View>
-              <Button title="INICIAR RUTA" icon={Play} onPress={() => iniciar(op)} loading={busy} style={{ marginTop: S.sm }} />
-            </Card>
+            <OperacionCard key={op.id} op={op} busy={busy} onIniciar={iniciar} onReload={load} />
           ))}
         </View>
       )}
     </Screen>
+  );
+}
+
+// Tarjeta de una consegna asignada: el chofer completa el lugar de retiro (origen)
+// y el de entrega (destino) antes de poder iniciar la ruta, y tiene acceso directo
+// a subir la foto de la bolla (parte diario, propio del chofer).
+function OperacionCard({ op, busy, onIniciar, onReload }: {
+  op: Operacion;
+  busy: boolean;
+  onIniciar: (op: Operacion) => void;
+  onReload: () => void | Promise<void>;
+}) {
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
+  const router = useRouter();
+
+  const faltanLugares = !(op.lugar_retiro?.trim() && op.lugar_entrega?.trim());
+  const [editing, setEditing] = useState(faltanLugares);
+  const [retiro, setRetiro] = useState(op.lugar_retiro || '');
+  const [entrega, setEntrega] = useState(op.lugar_entrega || '');
+  const [saving, setSaving] = useState(false);
+
+  const guardar = async () => {
+    if (!retiro.trim() || !entrega.trim()) {
+      Alert.alert('Faltan lugares', 'Completa el lugar de retiro y el de entrega para continuar.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.patch(`/programacion/${op.id}`, {
+        lugar_retiro: retiro.trim(),
+        lugar_entrega: entrega.trim(),
+      });
+      setEditing(false);
+      await onReload();
+    } catch (e: any) {
+      Alert.alert('No se pudo guardar', e?.response?.data?.message || 'Inténtalo de nuevo.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card style={styles.opCard}>
+      <View style={styles.opHeader}>
+        <Text style={styles.opCliente}>{op.cliente || 'Operación'}</Text>
+        {!!op.estado && <Badge label={op.estado === 'REPROGRAMADO' ? 'Reprog.' : 'Pendiente'} variant="warning" />}
+      </View>
+
+      {editing ? (
+        <>
+          <FormField label="Lugar de retiro (origen)" value={retiro} onChangeText={setRetiro} placeholder="¿Dónde recoges la mercadería?" style={{ marginBottom: S.sm }} />
+          <FormField label="Lugar de entrega (destino)" value={entrega} onChangeText={setEntrega} placeholder="¿Dónde la entregas?" style={{ marginBottom: S.sm }} />
+          <Button title="GUARDAR LUGARES" icon={Save} onPress={guardar} loading={saving} />
+          {!faltanLugares && (
+            <Button
+              title="Cancelar"
+              variant="ghost"
+              onPress={() => { setRetiro(op.lugar_retiro || ''); setEntrega(op.lugar_entrega || ''); setEditing(false); }}
+              disabled={saving}
+            />
+          )}
+        </>
+      ) : (
+        <>
+          <View style={styles.legRow}>
+            <MapPin size={15} color={C.success} />
+            <Text style={styles.opAddr} numberOfLines={1}>{op.lugar_retiro || '—'}</Text>
+          </View>
+          <View style={styles.legRow}>
+            <MapPin size={15} color={C.text} />
+            <Text style={styles.opAddr} numberOfLines={1}>{op.lugar_entrega || '—'}</Text>
+          </View>
+          <Button title="INICIAR RUTA" icon={Play} onPress={() => onIniciar(op)} loading={busy} style={{ marginTop: S.sm }} />
+          <View style={styles.opActions}>
+            <TouchableOpacity onPress={() => setEditing(true)} style={styles.linkBtn} activeOpacity={0.7}>
+              <Pencil size={14} color={C.primary} />
+              <Text style={styles.linkText}>Editar lugares</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/(app)/parte-diario' as any)} style={styles.linkBtn} activeOpacity={0.7}>
+              <Camera size={14} color={C.primary} />
+              <Text style={styles.linkText}>Subir foto de la bolla</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
+    </Card>
   );
 }
 
@@ -260,4 +333,7 @@ const makeStyles = () =>
     opHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
     opCliente: { fontSize: 15, fontWeight: '700', color: C.text },
     opAddr: { flex: 1, fontSize: 13, color: C.textMuted },
+    opActions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: S.sm },
+    linkBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4 },
+    linkText: { fontSize: 13, color: C.primary, fontWeight: '600' },
   });

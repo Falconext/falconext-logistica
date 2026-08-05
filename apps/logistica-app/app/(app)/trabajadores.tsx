@@ -248,9 +248,13 @@ export default function TrabajadoresScreen() {
     const activo = isActivo(t.estado_laboral);
     return (
       <TouchableOpacity activeOpacity={0.7} style={styles.card} onPress={() => setDetail(t)}>
-        <View style={styles.avatar}>
-          <User size={20} color={C.primary} />
-        </View>
+        {t.url_foto ? (
+          <Image source={{ uri: t.url_foto }} style={styles.avatar} resizeMode="cover" />
+        ) : (
+          <View style={styles.avatar}>
+            <User size={20} color={C.primary} />
+          </View>
+        )}
         <View style={{ flex: 1 }}>
           <View style={styles.cardTop}>
             <Text style={styles.name} numberOfLines={1}>{t.nombre_completo}</Text>
@@ -506,6 +510,7 @@ const makeStyles = () => StyleSheet.create({
     backgroundColor: C.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: S.sm },
   name: { fontSize: 16, fontWeight: '700', color: C.text, flex: 1 },

@@ -410,7 +410,7 @@ export default function OperacionesScreen() {
           label="Conductor"
           value={form.trabajador_id}
           onChange={(v) => setForm({ ...form, trabajador_id: v })}
-          options={trabajadores.map((w) => ({ value: w.nombre_completo, label: w.nombre_completo }))}
+          options={trabajadores.map((w) => ({ value: w.id, label: w.nombre_completo }))}
           placeholder="Selecciona un conductor"
           searchable
         />

@@ -23,7 +23,7 @@ import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { formatMoney } from '../../constants/currency';
-import type { Vehiculo } from '../../types';
+import type { Vehiculo, Trabajador } from '../../types';
 
 const C = Theme.colors;
 const S = Theme.spacing;
@@ -100,6 +100,7 @@ export default function PeajesScreen() {
 
   const [items, setItems] = useState<Peaje[]>([]);
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
+  const [trabajadores, setTrabajadores] = useState<Trabajador[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
@@ -112,15 +113,17 @@ export default function PeajesScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [pRes, vRes] = await Promise.all([
+      const [pRes, vRes, tRes] = await Promise.all([
         api.get('/peajes', { params: { take: 100 } }),
         api.get('/vehiculos').catch(() => ({ data: [] })),
+        api.get('/trabajadores').catch(() => ({ data: [] })),
       ]);
       // La lista viene como { items, total, counts }; toleramos también un array plano.
       const data = pRes.data;
       const list = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
       setItems(list);
       setVehiculos(Array.isArray(vRes.data) ? vRes.data : []);
+      setTrabajadores(Array.isArray(tRes.data) ? tRes.data : []);
     } catch (e) {
       console.error('Error cargando peajes', e);
     } finally {
@@ -130,6 +133,12 @@ export default function PeajesScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // El vínculo es por UUID; para mostrar usamos el nombre del trabajador.
+  const trabajadorLabel = useCallback(
+    (id?: string | null) => trabajadores.find((t) => t.id === id)?.nombre_completo || id || '',
+    [trabajadores],
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -243,7 +252,7 @@ export default function PeajesScreen() {
             <Calendar size={13} color={C.textFaint} />
             <Text style={styles.meta}>{formatDate(p.fecha)}</Text>
           </View>
-          {p.trabajador_id ? <Text style={styles.meta}>· {p.trabajador_id}</Text> : null}
+          {p.trabajador_id ? <Text style={styles.meta}>· {trabajadorLabel(p.trabajador_id)}</Text> : null}
         </View>
       </View>
       <Text style={styles.cost} numberOfLines={1}>{formatMoney(p.monto, moneda)}</Text>
@@ -312,7 +321,7 @@ export default function PeajesScreen() {
             <InfoRow label="Monto" value={formatMoney(detail.monto, moneda)} />
             <InfoRow label="Estado" value={detail.estado} />
             <InfoRow label="Fecha" value={formatDate(detail.fecha)} />
-            <InfoRow label="Trabajador" value={detail.trabajador_id} />
+            <InfoRow label="Trabajador" value={trabajadorLabel(detail.trabajador_id)} />
             <InfoRow label="N° multa" value={detail.id_multa} />
             <View style={styles.detailDesc}>
               <Text style={styles.detailDescLabel}>Comentarios</Text>
@@ -376,11 +385,13 @@ export default function PeajesScreen() {
           value={form.fecha}
           onChange={(v) => setForm({ ...form, fecha: v })}
         />
-        <FormField
-          label="Trabajador (código)"
+        <Select
+          label="Trabajador"
           value={form.trabajador_id}
-          onChangeText={(t) => setForm({ ...form, trabajador_id: t })}
-          placeholder="Código del trabajador"
+          onChange={(v) => setForm({ ...form, trabajador_id: v })}
+          options={trabajadores.map((t) => ({ value: t.id, label: t.nombre_completo }))}
+          placeholder="Selecciona un trabajador"
+          searchable
         />
         <FormField
           label="Comentarios"

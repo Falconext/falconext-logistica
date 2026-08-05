@@ -7,6 +7,7 @@ import FileUpload from '../../components/FileUpload';
 import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
 import { useCurrency } from '../../lib/useCurrency';
+import { useAuthStore } from '../../lib/store';
 
 interface PeajeModalProps {
     isOpen: boolean;
@@ -16,7 +17,6 @@ interface PeajeModalProps {
 }
 
 const emptyForm = () => ({
-    id_multa: '',
     estado: 'PENDIENTE',
     fecha: new Date().toISOString().split('T')[0],
     hora: '',
@@ -35,6 +35,12 @@ const emptyForm = () => ({
 
 export default function PeajeModal({ isOpen, onClose, onSuccess, record }: PeajeModalProps) {
     const { currency } = useCurrency();
+    const user = useAuthStore((s) => s.user);
+    // Admins registran para cualquier conductor; el chofer/autista (rol USER) es el
+    // dueño de la cuenta, así que su conductor se asigna solo y no se le muestra.
+    const isAdmin = !!user && (user.es_admin === true || user.role === 'ADMIN' || user.role === 'SUPERADMIN');
+    const myWorkerId = user?.trabajador_id || '';
+    const hideConductor = !isAdmin && !!myWorkerId;
     const isEdit = !!record;
 
     const [vehicles, setVehicles] = useState<any[]>([]);
@@ -50,7 +56,6 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
         setError('');
         if (record) {
             setFormData({
-                id_multa: record.id_multa || '',
                 estado: record.estado || 'PENDIENTE',
                 fecha: record.fecha ? new Date(record.fecha).toISOString().split('T')[0] : '',
                 hora: record.hora || '',
@@ -70,6 +75,15 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
             setFormData(emptyForm());
         }
     }, [isOpen, record]);
+
+    // El chofer/autista no elige conductor: es él mismo (dueño de la cuenta). Resolvemos
+    // su trabajador al UUID de la opción cuando cargan los trabajadores (por si viene como código).
+    useEffect(() => {
+        if (!isOpen || isAdmin || !myWorkerId) return;
+        const w = workers.find((x) => x.id === myWorkerId || x.id_trabajador === myWorkerId);
+        const val = w ? w.id : myWorkerId;
+        setFormData((f) => (f.trabajador_id === val ? f : { ...f, trabajador_id: val }));
+    }, [isOpen, isAdmin, myWorkerId, workers]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -109,13 +123,6 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
                 <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-700">ID Multa</label>
-                            <input type="text" placeholder="Id de la multa" className={inputClass}
-                                value={formData.id_multa}
-                                onChange={(e) => setFormData({ ...formData, id_multa: e.target.value })} />
-                        </div>
-
-                        <div className="space-y-2">
                             <label className="text-sm font-medium text-slate-700">Estado</label>
                             <Select value={formData.estado}
                                 onChange={(v) => setFormData({ ...formData, estado: v })}
@@ -137,16 +144,18 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
                                 }))} />
                         </div>
 
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-700">Conductor</label>
-                            <Select value={formData.trabajador_id}
-                                onChange={(v) => setFormData({ ...formData, trabajador_id: v })}
-                                placeholder="Seleccionar conductor"
-                                options={workers.map(w => ({
-                                    value: w.id,
-                                    label: w.nombre || w.nombre_completo || w.id,
-                                }))} />
-                        </div>
+                        {!hideConductor && (
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-slate-700">Conductor</label>
+                                <Select value={formData.trabajador_id}
+                                    onChange={(v) => setFormData({ ...formData, trabajador_id: v })}
+                                    placeholder="Seleccionar conductor"
+                                    options={workers.map(w => ({
+                                        value: w.id,
+                                        label: w.nombre || w.nombre_completo || w.id,
+                                    }))} />
+                            </div>
+                        )}
 
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-slate-700">Monto ({currency})</label>

@@ -66,6 +66,10 @@ export default function DatePicker({
   const maxDate = useMemo(() => parseISO(max), [max]);
 
   const [open, setOpen] = useState(false);
+  // Vista del calendario: 'days' (rejilla de días), 'months' (elegir mes) o
+  // 'years' (elegir año). Permite saltar a años lejanos (p. ej. fechas de
+  // nacimiento) sin navegar mes a mes.
+  const [mode, setMode] = useState<'days' | 'months' | 'years'>('days');
   const [view, setView] = useState<Date>(() => selected ?? new Date());
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -102,6 +106,7 @@ export default function DatePicker({
   useEffect(() => {
     if (open) {
       setView(selected ?? new Date());
+      setMode('days');
       computePosition();
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -148,6 +153,8 @@ export default function DatePicker({
   }, [view]);
 
   const today = new Date();
+  // Inicio de la "página" de 12 años que se muestra en la vista de años.
+  const yearsStart = Math.floor(view.getFullYear() / 12) * 12;
 
   const isDisabledDay = (d: Date) => {
     if (minDate && d < new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate())) return true;
@@ -162,8 +169,10 @@ export default function DatePicker({
   };
 
   const changeMonth = (delta: number) => setView((v) => new Date(v.getFullYear(), v.getMonth() + delta, 1));
+  const changeYear = (delta: number) => setView((v) => new Date(v.getFullYear() + delta, v.getMonth(), 1));
   const goToday = () => {
     setView(new Date());
+    setMode('days');
     pick(new Date());
   };
 
@@ -206,48 +215,98 @@ export default function DatePicker({
           ref={popRef}
           style={{ position: 'fixed', top: coords.top, left: coords.left, width: POP_W }}
           className="z-[100] rounded-2xl border border-slate-200 bg-white shadow-xl p-3 animate-in fade-in zoom-in-95 duration-150">
-          {/* Header mes/año */}
+          {/* Header con navegación jerárquica: día → mes → año. El chevron
+              avanza mes (días), año (meses) o década (años); el título sube de
+              nivel para saltar rápido a años lejanos. */}
           <div className="flex items-center justify-between mb-2 px-1">
-            <button type="button" onClick={() => changeMonth(-1)} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition">
+            <button type="button" onClick={() => (mode === 'days' ? changeMonth(-1) : mode === 'months' ? changeYear(-1) : changeYear(-12))} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition">
               <ChevronLeft size={18} />
             </button>
-            <span className="text-sm font-semibold text-slate-900 capitalize">{MESES[view.getMonth()]} {view.getFullYear()}</span>
-            <button type="button" onClick={() => changeMonth(1)} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition">
+            {mode === 'years' ? (
+              <span className="text-sm font-semibold text-slate-900">{yearsStart} – {yearsStart + 11}</span>
+            ) : (
+              <button type="button" onClick={() => setMode(mode === 'days' ? 'months' : 'years')} className="text-sm font-semibold text-slate-900 capitalize px-2 py-1 rounded-lg hover:bg-slate-100 transition">
+                {mode === 'days' ? `${MESES[view.getMonth()]} ${view.getFullYear()}` : view.getFullYear()}
+              </button>
+            )}
+            <button type="button" onClick={() => (mode === 'days' ? changeMonth(1) : mode === 'months' ? changeYear(1) : changeYear(12))} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition">
               <ChevronRight size={18} />
             </button>
           </div>
 
-          {/* Días de la semana */}
-          <div className="grid grid-cols-7 mb-1">
-            {DIAS.map((d) => (
-              <div key={d} className="h-7 flex items-center justify-center text-[11px] font-semibold text-slate-400">{d}</div>
-            ))}
-          </div>
+          {mode === 'days' && (
+            <>
+              {/* Días de la semana */}
+              <div className="grid grid-cols-7 mb-1">
+                {DIAS.map((d) => (
+                  <div key={d} className="h-7 flex items-center justify-center text-[11px] font-semibold text-slate-400">{d}</div>
+                ))}
+              </div>
 
-          {/* Rejilla de días */}
-          <div className="grid grid-cols-7 gap-0.5">
-            {cells.map(({ date, inMonth }, i) => {
-              const isSel = selected && sameDay(date, selected);
-              const isToday = sameDay(date, today);
-              const disabledDay = isDisabledDay(date);
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  disabled={disabledDay}
-                  onClick={() => pick(date)}
-                  className={`h-9 rounded-lg text-sm font-medium transition
-                    ${isSel ? 'bg-[#FFC933] text-[#1a1a1c] font-bold' : ''}
-                    ${!isSel && isToday ? 'border border-[#FFC933] text-slate-900' : ''}
-                    ${!isSel && !isToday && inMonth ? 'text-slate-700 hover:bg-slate-100' : ''}
-                    ${!inMonth ? 'text-slate-300 hover:bg-slate-50' : ''}
-                    ${disabledDay ? 'opacity-30 cursor-not-allowed hover:bg-transparent' : ''}`}
-                >
-                  {date.getDate()}
-                </button>
-              );
-            })}
-          </div>
+              {/* Rejilla de días */}
+              <div className="grid grid-cols-7 gap-0.5">
+                {cells.map(({ date, inMonth }, i) => {
+                  const isSel = selected && sameDay(date, selected);
+                  const isToday = sameDay(date, today);
+                  const disabledDay = isDisabledDay(date);
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      disabled={disabledDay}
+                      onClick={() => pick(date)}
+                      className={`h-9 rounded-lg text-sm font-medium transition
+                        ${isSel ? 'bg-[#FFC933] text-[#1a1a1c] font-bold' : ''}
+                        ${!isSel && isToday ? 'border border-[#FFC933] text-slate-900' : ''}
+                        ${!isSel && !isToday && inMonth ? 'text-slate-700 hover:bg-slate-100' : ''}
+                        ${!inMonth ? 'text-slate-300 hover:bg-slate-50' : ''}
+                        ${disabledDay ? 'opacity-30 cursor-not-allowed hover:bg-transparent' : ''}`}
+                    >
+                      {date.getDate()}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {mode === 'months' && (
+            <div className="grid grid-cols-3 gap-1.5">
+              {MESES_CORTO.map((mLabel, i) => {
+                const isSel = selected && selected.getFullYear() === view.getFullYear() && selected.getMonth() === i;
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => { setView(new Date(view.getFullYear(), i, 1)); setMode('days'); }}
+                    className={`h-11 rounded-lg text-sm font-medium capitalize transition
+                      ${isSel ? 'bg-[#FFC933] text-[#1a1a1c] font-bold' : 'text-slate-700 hover:bg-slate-100'}`}
+                  >
+                    {mLabel}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {mode === 'years' && (
+            <div className="grid grid-cols-3 gap-1.5">
+              {Array.from({ length: 12 }, (_, i) => yearsStart + i).map((y) => {
+                const isSel = selected && selected.getFullYear() === y;
+                return (
+                  <button
+                    key={y}
+                    type="button"
+                    onClick={() => { setView(new Date(y, view.getMonth(), 1)); setMode('months'); }}
+                    className={`h-11 rounded-lg text-sm font-medium transition
+                      ${isSel ? 'bg-[#FFC933] text-[#1a1a1c] font-bold' : 'text-slate-700 hover:bg-slate-100'}`}
+                  >
+                    {y}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* Pie: hoy / limpiar */}
           <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 px-1">

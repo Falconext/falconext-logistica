@@ -6,12 +6,14 @@ import { Programacion } from '../../types';
 import { MapboxRouteMap } from '../../components/tracking/MapboxRouteMap';
 import { MapboxLiveMap as LiveMapReal } from '../../components/tracking/MapboxLiveMap';
 import NewRouteModal from './NewRouteModal';
+import { estadoConsegnaMeta } from './constants';
 import {
-    Truck, Search, Plus, Package, Layers, FileSpreadsheet, MapPin, User, Navigation, X, Check, Trash2, AlertTriangle, Loader2
+    Truck, Search, Plus, Package, Layers, FileSpreadsheet, MapPin, User, Navigation, X, Check, Trash2, AlertTriangle, Loader2, Route, MapPinned, Smartphone, Boxes, Clock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import clsx from 'clsx';
 import { useCurrency } from '../../lib/useCurrency';
+import { useAuthStore } from '../../lib/store';
 import { useT, useDateLocale } from '../../lib/i18n';
 
 const MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyDJ-Y0SukxfjbACOUjPY7CoV6qnaQkKSZg";
@@ -48,11 +50,12 @@ const WINDOW_OPTIONS_BASE: { key: string; days: number | null }[] = [
 
 // Tarjeta de detalle de la operación seleccionada.
 // En desktop flota sobre el mapa (abajo-izquierda); en móvil se muestra debajo del mapa.
-function RouteDetailCard({ selected, format, onEdit, onDelete }: {
+function RouteDetailCard({ selected, format, onEdit, onDelete, canDelete = true }: {
     selected: Programacion;
     format: (n: number) => string;
     onEdit: () => void;
     onDelete: () => void;
+    canDelete?: boolean;
 }) {
     const t = useT();
     return (
@@ -64,8 +67,12 @@ function RouteDetailCard({ selected, format, onEdit, onDelete }: {
                         <span className={`px-2 py-0.5 rounded-md text-[11px] font-medium border ${estadoMeta(selected.estado).badge}`}>
                             {t(`operaciones.estados.${estadoLabelKey(selected.estado)}`)}
                         </span>
+                        {estadoConsegnaMeta(selected.estado_consegna) && (
+                            <span className={`px-2 py-0.5 rounded-md text-[11px] font-medium border ${estadoConsegnaMeta(selected.estado_consegna)!.badge}`}>
+                                {estadoConsegnaMeta(selected.estado_consegna)!.label}
+                            </span>
+                        )}
                     </div>
-                    <p className="text-xs text-slate-400 mt-0.5">{selected.id_programacion}</p>
                 </div>
                 <div className="shrink-0 flex items-center gap-2">
                     <button
@@ -74,13 +81,15 @@ function RouteDetailCard({ selected, format, onEdit, onDelete }: {
                     >
                         {t('operaciones.editar')}
                     </button>
-                    <button
-                        onClick={onDelete}
-                        title={t('operaciones.eliminarOperacionTitle')}
-                        className="w-8 h-8 rounded-lg border border-slate-200 text-slate-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 flex items-center justify-center transition"
-                    >
-                        <Trash2 size={14} />
-                    </button>
+                    {canDelete && (
+                        <button
+                            onClick={onDelete}
+                            title={t('operaciones.eliminarOperacionTitle')}
+                            className="w-8 h-8 rounded-lg border border-slate-200 text-slate-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 flex items-center justify-center transition"
+                        >
+                            <Trash2 size={14} />
+                        </button>
+                    )}
                 </div>
             </div>
             <div className="mt-3 space-y-2 text-sm">
@@ -106,6 +115,15 @@ function RouteDetailCard({ selected, format, onEdit, onDelete }: {
                     <span className="ml-auto font-semibold text-slate-900 tabular-nums">{format(selected.ingreso_estimado)}</span>
                 )}
             </div>
+            {(selected.km || selected.ciudad || selected.app || selected.compactado || selected.attesa) && (
+                <div className="mt-2 pt-2 border-t border-slate-100 flex items-center gap-4 text-xs text-slate-500 flex-wrap">
+                    {selected.km ? <span className="flex items-center gap-1.5"><Route size={13} /> {selected.km} km</span> : null}
+                    {selected.ciudad ? <span className="flex items-center gap-1.5"><MapPinned size={13} /> {selected.ciudad}</span> : null}
+                    {selected.app ? <span className="flex items-center gap-1.5"><Smartphone size={13} /> {selected.app}</span> : null}
+                    {selected.attesa ? <span className="flex items-center gap-1.5"><Clock size={13} /> Attesa: {selected.attesa}</span> : null}
+                    {selected.compactado ? <span className="flex items-center gap-1.5 text-blue-600 font-medium"><Boxes size={13} /> Compactado</span> : null}
+                </div>
+            )}
         </div>
     );
 }
@@ -113,6 +131,10 @@ function RouteDetailCard({ selected, format, onEdit, onDelete }: {
 export default function OperacionesPage() {
     const t = useT();
     const { format } = useCurrency();
+    const user = useAuthStore((s) => s.user);
+    // Solo admins editan todo. El chofer/autista (rol USER, no admin) sólo puede
+    // editar el origen (retiro) y el destino (entrega); el resto es de solo lectura.
+    const canEditAll = !!user && (user.es_admin === true || user.role === 'ADMIN' || user.role === 'SUPERADMIN');
     const WINDOW_OPTIONS = WINDOW_OPTIONS_BASE.map(o => ({ ...o, label: t(`operaciones.ventana.${o.key}`) }));
     const [rutas, setRutas] = useState<Programacion[]>([]);
     const [total, setTotal] = useState(0);
@@ -262,9 +284,17 @@ export default function OperacionesPage() {
         setLoading(true);
         api.get('/programacion', { params: buildParams(0) })
             .then(res => {
-                setRutas(res.data.items ?? []);
+                const items = res.data.items ?? [];
+                setRutas(items);
                 setTotal(res.data.total ?? 0);
                 setCounts(res.data.counts ?? {});
+                // Mantener la tarjeta de detalle en sync: tras editar (p. ej. cambiar el
+                // estado de la consegna) el objeto `selected` quedaba con los datos viejos.
+                setSelected(prev => {
+                    if (!prev) return prev;
+                    const fresh = items.find((it: Programacion) => it.id === prev.id);
+                    return fresh ? { ...prev, ...fresh } : prev;
+                });
             })
             .catch(err => console.error(err))
             .finally(() => setLoading(false));
@@ -279,7 +309,6 @@ export default function OperacionesPage() {
             if (data.length === 0) return toast.error(t('operaciones.toastNoHayDatos'));
             const xlsx = await import('xlsx');
             const ws = xlsx.utils.json_to_sheet(data.map(r => ({
-                [t('operaciones.excel.id')]: r.id_programacion,
                 [t('operaciones.excel.fecha')]: new Date(r.fecha).toLocaleDateString(),
                 [t('operaciones.excel.cliente')]: r.cliente,
                 [t('operaciones.excel.vehiculo')]: r.vehiculo_id,
@@ -376,15 +405,17 @@ export default function OperacionesPage() {
                     )}
                 </div>
 
-                {/* Footer add */}
-                <div className="p-3 border-t border-slate-100">
-                    <button
-                        onClick={() => { setEditingRuta(null); setIsNewRouteModalOpen(true); }}
-                        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition"
-                    >
-                        <Plus size={16} /> {t('operaciones.nuevaOperacion')}
-                    </button>
-                </div>
+                {/* Footer add — solo admins pueden crear rutas */}
+                {canEditAll && (
+                    <div className="p-3 border-t border-slate-100">
+                        <button
+                            onClick={() => { setEditingRuta(null); setIsNewRouteModalOpen(true); }}
+                            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition"
+                        >
+                            <Plus size={16} /> {t('operaciones.nuevaOperacion')}
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* ================= RIGHT: MAP + DETAIL ================= */}
@@ -399,6 +430,8 @@ export default function OperacionesPage() {
                         destination={selected?.lugar_entrega || ''}
                         plate={selected?.vehiculo_id || ''}
                         mapType={mapType}
+                        statusText={selected ? t(`operaciones.estados.${estadoLabelKey(selected.estado)}`) : undefined}
+                        statusDotClass={selected ? estadoMeta(selected.estado).dot : undefined}
                     />
                 </div>
 
@@ -462,6 +495,7 @@ export default function OperacionesPage() {
                         <RouteDetailCard
                             selected={selected}
                             format={format}
+                            canDelete={canEditAll}
                             onEdit={() => { setEditingRuta(selected); setIsNewRouteModalOpen(true); }}
                             onDelete={() => setDeleting(selected)}
                         />
@@ -475,6 +509,7 @@ export default function OperacionesPage() {
                       <RouteDetailCard
                           selected={selected}
                           format={format}
+                          canDelete={canEditAll}
                           onEdit={() => { setEditingRuta(selected); setIsNewRouteModalOpen(true); }}
                           onDelete={() => setDeleting(selected)}
                       />
@@ -488,6 +523,7 @@ export default function OperacionesPage() {
                 onClose={() => setIsNewRouteModalOpen(false)}
                 onSuccess={reloadFirstPage}
                 initialData={editingRuta}
+                canEditAll={canEditAll}
             />
 
             {/* Confirmación de eliminación */}
@@ -502,7 +538,7 @@ export default function OperacionesPage() {
                                 <h3 className="text-lg font-bold text-slate-900">{t('operaciones.eliminarOperacionTitle')}</h3>
                                 <p className="text-sm text-slate-500 mt-1">
                                     {t('operaciones.confirmarEliminarPrefix')}{' '}
-                                    <span className="font-medium text-slate-700">{deleting.cliente || deleting.id_programacion || t('operaciones.estaOperacionFallback')}</span>
+                                    <span className="font-medium text-slate-700">{deleting.cliente || t('operaciones.estaOperacionFallback')}</span>
                                     {t('operaciones.confirmarEliminarSuffix')}
                                 </p>
                             </div>
@@ -553,7 +589,7 @@ const RouteCard = memo(function RouteCard({ ruta, isSelected, onSelect }: {
                 <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
                     <Package size={15} />
                 </div>
-                <span className="font-semibold text-slate-900 text-sm truncate">{ruta.cliente || ruta.id_programacion || t('operaciones.operacionFallback')}</span>
+                <span className="font-semibold text-slate-900 text-sm truncate">{ruta.cliente || t('operaciones.operacionFallback')}</span>
                 <span className={`ml-auto shrink-0 px-2 py-0.5 rounded-md text-[11px] font-medium border ${meta.badge}`}>
                     {t(`operaciones.estados.${estadoLabelKey(ruta.estado)}`)}
                 </span>
@@ -571,25 +607,34 @@ const RouteCard = memo(function RouteCard({ ruta, isSelected, onSelect }: {
                 <span className="truncate max-w-[45%] text-right">{ruta.lugar_entrega?.split(',')[0] || t('operaciones.destino')} · {fmtDate(ruta.fecha_entrega, dateLocale)}</span>
             </div>
 
-            <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center gap-3 text-xs text-slate-500">
+            <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center gap-3 text-xs text-slate-500 flex-wrap">
                 <span className="flex items-center gap-1"><Truck size={12} /> {ruta.vehiculo_id || '—'}</span>
                 <span className="flex items-center gap-1 truncate"><User size={12} /> {ruta.trabajador_nombre || ruta.trabajador_id || t('operaciones.sinAsignar')}</span>
+                {ruta.app ? <span className="flex items-center gap-1"><Smartphone size={12} /> {ruta.app}</span> : null}
+                {ruta.compactado ? <span className="flex items-center gap-1 text-blue-600 font-medium"><Boxes size={12} /> Compactado</span> : null}
             </div>
+            {estadoConsegnaMeta(ruta.estado_consegna) && (
+                <div className="mt-2">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium border ${estadoConsegnaMeta(ruta.estado_consegna)!.badge}`}>
+                        {estadoConsegnaMeta(ruta.estado_consegna)!.label}
+                    </span>
+                </div>
+            )}
         </button>
     );
 });
 
 /* Memoized map — only re-renders when the selected route or map type actually changes,
    so typing in search, opening "Capas" or hovering the list won't touch the map. */
-const MapView = memo(function MapView({ deviceId, worker, origin, destination, plate, mapType }: {
-    deviceId: string; worker?: string; origin: string; destination: string; plate: string; mapType: 'roadmap' | 'satellite';
+const MapView = memo(function MapView({ deviceId, worker, origin, destination, plate, mapType, statusText, statusDotClass }: {
+    deviceId: string; worker?: string; origin: string; destination: string; plate: string; mapType: 'roadmap' | 'satellite'; statusText?: string; statusDotClass?: string;
 }) {
     const t = useT();
     if (deviceId) {
         return <LiveMapReal deviceId={deviceId} apiKey={MAPS_KEY} vehiclePlate={plate} workerName={worker} />;
     }
     if (origin && destination) {
-        return <MapboxRouteMap originAddress={origin} destinationAddress={destination} mapType={mapType} />;
+        return <MapboxRouteMap originAddress={origin} destinationAddress={destination} mapType={mapType} statusText={statusText} statusDotClass={statusDotClass} />;
     }
     return (
         <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-3">

@@ -31,7 +31,6 @@ const EMPTY = {
     permisos_especiales: '',
     fecha_vencimiento_deroghe: '',
     area: '',
-    id_interno_furgon: '',
     kilometraje_actual: '',
     url_foto: '',
 };
@@ -72,7 +71,6 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                     ? initialData.fecha_vencimiento_deroghe.split('T')[0]
                     : '',
                 area: initialData.area || '',
-                id_interno_furgon: initialData.id_interno_furgon || '',
                 kilometraje_actual: initialData.kilometraje_actual?.toString() || '',
                 url_foto: initialData.url_foto || '',
             });
@@ -108,7 +106,6 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                     ? new Date(form.fecha_vencimiento_deroghe).toISOString()
                     : null,
                 area: form.area || null,
-                id_interno_furgon: form.id_interno_furgon || null,
                 url_foto: form.url_foto || null,
                 anio_fabricacion: form.anio_fabricacion ? parseInt(form.anio_fabricacion, 10) : null,
                 kilometraje_actual: form.kilometraje_actual ? parseInt(form.kilometraje_actual, 10) : null,
@@ -241,15 +238,6 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                                     placeholder="Ej: 120000"
                                     value={form.kilometraje_actual}
                                     onChange={(e) => set('kilometraje_actual', e.target.value)}
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className={labelCls}>ID interno furgón</label>
-                                <input
-                                    className={inputCls}
-                                    placeholder="Ej: F-08"
-                                    value={form.id_interno_furgon}
-                                    onChange={(e) => set('id_interno_furgon', e.target.value)}
                                 />
                             </div>
                             <div className="space-y-1.5">

@@ -21,21 +21,27 @@ export class ProgramacionService {
         lugar_entrega: true,
         fecha_entrega: true,
         hora_retiro: true,
+        km: true,
+        ciudad: true,
+        app: true,
+        compactado: true,
+        estado_consegna: true,
+        attesa: true,
         estado: true,
         ingreso_estimado: true,
     };
 
     async findAll(
         tenantId: string,
-        opts: { from?: string; to?: string; q?: string; estados?: string[]; skip?: number; take?: number; ownerCodigo?: string } = {},
+        opts: { from?: string; to?: string; q?: string; estados?: string[]; skip?: number; take?: number; ownerIds?: string[] } = {},
     ) {
-        const { from, to, q, estados, skip = 0, take = 60, ownerCodigo } = opts;
+        const { from, to, q, estados, skip = 0, take = 60, ownerIds } = opts;
 
         // Base scope: always the caller's tenant, plus optional date window + search.
         const baseWhere: Prisma.ProgramacionWhereInput = { tenant_id: tenantId };
-        // Owner scoping: restricted users only see programaciones for their own
-        // trabajador (id_trabajador like 'G001'). ADMIN/SUPERADMIN pass undefined.
-        if (ownerCodigo) baseWhere.trabajador_id = ownerCodigo;
+        // Owner scoping: restricted users only see their own trabajador's rows.
+        // Aceptamos UUID (nuevo) y código legacy para tolerar data no migrada.
+        if (ownerIds?.length) baseWhere.trabajador_id = { in: ownerIds };
         if (from || to) {
             baseWhere.fecha = {};
             if (from) (baseWhere.fecha as Prisma.DateTimeFilter).gte = new Date(from);
@@ -111,6 +117,34 @@ export class ProgramacionService {
     async findOne(id: string) {
         return this.prisma.programacion.findUnique({
             where: { id },
+            include: { gastos: { orderBy: { creado_en: 'asc' } } },
+        });
+    }
+
+    // Normaliza un gasto del frontend a la forma de la BD, denormalizando chofer/vehículo
+    // desde la operación para poder listarlo luego en los módulos de Peaje/Combustible.
+    private normalizeGasto(g: any, op: { id: string; trabajador_id?: string | null; vehiculo_id?: string | null }, tenantId: string) {
+        return {
+            programacion_id: op.id,
+            tipo: String(g.tipo || 'OTRO'),
+            monto: g.monto != null && g.monto !== '' ? Number(g.monto) : 0,
+            fecha: g.fecha ? new Date(g.fecha) : null,
+            descripcion: g.descripcion || null,
+            numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null,
+            comprobantes: Array.isArray(g.comprobantes) ? g.comprobantes.filter(Boolean) : [],
+            trabajador_id: op.trabajador_id || null,
+            targa: op.vehiculo_id || null,
+            tenant_id: tenantId,
+        };
+    }
+
+    // Lista los gastos de un tipo (PEAJE/COMBUSTIBLE) del tenant, para reflejarlos en
+    // los módulos respectivos. Incluye datos de la operación de origen.
+    async findGastosByTipo(tenantId: string, tipo: string) {
+        return this.prisma.gastoOperacion.findMany({
+            where: { tenant_id: tenantId, tipo },
+            orderBy: { fecha: 'desc' },
+            include: { programacion: { select: { id: true, id_programacion: true, cliente: true } } },
         });
     }
 
@@ -140,15 +174,17 @@ export class ProgramacionService {
     }
 
     async create(data: any, tenantId?: string) {
+        // `gastos` es una relación (array de objetos), no una columna: se maneja aparte.
+        const { gastos, ...rest } = data;
         // Scope the new record to the caller's tenant (from the JWT). Fall back to
         // the first tenant only if no auth context is available (legacy callers).
         const resolvedTenant = tenantId
             || data.tenant_id
             || (await this.prisma.tenant.findFirst())?.id;
 
-        return this.prisma.programacion.create({
+        const created = await this.prisma.programacion.create({
             data: {
-                ...data,
+                ...rest,
                 // `fecha` es requerida en el modelo pero los clientes (app y web) sólo
                 // envían fecha_retiro/fecha_entrega. La derivamos para no fallar el create.
                 fecha: data.fecha || data.fecha_retiro || data.fecha_entrega || new Date(),
@@ -158,13 +194,35 @@ export class ProgramacionService {
                 tenant_id: resolvedTenant
             }
         });
+
+        if (Array.isArray(gastos) && gastos.length) {
+            await this.prisma.gastoOperacion.createMany({
+                data: gastos.map((g) => this.normalizeGasto(g, created, resolvedTenant)),
+            });
+        }
+        return this.findOne(created.id);
     }
 
     async update(id: string, data: any) {
-        return this.prisma.programacion.update({
+        // Separamos los gastos (relación) del resto de columnas.
+        const { gastos, ...rest } = data;
+        const updated = await this.prisma.programacion.update({
             where: { id },
-            data: data
+            data: rest,
         });
+
+        // Si el cliente envía `gastos`, reemplazamos la lista completa de la operación.
+        if (gastos !== undefined) {
+            await this.prisma.$transaction([
+                this.prisma.gastoOperacion.deleteMany({ where: { programacion_id: id } }),
+                ...(Array.isArray(gastos) && gastos.length
+                    ? [this.prisma.gastoOperacion.createMany({
+                        data: gastos.map((g) => this.normalizeGasto(g, updated, updated.tenant_id)),
+                    })]
+                    : []),
+            ]);
+        }
+        return this.findOne(id);
     }
 
     async remove(id: string, tenantId: string) {

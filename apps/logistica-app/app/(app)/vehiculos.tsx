@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
+import { View, Text, Image, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Truck, Crosshair, Trash2, Pencil, ShieldAlert, Car, CheckCircle2, FolderArchive } from 'lucide-react-native';
 import {
@@ -154,9 +154,13 @@ export default function VehiculosScreen() {
     const activo = v.estado_vehiculo === 'DISPONIBLE';
     return (
       <TouchableOpacity activeOpacity={0.7} style={styles.card} onPress={() => setDetail(v)}>
-        <View style={styles.cardIcon}>
-          <Truck size={20} color={C.primary} />
-        </View>
+        {v.url_foto ? (
+          <Image source={{ uri: v.url_foto }} style={styles.cardIcon} resizeMode="cover" />
+        ) : (
+          <View style={styles.cardIcon}>
+            <Truck size={20} color={C.primary} />
+          </View>
+        )}
         <View style={{ flex: 1 }}>
           <View style={styles.cardTop}>
             <Text style={styles.plate}>{v.placa}</Text>
@@ -323,6 +327,7 @@ const makeStyles = () => StyleSheet.create({
     backgroundColor: C.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: S.sm },
   plate: { fontSize: 16, fontWeight: '700', color: C.text },

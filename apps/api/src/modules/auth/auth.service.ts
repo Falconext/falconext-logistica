@@ -25,6 +25,12 @@ export class AuthService {
             const { password, ...result } = user;
             return result;
         }
+        // [DEBUG-TEMPORAL] Diagnóstico de logins fallidos: NO registra la contraseña,
+        // solo el email recibido, si el usuario existe y la longitud de la clave.
+        // TODO: quitar tras diagnosticar el problema de login móvil.
+        console.warn(
+            `[LOGIN-DEBUG] emailRecibido="${email}" existeUsuario=${!!user} passLen=${pass?.length ?? 0} passTrimLen=${pass?.trim().length ?? 0} primerChar="${(pass ?? '').slice(0, 1)}" ultimoChar="${(pass ?? '').slice(-1)}"`
+        );
         return null;
     }
 

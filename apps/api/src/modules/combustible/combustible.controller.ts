@@ -19,7 +19,7 @@ export class CombustibleController {
             area: query.area,
             skip: query.skip ? parseInt(query.skip, 10) || 0 : 0,
             take: query.take ? Math.min(parseInt(query.take, 10) || 10, 100) : 10,
-            trabajadorCodigo: req.user.soloPropios ? req.user.trabajadorCodigo : undefined,
+            ownerIds: req.user.soloPropios ? [req.user.trabajadorId, req.user.trabajadorCodigo].filter(Boolean) : undefined,
         });
     }
 

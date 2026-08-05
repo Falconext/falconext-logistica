@@ -26,3 +26,8 @@ apps/logistica-app/.expo
 
 # Cache de build TS
 *.tsbuildinfo
+apps/logistica-app/build-ios.sh
+apps/logistica-app/submit-ios.sh
+
+# Vercel link metadata
+.vercel

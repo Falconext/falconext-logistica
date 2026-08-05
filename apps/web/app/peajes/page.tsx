@@ -151,7 +151,6 @@ export default function PeajesPage() {
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('peajes.columnas.comentario')}</th>
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('peajes.columnas.fecha')}</th>
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('peajes.columnas.hora')}</th>
-                                <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('peajes.columnas.multa')}</th>
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('peajes.columnas.tipo')}</th>
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap text-right">{t('peajes.columnas.monto')}</th>
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('peajes.columnas.archivo')}</th>
@@ -160,9 +159,9 @@ export default function PeajesPage() {
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={10} className="text-center py-16 text-slate-400">{t('peajes.cargando')}</td></tr>
+                                <tr><td colSpan={9} className="text-center py-16 text-slate-400">{t('peajes.cargando')}</td></tr>
                             ) : items.length === 0 ? (
-                                <tr><td colSpan={10} className="text-center py-16 text-slate-400">{t('peajes.vacio')}</td></tr>
+                                <tr><td colSpan={9} className="text-center py-16 text-slate-400">{t('peajes.vacio')}</td></tr>
                             ) : pageRows.map((item) => (
                                 <tr key={item.id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
                                     <td className="px-5 py-3.5">
@@ -174,7 +173,9 @@ export default function PeajesPage() {
                                         </div>
                                     </td>
                                     <td className="px-5 py-3.5">
-                                        {item.estado ? (
+                                        {item._origen === 'operacion' ? (
+                                            <span className="px-2.5 py-0.5 rounded-md text-xs font-medium border whitespace-nowrap text-blue-600 border-blue-200 bg-blue-50">Operación</span>
+                                        ) : item.estado ? (
                                             <span className={`px-2.5 py-0.5 rounded-md text-xs font-medium border whitespace-nowrap ${ESTADO_BADGE[item.estado] || ESTADO_BADGE.PENDIENTE}`}>
                                                 {item.estado}
                                             </span>
@@ -185,7 +186,6 @@ export default function PeajesPage() {
                                         {item.fecha ? new Date(item.fecha).toLocaleDateString(dateLocale, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                                     </td>
                                     <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">{item.hora || '—'}</td>
-                                    <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">{item.id_multa || '—'}</td>
                                     <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">{item.tipo || '—'}</td>
                                     <td className="px-5 py-3.5 text-right font-bold text-slate-900 tabular-nums whitespace-nowrap">{format(item.monto || 0)}</td>
                                     <td className="px-5 py-3.5">
@@ -196,22 +196,26 @@ export default function PeajesPage() {
                                         ) : <span className="text-slate-300">—</span>}
                                     </td>
                                     <td className="px-5 py-3.5">
-                                        <div className="flex items-center justify-end gap-1.5">
-                                            <button
-                                                onClick={() => openEdit(item)}
-                                                title={t('peajes.editar')}
-                                                className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 hover:text-slate-900 transition"
-                                            >
-                                                <Pencil size={15} />
-                                            </button>
-                                            <button
-                                                onClick={() => setDeleting(item)}
-                                                title={t('peajes.eliminar')}
-                                                className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-red-50 hover:border-red-200 flex items-center justify-center text-slate-500 hover:text-red-600 transition"
-                                            >
-                                                <Trash2 size={15} />
-                                            </button>
-                                        </div>
+                                        {item._origen === 'operacion' ? (
+                                            <span className="block text-right text-xs text-slate-400 italic whitespace-nowrap">Desde operación</span>
+                                        ) : (
+                                            <div className="flex items-center justify-end gap-1.5">
+                                                <button
+                                                    onClick={() => openEdit(item)}
+                                                    title={t('peajes.editar')}
+                                                    className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 hover:text-slate-900 transition"
+                                                >
+                                                    <Pencil size={15} />
+                                                </button>
+                                                <button
+                                                    onClick={() => setDeleting(item)}
+                                                    title={t('peajes.eliminar')}
+                                                    className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-red-50 hover:border-red-200 flex items-center justify-center text-slate-500 hover:text-red-600 transition"
+                                                >
+                                                    <Trash2 size={15} />
+                                                </button>
+                                            </div>
+                                        )}
                                     </td>
                                 </tr>
                             ))}
@@ -266,7 +270,7 @@ export default function PeajesPage() {
                                 const vehiculoLabel = deleting.targa || t('peajes.esteVehiculo');
                                 const fullText = t('peajes.confirmarEliminarTexto', {
                                     vehiculo: vehiculoLabel,
-                                    multa: deleting.id_multa ? ` (${deleting.id_multa})` : '',
+                                    multa: '',
                                 });
                                 const [before, after] = fullText.split(vehiculoLabel);
                                 return (

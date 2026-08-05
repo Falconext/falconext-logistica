@@ -18,7 +18,9 @@ export class ProgramacionController {
             skip: query.skip ? parseInt(query.skip, 10) || 0 : 0,
             take: query.take ? Math.min(parseInt(query.take, 10) || 60, 1000) : 60,
             // Owner scoping: restricted users (solo_propios) only see their own rows.
-            ownerCodigo: req.user.soloPropios ? req.user.trabajadorCodigo : undefined,
+            // Se envían UUID y código: el vínculo migró a UUID pero puede quedar
+            // data histórica por código durante la transición.
+            ownerIds: req.user.soloPropios ? [req.user.trabajadorId, req.user.trabajadorCodigo].filter(Boolean) : undefined,
         });
     }
 
@@ -27,6 +29,13 @@ export class ProgramacionController {
         return this.programacionService.create(data, req.user.tenantId);
     }
 
+
+    // Gastos de un tipo (PEAJE/COMBUSTIBLE) del tenant, para los módulos respectivos.
+    // Debe ir antes de ':id' para que 'gastos' no se interprete como un id.
+    @Get('gastos')
+    findGastos(@Req() req, @Query('tipo') tipo: string) {
+        return this.programacionService.findGastosByTipo(req.user.tenantId, tipo);
+    }
 
     @Get(':id')
     findOne(@Param('id') id: string) {

@@ -16,7 +16,6 @@ interface CombustibleModalProps {
 }
 
 const emptyForm = () => ({
-    id_registro: '',
     fecha: new Date().toISOString().split('T')[0],
     targa: '',
     trabajador_id: '',
@@ -44,7 +43,6 @@ export default function CombustibleModal({ isOpen, onClose, onSuccess, record }:
         setError('');
         if (record) {
             setFormData({
-                id_registro: record.id_registro || '',
                 fecha: record.fecha ? new Date(record.fecha).toISOString().split('T')[0] : '',
                 targa: record.targa || '',
                 trabajador_id: record.trabajador_id || '',
@@ -96,13 +94,6 @@ export default function CombustibleModal({ isOpen, onClose, onSuccess, record }:
 
                 <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-700">ID Registro</label>
-                            <input type="text" placeholder="Id del registro" className={inputClass}
-                                value={formData.id_registro}
-                                onChange={(e) => setFormData({ ...formData, id_registro: e.target.value })} />
-                        </div>
-
                         <div className="space-y-2">
                             <Select
                                 label="Placa (Targa)"

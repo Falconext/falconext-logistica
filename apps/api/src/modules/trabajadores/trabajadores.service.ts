@@ -118,37 +118,38 @@ export class TrabajadoresService {
             return { rutas: [], peajes: [], combustible: [] };
         }
 
-        const workerId = worker.id_trabajador; // This is the code like "G002"
+        const workerId = worker.id_trabajador; // Código legacy (ej. "G002")
+        // El vínculo migró al UUID (worker.id); mantenemos el código y el nombre
+        // como fallback para atribuir data histórica no migrada.
+        const claves = [worker.id, workerId, worker.nombre_completo].filter(Boolean) as string[];
+        const clavesIds = [worker.id, workerId].filter(Boolean) as string[];
 
-        // Get routes where trabajador_id contains the worker's name
+        // Rutas: por UUID (nuevo), o por código/nombre (histórico).
         const rutas = await this.prisma.programacion.findMany({
             where: {
                 tenant_id: tenantId,
-                OR: [
-                    { trabajador_id: worker.nombre_completo },
-                    { trabajador_id: workerId || 'NO_MATCH' }
-                ]
+                trabajador_id: { in: claves },
             },
             orderBy: { fecha: 'desc' }
         });
 
-        // Get peajes (tolls) by worker ID code
-        const peajes = workerId ? await this.prisma.peaje.findMany({
+        // Peajes: por UUID (nuevo) o código (histórico).
+        const peajes = await this.prisma.peaje.findMany({
             where: {
                 tenant_id: tenantId,
-                trabajador_id: workerId
+                trabajador_id: { in: clavesIds },
             },
             orderBy: { fecha: 'desc' }
-        }) : [];
+        });
 
-        // Get combustible (fuel) by worker ID code
-        const combustible = workerId ? await this.prisma.combustible.findMany({
+        // Combustible: por UUID (nuevo) o código (histórico).
+        const combustible = await this.prisma.combustible.findMany({
             where: {
                 tenant_id: tenantId,
-                trabajador_id: workerId
+                trabajador_id: { in: clavesIds },
             },
             orderBy: { fecha: 'desc' }
-        }) : [];
+        });
 
         return { rutas, peajes, combustible };
     }
