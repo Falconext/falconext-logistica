@@ -20,6 +20,7 @@ export class ProgramacionService {
         fecha_retiro: true,
         lugar_entrega: true,
         fecha_entrega: true,
+        destinos: true,
         hora_retiro: true,
         km: true,
         ciudad: true,

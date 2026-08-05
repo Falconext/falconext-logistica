@@ -174,9 +174,10 @@ model Programacion {
   lugar_retiro     String?  // 'LUOGO RITIRO'
   fecha_retiro     DateTime? // New: Specific Date+Time for pickup
   
-  lugar_entrega    String?  // 'LUOGO CONSEGNA'
+  lugar_entrega    String?  // 'LUOGO CONSEGNA' (primer/único destino)
   fecha_entrega    DateTime? // New: Specific Date+Time for delivery
-  
+  destinos         String[] // Destinos adicionales (paradas) tras lugar_entrega, en orden
+
   hora_retiro      String?  // Deprecated? Keep for legacy
   eta              String?  // Deprecated? Keep for legacy
   

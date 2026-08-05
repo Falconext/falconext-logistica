@@ -26,6 +26,7 @@ export interface MapCircle {
 export interface MapRoute {
   originAddress?: string;
   destinationAddress?: string;
+  waypoints?: string[]; // paradas intermedias (en orden) entre origen y destino
   coordinates?: [number, number][];
 }
 
@@ -107,15 +108,23 @@ function drawRoute(map,route){
   };
   if(route.coordinates){done(route.coordinates.map(function(c){return LL(c[0],c[1]);}));return;}
   var geo=new google.maps.Geocoder();
-  var g=function(addr){return new Promise(function(res){if(!addr){res(null);return;}geo.geocode({address:addr},function(r,st){res(st==='OK'&&r[0]?r[0].geometry.location:null);});});};
-  Promise.all([g(route.originAddress),g(route.destinationAddress)]).then(function(rr){
+  var g=function(addr){return new Promise(function(res){
+    if(!addr){res(null);return;}
+    var m=(''+addr).trim().match(/^(-?\\d{1,3}(?:\\.\\d+)?),\\s*(-?\\d{1,3}(?:\\.\\d+)?)$/);
+    if(m){res(LL(parseFloat(m[2]),parseFloat(m[1])));return;}
+    geo.geocode({address:addr},function(r,st){res(st==='OK'&&r[0]?r[0].geometry.location:null);});
+  });};
+  var wps=(route.waypoints||[]).filter(function(w){return !!w;});
+  Promise.all([g(route.originAddress),g(route.destinationAddress)].concat(wps.map(g))).then(function(rr){
     var o=rr[0],d=rr[1];if(!o||!d){post({type:'routeError'});return;}
+    var wl=rr.slice(2).filter(function(x){return !!x;});
     new google.maps.Marker({position:o,map:map,icon:dot('#16A34A')});
+    wl.forEach(function(w){new google.maps.Marker({position:w,map:map,icon:dot('#F97316')});});
     new google.maps.Marker({position:d,map:map,icon:dot('#DC2626')});
     var ds=new google.maps.DirectionsService();
-    ds.route({origin:o,destination:d,travelMode:google.maps.TravelMode.DRIVING},function(res,st){
-      if(st==='OK'&&res.routes&&res.routes[0]){var rt=res.routes[0];var leg=rt.legs&&rt.legs[0];if(leg)post({type:'route',eta:Math.round(leg.duration.value/60),dist:(leg.distance.value/1000).toFixed(1)});done(rt.overview_path);}
-      else{done([o,d]);}
+    ds.route({origin:o,destination:d,waypoints:wl.map(function(loc){return {location:loc,stopover:true};}),travelMode:google.maps.TravelMode.DRIVING},function(res,st){
+      if(st==='OK'&&res.routes&&res.routes[0]){var rt=res.routes[0];var legs=rt.legs||[];var tmin=0,tm=0;legs.forEach(function(l){tmin+=l.duration?l.duration.value:0;tm+=l.distance?l.distance.value:0;});post({type:'route',eta:Math.round(tmin/60),dist:(tm/1000).toFixed(1)});done(rt.overview_path);}
+      else{done([o].concat(wl).concat([d]));}
     });
   });
 }

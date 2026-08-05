@@ -9,6 +9,7 @@ import { useT } from '../../lib/i18n';
 interface Props {
   originAddress: string;
   destinationAddress: string;
+  waypoints?: string[]; // paradas intermedias (en orden) entre origen y destino
   mapType?: 'roadmap' | 'satellite';
   statusText?: string;
   statusDotClass?: string; // clase Tailwind para el color del punto de estado
@@ -24,6 +25,9 @@ function getGeocoder() {
 
 async function geocode(addr: string): Promise<google.maps.LatLng | null> {
   if (!addr) return null;
+  // "lat,lng" (posición actual) → punto directo, sin geocodificar.
+  const m = addr.trim().match(/^(-?\d{1,3}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)$/);
+  if (m) return new google.maps.LatLng(parseFloat(m[1]), parseFloat(m[2]));
   if (geoCache.has(addr)) return geoCache.get(addr)!;
   try {
     const { results } = await getGeocoder().geocode({ address: addr });
@@ -36,7 +40,7 @@ async function geocode(addr: string): Promise<google.maps.LatLng | null> {
   }
 }
 
-export function MapboxRouteMap({ originAddress, destinationAddress, mapType = 'roadmap', statusText, statusDotClass = 'bg-emerald-500' }: Props) {
+export function MapboxRouteMap({ originAddress, destinationAddress, waypoints, mapType = 'roadmap', statusText, statusDotClass = 'bg-emerald-500' }: Props) {
   const t = useT();
   const resolvedStatusText = statusText ?? t('componentes.routeMap.enTransito');
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -88,23 +92,37 @@ export function MapboxRouteMap({ originAddress, destinationAddress, mapType = 'r
       setErr(false);
       setEta('');
       setDist('');
-      const [o, d] = await Promise.all([geocode(originAddress), geocode(destinationAddress)]);
+      const wps = (waypoints || []).map((w) => (w || '').trim()).filter(Boolean);
+      const [o, d, ...wpLocsRaw] = await Promise.all([
+        geocode(originAddress),
+        geocode(destinationAddress),
+        ...wps.map((w) => geocode(w)),
+      ]);
       if (cancelled) return;
       if (!o || !d) { setErr(true); return; }
+      const wpLocs = wpLocsRaw.filter((x): x is google.maps.LatLng => !!x);
 
       clear();
 
-      let path: google.maps.LatLng[] = [o, d];
+      let path: google.maps.LatLng[] = [o, ...wpLocs, d];
       try {
         const svc = new google.maps.DirectionsService();
-        const result = await svc.route({ origin: o, destination: d, travelMode: google.maps.TravelMode.DRIVING });
+        const result = await svc.route({
+          origin: o,
+          destination: d,
+          waypoints: wpLocs.map((loc) => ({ location: loc, stopover: true })),
+          travelMode: google.maps.TravelMode.DRIVING,
+        });
         const route = result.routes?.[0];
         if (route) {
           path = route.overview_path;
-          setEta(route.legs?.[0]?.duration?.text ?? '');
-          setDist(route.legs?.[0]?.distance?.text ?? '');
+          // Suma de todos los tramos (origen → paradas → destino).
+          const totMin = (route.legs || []).reduce((s, l) => s + (l.duration?.value ?? 0), 0);
+          const totM = (route.legs || []).reduce((s, l) => s + (l.distance?.value ?? 0), 0);
+          if (totMin) setEta(`${Math.round(totMin / 60)} min`);
+          if (totM) setDist(`${(totM / 1000).toFixed(1)} km`);
         }
-      } catch { /* usa línea recta origen→destino */ }
+      } catch { /* usa línea recta origen→paradas→destino */ }
       if (cancelled) return;
 
       polylineRef.current = new google.maps.Polyline({
@@ -115,7 +133,7 @@ export function MapboxRouteMap({ originAddress, destinationAddress, mapType = 'r
         map,
       });
 
-      // Marcadores origen/destino con InfoWindow al hacer click.
+      // Marcadores origen/paradas/destino con InfoWindow al hacer click.
       const makeMarker = (pos: google.maps.LatLng, color: string, label: string) => {
         const marker = new google.maps.Marker({
           position: pos,
@@ -135,6 +153,7 @@ export function MapboxRouteMap({ originAddress, destinationAddress, mapType = 'r
       };
       markersRef.current = [
         makeMarker(o, '#16A34A', t('componentes.routeMap.origen')),
+        ...wpLocs.map((loc, i) => makeMarker(loc, '#F97316', `Parada ${i + 1}`)),
         makeMarker(d, '#DC2626', t('componentes.routeMap.destino')),
       ];
 
@@ -144,7 +163,7 @@ export function MapboxRouteMap({ originAddress, destinationAddress, mapType = 'r
     })();
 
     return () => { cancelled = true; };
-  }, [originAddress, destinationAddress, isLoaded]);
+  }, [originAddress, destinationAddress, (waypoints || []).join('|'), isLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!GOOGLE_MAPS_KEY) return <div className="h-full flex items-center justify-center text-slate-400">{t('componentes.routeMap.configurarMapa')}</div>;
 

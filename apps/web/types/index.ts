@@ -77,6 +77,7 @@ export interface Programacion {
 
     lugar_entrega?: string;
     fecha_entrega?: string; // Added (for countdown)
+    destinos?: string[]; // Destinos adicionales (paradas) tras lugar_entrega
 
     hora_retiro?: string;
     eta?: string;

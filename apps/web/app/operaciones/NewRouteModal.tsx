@@ -9,7 +9,7 @@ import Select from '../../components/Select';
 import FileUpload from '../../components/FileUpload';
 import MultiFileUpload from '../../components/MultiFileUpload';
 import { useCurrency } from '../../lib/useCurrency';
-import { APP_OPTIONS, ESTADO_CONSEGNA_META } from './constants';
+import { APP_OPTIONS, ESTADO_CONSEGNA_META, RETIRO_PRESETS, isCoords } from './constants';
 
 // Fila de gasto en el formulario (monto como string para el input).
 type GastoRow = { tipo: string; monto: string; descripcion: string; numero_mancato: string; comprobantes: string[] };
@@ -96,6 +96,9 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
         entrega_fecha: new Date().toISOString().split('T')[0],
         entrega_hora: '',
 
+        // Destinos adicionales (paradas tras el destino principal)
+        destinos: [] as string[],
+
         // Datos de consegna
         km: '',
         ciudad: '',
@@ -150,6 +153,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 entrega_lugar: src.lugar_entrega || '',
                 entrega_fecha: isoToDate(src.fecha_entrega) || today,
                 entrega_hora: isoToTime(src.fecha_entrega),
+                destinos: Array.isArray(src.destinos) ? src.destinos : [],
                 km: src.km != null ? String(src.km) : '',
                 ciudad: src.ciudad || '',
                 app: src.app || '',
@@ -188,6 +192,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 entrega_lugar: '',
                 entrega_fecha: today,
                 entrega_hora: '',
+                destinos: [],
                 km: '',
                 ciudad: '',
                 app: '',
@@ -245,6 +250,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 hora_retiro: formData.retiro_hora, // Legacy support
                 lugar_entrega: formData.entrega_lugar,
                 fecha_entrega: fechaEntregaIso,
+                destinos: formData.destinos.map((s) => s.trim()).filter(Boolean),
                 km: formData.km !== '' ? Number(formData.km) : null,
                 ciudad: formData.ciudad || null,
                 app: formData.app || null,
@@ -289,6 +295,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 entrega_lugar: '',
                 entrega_fecha: '',
                 entrega_hora: '',
+                destinos: [],
                 km: '',
                 ciudad: '',
                 app: '',
@@ -307,6 +314,31 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
             toast.error(initialData ? 'Error al actualizar ruta' : 'Error al crear ruta');
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    // --- Destinos adicionales (paradas) ---
+    const addDestino = () => setFormData((f) => ({ ...f, destinos: [...f.destinos, ''] }));
+    const updateDestino = (i: number, val: string) => setFormData((f) => ({ ...f, destinos: f.destinos.map((d, idx) => (idx === i ? val : d)) }));
+    const removeDestino = (i: number) => setFormData((f) => ({ ...f, destinos: f.destinos.filter((_, idx) => idx !== i) }));
+
+    // --- Posición actual del conductor (usa su última ubicación GPS como origen) ---
+    const usarPosicionActual = async () => {
+        if (!formData.trabajador_id) {
+            toast.error('Selecciona primero el conductor');
+            return;
+        }
+        try {
+            const res = await api.get(`/gps/trabajador/${formData.trabajador_id}/ubicacion`);
+            const position = res.data?.position;
+            if (position && position.latitude != null && position.longitude != null) {
+                setFormData({ ...formData, retiro_lugar: `${position.latitude},${position.longitude}` });
+                toast.success('Origen fijado en la posición actual del conductor');
+            } else {
+                toast.error('El conductor no tiene ubicación GPS reciente');
+            }
+        } catch {
+            toast.error('El conductor no tiene ubicación GPS reciente');
         }
     };
 
@@ -421,6 +453,25 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                 </h4>
 
                                 <div className="space-y-3">
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {RETIRO_PRESETS.map((preset) => (
+                                            <button
+                                                key={preset.value}
+                                                type="button"
+                                                onClick={() => setFormData({ ...formData, retiro_lugar: preset.value })}
+                                                className="px-2.5 py-1 rounded-full border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition"
+                                            >
+                                                {preset.label}
+                                            </button>
+                                        ))}
+                                        <button
+                                            type="button"
+                                            onClick={usarPosicionActual}
+                                            className="px-2.5 py-1 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[11px] font-semibold hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+                                        >
+                                            📍 Posición actual
+                                        </button>
+                                    </div>
                                     <div className="space-y-1">
                                         <label className="text-[10px] font-bold text-slate-400 uppercase">Dirección</label>
                                         <input
@@ -430,6 +481,9 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                             value={formData.retiro_lugar}
                                             onChange={(e) => setFormData({ ...formData, retiro_lugar: e.target.value })}
                                         />
+                                        {isCoords(formData.retiro_lugar) && (
+                                            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">📍 Posición actual (coordenadas)</p>
+                                        )}
                                     </div>
                                     <div className="grid grid-cols-2 gap-2">
                                         <div className="space-y-1">
@@ -490,6 +544,43 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* Destinos adicionales (paradas después del destino principal) */}
+                        <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800">
+                            <h4 className="flex items-center gap-2 text-slate-700 dark:text-slate-200 font-bold mb-3">
+                                <MapPin size={16} className="text-red-500" />
+                                Destinos adicionales
+                            </h4>
+                            <div className="space-y-2">
+                                {formData.destinos.map((dest, i) => (
+                                    <div key={i} className="flex items-center gap-2">
+                                        <span className="text-[10px] font-bold text-slate-400 w-5 shrink-0 text-center">{i + 2}</span>
+                                        <input
+                                            type="text"
+                                            placeholder="Dirección de la parada adicional"
+                                            className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-red-500/50 outline-none"
+                                            value={dest}
+                                            onChange={(e) => updateDestino(i, e.target.value)}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => removeDestino(i)}
+                                            className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition shrink-0"
+                                            aria-label="Quitar destino"
+                                        >
+                                            <Trash2 size={15} />
+                                        </button>
+                                    </div>
+                                ))}
+                                <button
+                                    type="button"
+                                    onClick={addDestino}
+                                    className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-500 hover:text-red-600 hover:border-red-400 text-sm font-medium transition"
+                                >
+                                    <Plus size={16} /> Agregar destino
+                                </button>
                             </div>
                         </div>
 

@@ -10,6 +10,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import * as Location from 'expo-location';
 import {
   Package,
   MapPin,
@@ -50,7 +51,7 @@ import api from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatMoney } from '../../constants/currency';
-import { APP_OPTIONS, GASTO_TIPOS, CONSEGNA_ACTIONS, estadoConsegnaMeta } from '../../constants/operaciones';
+import { APP_OPTIONS, GASTO_TIPOS, CONSEGNA_ACTIONS, estadoConsegnaMeta, RETIRO_PRESETS, isCoords } from '../../constants/operaciones';
 import type { Programacion, Vehiculo, Trabajador } from '../../types';
 
 const C = Theme.colors;
@@ -98,6 +99,7 @@ interface FormState {
   entrega_lugar: string;
   entrega_fecha: string;
   entrega_hora: string;
+  destinos: string[];
   nota: string;
   estado: string;
   // Datos de consegna
@@ -124,6 +126,7 @@ const emptyForm = (): FormState => ({
   entrega_lugar: '',
   entrega_fecha: todayISO(),
   entrega_hora: '',
+  destinos: [],
   nota: '',
   estado: 'PENDIENTE',
   km: '',
@@ -277,6 +280,7 @@ export default function OperacionesScreen() {
     entrega_lugar: src.lugar_entrega || '',
     entrega_fecha: src.fecha_entrega ? src.fecha_entrega.split('T')[0] : todayISO(),
     entrega_hora: '',
+    destinos: Array.isArray(src.destinos) ? src.destinos : [],
     nota: src.nota || '',
     estado: src.estado || 'PENDIENTE',
     km: src.km != null ? String(src.km) : '',
@@ -308,6 +312,19 @@ export default function OperacionesScreen() {
     api.get(`/programacion/${r.id}`).then((res) => { if (res.data) populate({ ...r, ...res.data }); }).catch(() => {});
   };
 
+  // --- Origen: posición actual (GPS del teléfono) ---
+  const usarPosicionActual = async () => {
+    const perm = await Location.requestForegroundPermissionsAsync();
+    if (!perm.granted) { Alert.alert('Permiso requerido', 'Necesitamos tu ubicación.'); return; }
+    const pos = await Location.getCurrentPositionAsync({});
+    setForm((f) => ({ ...f, retiro_lugar: pos.coords.latitude + ',' + pos.coords.longitude }));
+  };
+
+  // --- Destinos adicionales ---
+  const addDestino = () => setForm((f) => ({ ...f, destinos: [...f.destinos, ''] }));
+  const updateDestino = (i: number, val: string) => setForm((f) => ({ ...f, destinos: f.destinos.map((d, idx) => (idx === i ? val : d)) }));
+  const removeDestino = (i: number) => setForm((f) => ({ ...f, destinos: f.destinos.filter((_, idx) => idx !== i) }));
+
   // --- Gastos (rendición) ---
   const addGasto = () => setForm((f) => ({ ...f, gastos: [...f.gastos, { tipo: 'PEAJE', monto: '', descripcion: '', numero_mancato: '', comprobantes: [] }] }));
   const updateGasto = (i: number, patch: Partial<GastoRow>) => setForm((f) => ({ ...f, gastos: f.gastos.map((g, idx) => (idx === i ? { ...g, ...patch } : g)) }));
@@ -338,6 +355,7 @@ export default function OperacionesScreen() {
         hora_retiro: form.retiro_hora,
         lugar_entrega: form.entrega_lugar,
         fecha_entrega: toIso(form.entrega_fecha, form.entrega_hora, '23:59'),
+        destinos: form.destinos.map((s) => s.trim()).filter(Boolean),
         nota: form.nota,
         km: form.km !== '' ? Number(form.km) : null,
         ciudad: form.ciudad || null,
@@ -524,12 +542,19 @@ export default function OperacionesScreen() {
       >
         {detail && (
           <View>
-            {!!(detail.lugar_retiro && detail.lugar_entrega) && (
-              <MapboxWebView
-                style={styles.mapBox}
-                route={{ originAddress: detail.lugar_retiro, destinationAddress: detail.lugar_entrega }}
-              />
-            )}
+            {!!(detail.lugar_retiro && detail.lugar_entrega) && (() => {
+              const stops = [detail.lugar_entrega, ...(detail.destinos || [])].filter(Boolean) as string[];
+              return (
+                <MapboxWebView
+                  style={styles.mapBox}
+                  route={{
+                    originAddress: detail.lugar_retiro,
+                    destinationAddress: stops[stops.length - 1] || detail.lugar_entrega,
+                    waypoints: stops.slice(0, -1),
+                  }}
+                />
+              );
+            })()}
             <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: S.md }}>
               <Badge label={estadoMeta(detail.estado).label} variant={estadoMeta(detail.estado).variant} />
               {estadoConsegnaMeta(detail.estado_consegna) && (
@@ -641,12 +666,38 @@ export default function OperacionesScreen() {
         />
 
         <Text style={styles.formSection}>Origen (retiro)</Text>
+        <View style={styles.chipsWrap}>
+          {RETIRO_PRESETS.map((preset) => {
+            const active = form.retiro_lugar === preset.value;
+            return (
+              <TouchableOpacity
+                key={preset.value}
+                style={[styles.estadoChip, active && styles.estadoChipActive]}
+                onPress={() => setForm({ ...form, retiro_lugar: preset.value })}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.estadoChipText, active && { color: '#fff' }]}>{preset.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+          <TouchableOpacity
+            style={styles.estadoChip}
+            onPress={usarPosicionActual}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.estadoChipText}>📍 Posición actual</Text>
+          </TouchableOpacity>
+        </View>
         <FormField
           label="Dirección de retiro *"
           value={form.retiro_lugar}
           onChangeText={(t) => setForm({ ...form, retiro_lugar: t })}
           placeholder="Ej: Av. Javier Prado Este 4200, Surco"
+          style={{ marginTop: S.sm }}
         />
+        {isCoords(form.retiro_lugar) && (
+          <Text style={styles.gpsHint}>📍 Posición actual (GPS)</Text>
+        )}
         <View style={styles.dateRow}>
           <View style={{ flex: 1 }}>
             <DatePicker
@@ -689,6 +740,26 @@ export default function OperacionesScreen() {
             style={{ flex: 1 }}
           />
         </View>
+
+        <Text style={styles.formSection}>Destinos adicionales</Text>
+        {form.destinos.map((d, i) => (
+          <View key={i} style={styles.destinoRow}>
+            <FormField
+              label={`Destino ${i + 2}`}
+              value={d}
+              onChangeText={(t) => updateDestino(i, t)}
+              placeholder="Ej: Via Roma 10, Milano"
+              style={{ flex: 1 }}
+            />
+            <TouchableOpacity style={styles.destinoRemove} onPress={() => removeDestino(i)} activeOpacity={0.7}>
+              <Trash2 size={16} color={C.danger} />
+            </TouchableOpacity>
+          </View>
+        ))}
+        <TouchableOpacity style={styles.addGasto} onPress={addDestino} activeOpacity={0.7}>
+          <Plus size={16} color={C.textMuted} />
+          <Text style={styles.addGastoText}>Agregar destino</Text>
+        </TouchableOpacity>
 
         <Text style={styles.formSection}>Datos de consegna</Text>
         <View style={styles.dateRow}>
@@ -956,6 +1027,9 @@ const makeStyles = () => StyleSheet.create({
   formSectionInline: { fontSize: 13, fontWeight: '700', color: C.text, textTransform: 'uppercase' },
   fieldLabelSm: { fontSize: 13, fontWeight: '500', color: C.textMuted, marginBottom: 6 },
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: S.sm },
+  gpsHint: { fontSize: 12, color: C.info, fontWeight: '600', marginTop: 4 },
+  destinoRow: { flexDirection: 'row', alignItems: 'flex-end', gap: S.sm, marginBottom: S.sm },
+  destinoRemove: { paddingBottom: 12, paddingHorizontal: 4 },
   estadoChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: S.md, paddingVertical: 9, borderRadius: Theme.radius.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.surfaceAlt },
   estadoChipActive: { backgroundColor: C.info, borderColor: C.info },
   estadoChipText: { fontSize: 13, fontWeight: '600', color: C.textMuted },

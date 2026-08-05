@@ -423,16 +423,22 @@ export default function OperacionesPage() {
               <div className="relative rounded-2xl border border-slate-200 overflow-hidden bg-slate-100 h-[52vh] lg:h-auto lg:flex-1">
                 {/* Map (memoized — no re-render on search/hover/layers) */}
                 <div className="absolute inset-0">
+                    {(() => {
+                    const stops = [selected?.lugar_entrega, ...(selected?.destinos || [])].filter(Boolean) as string[];
+                    return (
                     <MapView
                         deviceId={device?.id || ''}
                         worker={device?.worker || ''}
                         origin={selected?.lugar_retiro || ''}
-                        destination={selected?.lugar_entrega || ''}
+                        destination={stops[stops.length - 1] || selected?.lugar_entrega || ''}
+                        waypoints={stops.slice(0, -1)}
                         plate={selected?.vehiculo_id || ''}
                         mapType={mapType}
                         statusText={selected ? t(`operaciones.estados.${estadoLabelKey(selected.estado)}`) : undefined}
                         statusDotClass={selected ? estadoMeta(selected.estado).dot : undefined}
                     />
+                    );
+                    })()}
                 </div>
 
                 {/* Controles: debajo de la barra de estado en móvil, arriba-derecha en desktop */}
@@ -626,15 +632,15 @@ const RouteCard = memo(function RouteCard({ ruta, isSelected, onSelect }: {
 
 /* Memoized map — only re-renders when the selected route or map type actually changes,
    so typing in search, opening "Capas" or hovering the list won't touch the map. */
-const MapView = memo(function MapView({ deviceId, worker, origin, destination, plate, mapType, statusText, statusDotClass }: {
-    deviceId: string; worker?: string; origin: string; destination: string; plate: string; mapType: 'roadmap' | 'satellite'; statusText?: string; statusDotClass?: string;
+const MapView = memo(function MapView({ deviceId, worker, origin, destination, waypoints, plate, mapType, statusText, statusDotClass }: {
+    deviceId: string; worker?: string; origin: string; destination: string; waypoints?: string[]; plate: string; mapType: 'roadmap' | 'satellite'; statusText?: string; statusDotClass?: string;
 }) {
     const t = useT();
     if (deviceId) {
         return <LiveMapReal deviceId={deviceId} apiKey={MAPS_KEY} vehiclePlate={plate} workerName={worker} />;
     }
     if (origin && destination) {
-        return <MapboxRouteMap originAddress={origin} destinationAddress={destination} mapType={mapType} statusText={statusText} statusDotClass={statusDotClass} />;
+        return <MapboxRouteMap originAddress={origin} destinationAddress={destination} waypoints={waypoints} mapType={mapType} statusText={statusText} statusDotClass={statusDotClass} />;
     }
     return (
         <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-3">

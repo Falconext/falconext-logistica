@@ -1,5 +1,14 @@
 import { Play, CircleCheck, PauseCircle, Undo2, RefreshCw, Ban } from 'lucide-react-native';
 
+// Direcciones fijas de retiro (bodegas): casi todos los recorridos salen de estas dos.
+export const RETIRO_PRESETS: { label: string; value: string }[] = [
+    { label: 'Roma (Casal Lumbroso)', value: "Via Gaspare D'Urso, 98, 00166 La Massimina-Casal Lumbroso RM" },
+    { label: 'Milano (Bettola)', value: 'Via Walter Tobagi, 8, 20068 Bettola-Zeloforamagno MI' },
+];
+
+// "Posición actual" se guarda como coordenadas planas "lat,lng" (el mapa las rutea directo).
+export const isCoords = (s?: string | null) => !!s && /^-?\d{1,3}(\.\d+)?,\s*-?\d{1,3}(\.\d+)?$/.test(s.trim());
+
 // Opciones del campo APP: "Sensa App", Milano 01..18, "App Roma".
 export const APP_OPTIONS: { value: string; label: string }[] = [
     { value: 'SENSA APP', label: 'Sensa App' },
