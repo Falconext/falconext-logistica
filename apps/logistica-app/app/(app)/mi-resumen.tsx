@@ -118,7 +118,7 @@ export default function MiResumenScreen() {
     // Dispositivo GPS del chofer (para abrir el Historial de Ruta con datos).
     try {
       const dev = await api.get('/gps/mi-dispositivo');
-      setDeviceId(dev.data?.id || '');
+      setDeviceId(dev.data?.deviceId || '');
     } catch { /* el chofer puede no tener dispositivo */ }
   }, []);
 

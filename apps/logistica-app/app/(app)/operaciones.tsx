@@ -314,10 +314,14 @@ export default function OperacionesScreen() {
 
   // --- Origen: posición actual (GPS del teléfono) ---
   const usarPosicionActual = async () => {
-    const perm = await Location.requestForegroundPermissionsAsync();
-    if (!perm.granted) { Alert.alert('Permiso requerido', 'Necesitamos tu ubicación.'); return; }
-    const pos = await Location.getCurrentPositionAsync({});
-    setForm((f) => ({ ...f, retiro_lugar: pos.coords.latitude + ',' + pos.coords.longitude }));
+    try {
+      const perm = await Location.requestForegroundPermissionsAsync();
+      if (!perm.granted) { Alert.alert('Permiso requerido', 'Necesitamos tu ubicación.'); return; }
+      const pos = await Location.getCurrentPositionAsync({});
+      setForm((f) => ({ ...f, retiro_lugar: pos.coords.latitude + ',' + pos.coords.longitude }));
+    } catch {
+      Alert.alert('Ubicación no disponible', 'Activa el GPS e inténtalo de nuevo.');
+    }
   };
 
   // --- Destinos adicionales ---

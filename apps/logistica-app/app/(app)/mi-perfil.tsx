@@ -119,21 +119,25 @@ export default function MiPerfilScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [perfilRes, docsRes, resumenRes] = await Promise.all([
+      const [perfilRes, docsRes] = await Promise.all([
         api.get('/trabajadores/mi/perfil'),
         // El backend fuerza entidad=TRABAJADOR + su propio id para usuarios solo_propios.
         api.get('/documentos'),
-        api.get('/registros/mias/resumen'),
       ]);
       setPerfil(perfilRes.data ?? null);
       setArchivos(Array.isArray(docsRes.data) ? docsRes.data : []);
-      setResumen(resumenRes.data ?? null);
     } catch {
       // Silencioso: pull-to-refresh permite reintentar.
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+    // Resumen del mes por separado: si el usuario no está vinculado a un trabajador
+    // (p.ej. admin), este endpoint da 400 y NO debe tumbar el perfil.
+    try {
+      const resumenRes = await api.get('/registros/mias/resumen');
+      setResumen(resumenRes.data ?? null);
+    } catch { /* sin resumen: se muestran métricas en 0 */ }
   }, []);
 
   useFocusEffect(
