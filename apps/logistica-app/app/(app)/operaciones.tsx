@@ -47,6 +47,7 @@ import ImageUpload from '../../components/ImageUpload';
 import MultiFileUpload from '../../components/MultiFileUpload';
 import MapboxWebView from '../../components/MapboxWebView';
 import RouteReport from '../../components/RouteReport';
+import ChoferWizard from '../../components/ChoferWizard';
 import api from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -159,6 +160,7 @@ export default function OperacionesScreen() {
   const [selectedEstado, setSelectedEstado] = useState<string | null>(null);
 
   const [detail, setDetail] = useState<Programacion | null>(null);
+  const [wizardOp, setWizardOp] = useState<Programacion | null>(null); // chofer: flujo por pasos
   const [detailDeviceId, setDetailDeviceId] = useState<string>('');
   const [formVisible, setFormVisible] = useState(false);
   const [editing, setEditing] = useState<Programacion | null>(null);
@@ -398,7 +400,7 @@ export default function OperacionesScreen() {
   const renderCard = ({ item: r }: { item: Programacion }) => {
     const meta = estadoMeta(r.estado);
     return (
-      <TouchableOpacity activeOpacity={0.7} style={styles.card} onPress={() => setDetail(r)}>
+      <TouchableOpacity activeOpacity={0.7} style={styles.card} onPress={() => (canEditAll ? setDetail(r) : setWizardOp(r))}>
         <View style={styles.cardTop}>
           <View style={styles.cardIcon}>
             <Package size={18} color={C.primary} />
@@ -532,6 +534,14 @@ export default function OperacionesScreen() {
       </View>
 
       {canEditAll && <Fab onPress={openCreate} />}
+
+      {/* Chofer: flujo por pasos (wizard) al tocar una operación */}
+      <ChoferWizard
+        visible={!!wizardOp}
+        operacion={wizardOp}
+        onClose={() => setWizardOp(null)}
+        onSaved={() => { setWizardOp(null); load(); }}
+      />
 
       {/* Detalle */}
       <FormModal
