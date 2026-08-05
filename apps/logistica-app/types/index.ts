@@ -55,7 +55,6 @@ export interface Vehiculo {
   fecha_vencimiento_seguro?: string;
   revision_tecnica?: string;
   permisos_especiales?: string;
-  id_interno_furgon?: string;
   kilometraje_actual?: number;
   url_foto?: string;
 }
@@ -66,6 +65,7 @@ export interface Programacion {
   fecha: string;
   vehiculo_id?: string;
   trabajador_id?: string;
+  trabajador_nombre?: string | null;
   cliente?: string;
   lugar_retiro?: string;
   fecha_retiro?: string;
@@ -76,6 +76,31 @@ export interface Programacion {
   nota?: string;
   estado?: string;
   ingreso_estimado?: number;
+
+  // Datos operativos de consegna
+  km?: number;
+  ciudad?: string;
+  app?: string;
+  compactado?: boolean;
+  estado_consegna?: string; // CONSEGNATO | IN_CONSEGNA | IN_SOSPESO | RITIRATO | ANNULLATO | RISCHEDULATO
+  attesa?: string;
+  otros_datos?: string;
+  foto_bolla?: string | null;
+
+  // Rendición del chofer
+  anticipo?: number;
+  gastos?: GastoOperacion[];
+}
+
+// Gasto del chofer durante el trayecto (peaje, combustible, parking, otro).
+export interface GastoOperacion {
+  id?: string;
+  tipo: string; // PEAJE | COMBUSTIBLE | PARKING | OTRO
+  monto: number;
+  fecha?: string | null;
+  descripcion?: string | null;
+  numero_mancato?: string | null; // solo PEAJE
+  comprobantes: string[];
 }
 
 export interface Mantenimiento {

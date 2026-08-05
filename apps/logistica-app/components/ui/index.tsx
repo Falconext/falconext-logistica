@@ -292,6 +292,7 @@ export function FormField({
   multiline,
   autoCapitalize,
   style,
+  editable = true,
 }: {
   label: string;
   value: string;
@@ -302,13 +303,14 @@ export function FormField({
   multiline?: boolean;
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   style?: StyleProp<ViewStyle>;
+  editable?: boolean;
 }) {
   const styles = useStyles();
   return (
     <View style={[{ marginBottom: S.md }, style]}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
-        style={[styles.fieldInput, multiline && { height: 88, textAlignVertical: 'top' }]}
+        style={[styles.fieldInput, multiline && { height: 88, textAlignVertical: 'top' }, !editable && { opacity: 0.55 }]}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
@@ -317,6 +319,7 @@ export function FormField({
         secureTextEntry={secureTextEntry}
         multiline={multiline}
         autoCapitalize={autoCapitalize}
+        editable={editable}
       />
     </View>
   );

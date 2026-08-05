@@ -243,7 +243,6 @@ export default function VehiculosScreen() {
             <InfoRow label="Venc. seguro" value={detail.fecha_vencimiento_seguro} />
             <InfoRow label="Revisión técnica" value={detail.revision_tecnica} />
             <InfoRow label="Kilometraje" value={detail.kilometraje_actual} />
-            <InfoRow label="ID interno" value={detail.id_interno_furgon} />
           </View>
         )}
       </FormModal>

@@ -20,6 +20,10 @@ import {
   ClipboardList,
   CheckCircle2,
   Navigation,
+  Flag,
+  Wallet,
+  Plus,
+  Trash2,
 } from 'lucide-react-native';
 import {
   Screen,
@@ -38,9 +42,14 @@ import {
 } from '../../components/ui';
 import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
+import ImageUpload from '../../components/ImageUpload';
+import MultiFileUpload from '../../components/MultiFileUpload';
 import MapboxWebView from '../../components/MapboxWebView';
 import api from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
+import { formatMoney } from '../../constants/currency';
+import { APP_OPTIONS, GASTO_TIPOS, CONSEGNA_ACTIONS, estadoConsegnaMeta } from '../../constants/operaciones';
 import type { Programacion, Vehiculo, Trabajador } from '../../types';
 
 const C = Theme.colors;
@@ -67,6 +76,8 @@ const fmtDate = (d?: string) => {
 
 const todayISO = () => new Date().toISOString().split('T')[0];
 
+type GastoRow = { tipo: string; monto: string; descripcion: string; numero_mancato: string; comprobantes: string[] };
+
 interface FormState {
   vehiculo_id: string;
   trabajador_id: string;
@@ -79,6 +90,18 @@ interface FormState {
   entrega_hora: string;
   nota: string;
   estado: string;
+  // Datos de consegna
+  km: string;
+  ciudad: string;
+  app: string;
+  compactado: boolean;
+  estado_consegna: string;
+  attesa: string;
+  otros_datos: string;
+  foto_bolla: string;
+  // Rendición
+  anticipo: string;
+  gastos: GastoRow[];
 }
 
 const emptyForm = (): FormState => ({
@@ -93,11 +116,27 @@ const emptyForm = (): FormState => ({
   entrega_hora: '',
   nota: '',
   estado: 'PENDIENTE',
+  km: '',
+  ciudad: '',
+  app: '',
+  compactado: false,
+  estado_consegna: '',
+  attesa: '',
+  otros_datos: '',
+  foto_bolla: '',
+  anticipo: '',
+  gastos: [],
 });
 
 export default function OperacionesScreen() {
   const { themeKey } = useTheme();
   const styles = useMemo(() => makeStyles(), [themeKey]);
+  const { user } = useAuth();
+  // Solo admins editan todo. El chofer (rol USER) solo edita itinerario, estado de
+  // consegna, bolla y gastos; el resto es de solo lectura, y no crea ni elimina.
+  const canEditAll = !!user && (user.es_admin === true || user.role === 'ADMIN' || user.role === 'SUPERADMIN');
+  const lockOthers = !canEditAll;
+  const moneda = user?.moneda;
   const [items, setItems] = useState<Programacion[]>([]);
   const [total, setTotal] = useState(0);
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -200,33 +239,59 @@ export default function OperacionesScreen() {
     loadResources();
   };
 
+  const populate = (src: any) => setForm({
+    vehiculo_id: src.vehiculo_id || '',
+    trabajador_id: src.trabajador_id || '',
+    cliente: src.cliente || '',
+    retiro_lugar: src.lugar_retiro || '',
+    retiro_fecha: src.fecha_retiro ? src.fecha_retiro.split('T')[0] : todayISO(),
+    retiro_hora: src.hora_retiro || '',
+    entrega_lugar: src.lugar_entrega || '',
+    entrega_fecha: src.fecha_entrega ? src.fecha_entrega.split('T')[0] : todayISO(),
+    entrega_hora: '',
+    nota: src.nota || '',
+    estado: src.estado || 'PENDIENTE',
+    km: src.km != null ? String(src.km) : '',
+    ciudad: src.ciudad || '',
+    app: src.app || '',
+    compactado: !!src.compactado,
+    estado_consegna: src.estado_consegna || '',
+    attesa: src.attesa || '',
+    otros_datos: src.otros_datos || '',
+    foto_bolla: src.foto_bolla || '',
+    anticipo: src.anticipo != null ? String(src.anticipo) : '',
+    gastos: Array.isArray(src.gastos) ? src.gastos.map((g: any) => ({
+      tipo: g.tipo || 'OTRO',
+      monto: g.monto != null ? String(g.monto) : '',
+      descripcion: g.descripcion || '',
+      numero_mancato: g.numero_mancato || '',
+      comprobantes: Array.isArray(g.comprobantes) ? g.comprobantes : [],
+    })) : [],
+  });
+
   const openEdit = (r: Programacion) => {
     setEditing(r);
-    setForm({
-      vehiculo_id: r.vehiculo_id || '',
-      trabajador_id: r.trabajador_id || '',
-      cliente: r.cliente || '',
-      retiro_lugar: r.lugar_retiro || '',
-      retiro_fecha: r.fecha_retiro ? r.fecha_retiro.split('T')[0] : todayISO(),
-      retiro_hora: r.hora_retiro || '',
-      entrega_lugar: r.lugar_entrega || '',
-      entrega_fecha: r.fecha_entrega ? r.fecha_entrega.split('T')[0] : todayISO(),
-      entrega_hora: '',
-      nota: r.nota || '',
-      estado: r.estado || 'PENDIENTE',
-    });
+    populate(r); // precarga rápida con lo que trae la lista
     setDetail(null);
     setFormVisible(true);
     loadResources();
+    // Registro COMPLETO: la lista no trae nota/otros_datos/foto_bolla/gastos, y guardar
+    // sin ellos los borraría. GET /programacion/:id trae todos los campos.
+    api.get(`/programacion/${r.id}`).then((res) => { if (res.data) populate({ ...r, ...res.data }); }).catch(() => {});
   };
 
+  // --- Gastos (rendición) ---
+  const addGasto = () => setForm((f) => ({ ...f, gastos: [...f.gastos, { tipo: 'PEAJE', monto: '', descripcion: '', numero_mancato: '', comprobantes: [] }] }));
+  const updateGasto = (i: number, patch: Partial<GastoRow>) => setForm((f) => ({ ...f, gastos: f.gastos.map((g, idx) => (idx === i ? { ...g, ...patch } : g)) }));
+  const removeGasto = (i: number) => setForm((f) => ({ ...f, gastos: f.gastos.filter((_, idx) => idx !== i) }));
+  const totalGastos = form.gastos.reduce((s, g) => s + (g.monto !== '' ? Number(g.monto) || 0 : 0), 0);
+  const anticipoNum = form.anticipo !== '' ? Number(form.anticipo) || 0 : 0;
+  const saldo = anticipoNum - totalGastos;
+
   const save = async () => {
-    if (!form.vehiculo_id) {
-      Alert.alert('Falta el vehículo', 'Selecciona un vehículo para la operación.');
-      return;
-    }
-    if (!form.retiro_lugar.trim() || !form.entrega_lugar.trim()) {
-      Alert.alert('Faltan direcciones', 'Indica el lugar de retiro y de entrega.');
+    // Únicos obligatorios: vehículo y conductor.
+    if (!form.vehiculo_id || !form.trabajador_id) {
+      Alert.alert('Faltan datos', 'Vehículo y Conductor son obligatorios.');
       return;
     }
     setSaving(true);
@@ -246,6 +311,24 @@ export default function OperacionesScreen() {
         lugar_entrega: form.entrega_lugar,
         fecha_entrega: toIso(form.entrega_fecha, form.entrega_hora, '23:59'),
         nota: form.nota,
+        km: form.km !== '' ? Number(form.km) : null,
+        ciudad: form.ciudad || null,
+        app: form.app || null,
+        compactado: form.compactado,
+        estado_consegna: form.estado_consegna || null,
+        attesa: form.attesa || null,
+        otros_datos: form.otros_datos || null,
+        foto_bolla: form.foto_bolla || null,
+        anticipo: form.anticipo !== '' ? Number(form.anticipo) : null,
+        gastos: form.gastos
+          .filter((g) => g.tipo && (g.monto !== '' || g.comprobantes.length || g.descripcion || g.numero_mancato))
+          .map((g) => ({
+            tipo: g.tipo,
+            monto: g.monto !== '' ? Number(g.monto) : 0,
+            descripcion: g.descripcion || null,
+            numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null,
+            comprobantes: g.comprobantes,
+          })),
       };
       if (editing) {
         payload.estado = form.estado;
@@ -271,10 +354,16 @@ export default function OperacionesScreen() {
             <Package size={18} color={C.primary} />
           </View>
           <Text style={styles.client} numberOfLines={1}>
-            {r.cliente || r.id_programacion || 'Operación'}
+            {r.cliente || 'Operación'}
           </Text>
           <Badge label={meta.label} variant={meta.variant} />
         </View>
+
+        {estadoConsegnaMeta(r.estado_consegna) && (
+          <View style={{ flexDirection: 'row', marginTop: 8 }}>
+            <Badge label={estadoConsegnaMeta(r.estado_consegna)!.label} variant={estadoConsegnaMeta(r.estado_consegna)!.variant} />
+          </View>
+        )}
 
         <View style={styles.routeRow}>
           <View style={styles.routeSide}>
@@ -307,6 +396,17 @@ export default function OperacionesScreen() {
             <CalendarClock size={12} color={C.textFaint} />
             <Text style={styles.meta}>{fmtDate(r.fecha_entrega || r.fecha)}</Text>
           </View>
+          {!!r.app && (
+            <View style={styles.metaItem}>
+              <Package size={12} color={C.textFaint} />
+              <Text style={styles.meta} numberOfLines={1}>{r.app}</Text>
+            </View>
+          )}
+          {r.compactado && (
+            <View style={styles.metaItem}>
+              <Text style={[styles.meta, { color: C.info, fontWeight: '700' }]}>Compactado</Text>
+            </View>
+          )}
         </View>
       </TouchableOpacity>
     );
@@ -349,7 +449,7 @@ export default function OperacionesScreen() {
         )}
       </View>
 
-      <Fab onPress={openCreate} />
+      {canEditAll && <Fab onPress={openCreate} />}
 
       {/* Detalle */}
       <FormModal
@@ -370,10 +470,12 @@ export default function OperacionesScreen() {
                 route={{ originAddress: detail.lugar_retiro, destinationAddress: detail.lugar_entrega }}
               />
             )}
-            <View style={{ marginBottom: S.md }}>
+            <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: S.md }}>
               <Badge label={estadoMeta(detail.estado).label} variant={estadoMeta(detail.estado).variant} />
+              {estadoConsegnaMeta(detail.estado_consegna) && (
+                <Badge label={estadoConsegnaMeta(detail.estado_consegna)!.label} variant={estadoConsegnaMeta(detail.estado_consegna)!.variant} />
+              )}
             </View>
-            <InfoRow label="ID" value={detail.id_programacion} />
             <InfoRow label="Cliente" value={detail.cliente} />
             <InfoRow label="Origen (retiro)" value={detail.lugar_retiro} />
             <InfoRow label="Fecha retiro" value={fmtDate(detail.fecha_retiro || detail.fecha)} />
@@ -382,7 +484,22 @@ export default function OperacionesScreen() {
             <InfoRow label="Fecha entrega" value={fmtDate(detail.fecha_entrega)} />
             <InfoRow label="ETA" value={detail.eta} />
             <InfoRow label="Vehículo" value={detail.vehiculo_id} />
-            <InfoRow label="Conductor" value={detail.trabajador_id || 'Sin asignar'} />
+            <InfoRow label="Conductor" value={detail.trabajador_nombre || detail.trabajador_id || 'Sin asignar'} />
+            {detail.km != null && detail.km !== 0 ? <InfoRow label="KM" value={`${detail.km} km`} /> : null}
+            {detail.ciudad ? <InfoRow label="Ciudad" value={detail.ciudad} /> : null}
+            {detail.app ? <InfoRow label="App" value={detail.app} /> : null}
+            {detail.attesa ? <InfoRow label="Attesa" value={detail.attesa} /> : null}
+            {detail.compactado ? <InfoRow label="Compactado" value="Sí" /> : null}
+            {detail.otros_datos ? <InfoRow label="Otros datos" value={detail.otros_datos} /> : null}
+            {detail.anticipo != null && detail.anticipo !== 0 ? (
+              <InfoRow label="Anticipo" value={formatMoney(detail.anticipo, moneda)} />
+            ) : null}
+            {detail.gastos && detail.gastos.length > 0 ? (
+              <InfoRow
+                label="Gastos"
+                value={`${detail.gastos.length} · ${formatMoney(detail.gastos.reduce((s, g) => s + (g.monto || 0), 0), moneda)}`}
+              />
+            ) : null}
             <InfoRow label="Nota" value={detail.nota} />
           </View>
         )}
@@ -395,24 +512,55 @@ export default function OperacionesScreen() {
         title={editing ? 'Editar operación' : 'Nueva operación'}
         footer={<Button title={editing ? 'Guardar cambios' : 'Crear operación'} loading={saving} onPress={save} />}
       >
+        {lockOthers && (
+          <View style={styles.roleBanner}>
+            <Text style={styles.roleBannerText}>
+              Como conductor puedes actualizar el estado, el origen/destino, la bolla y los gastos. El resto es de solo lectura.
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.sectionRow}>
+          <Flag size={16} color={C.info} />
+          <Text style={styles.formSectionInline}>Estado de la consegna</Text>
+        </View>
+        <View style={styles.chipsWrap}>
+          {CONSEGNA_ACTIONS.map(({ value, label, Icon }) => {
+            const active = form.estado_consegna === value;
+            return (
+              <TouchableOpacity
+                key={value}
+                style={[styles.estadoChip, active && styles.estadoChipActive]}
+                onPress={() => setForm({ ...form, estado_consegna: active ? '' : value })}
+                activeOpacity={0.7}
+              >
+                <Icon size={14} color={active ? '#fff' : C.textMuted} />
+                <Text style={[styles.estadoChipText, active && { color: '#fff' }]}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
         <Text style={styles.formSection}>Recursos y cliente</Text>
 
         <Select
           label="Vehículo *"
           value={form.vehiculo_id}
           onChange={(v) => setForm({ ...form, vehiculo_id: v })}
-          options={vehiculos.map((v) => ({ value: v.placa, label: v.placa }))}
+          options={vehiculos.map((v) => ({ value: v.placa, label: v.marca_modelo ? `${v.placa} (${v.marca_modelo})` : v.placa }))}
           placeholder="Selecciona un vehículo"
           searchable
+          disabled={lockOthers}
         />
 
         <Select
-          label="Conductor"
+          label="Conductor *"
           value={form.trabajador_id}
           onChange={(v) => setForm({ ...form, trabajador_id: v })}
           options={trabajadores.map((w) => ({ value: w.id, label: w.nombre_completo }))}
           placeholder="Selecciona un conductor"
           searchable
+          disabled={lockOthers}
         />
 
         <FormField
@@ -421,6 +569,7 @@ export default function OperacionesScreen() {
           onChangeText={(t) => setForm({ ...form, cliente: t })}
           placeholder="Nombre del cliente"
           style={{ marginTop: S.md }}
+          editable={!lockOthers}
         />
 
         <Text style={styles.formSection}>Origen (retiro)</Text>
@@ -473,6 +622,79 @@ export default function OperacionesScreen() {
           />
         </View>
 
+        <Text style={styles.formSection}>Datos de consegna</Text>
+        <View style={styles.dateRow}>
+          <FormField
+            label="KM"
+            value={form.km}
+            onChangeText={(t) => setForm({ ...form, km: t })}
+            placeholder="0"
+            keyboardType="numeric"
+            style={{ flex: 1 }}
+            editable={!lockOthers}
+          />
+          <FormField
+            label="Ciudad"
+            value={form.ciudad}
+            onChangeText={(t) => setForm({ ...form, ciudad: t })}
+            placeholder="Ej: Milano"
+            style={{ flex: 1 }}
+            editable={!lockOthers}
+          />
+        </View>
+        <Select
+          label="App"
+          value={form.app}
+          onChange={(v) => setForm({ ...form, app: v })}
+          options={APP_OPTIONS}
+          placeholder="Selecciona una app"
+          searchable
+          clearable
+          disabled={lockOthers}
+        />
+        <FormField
+          label="Attesa"
+          value={form.attesa}
+          onChangeText={(t) => setForm({ ...form, attesa: t })}
+          placeholder="Ej: 15 min (espera al cliente)"
+          editable={!lockOthers}
+        />
+        <Text style={styles.fieldLabelSm}>¿Compactado?</Text>
+        <View style={styles.dateRow}>
+          <TouchableOpacity
+            style={[styles.toggleBtn, !form.compactado && styles.toggleBtnActiveDark, lockOthers && { opacity: 0.55 }]}
+            onPress={() => !lockOthers && setForm({ ...form, compactado: false })}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.toggleBtnText, !form.compactado && { color: '#fff' }]}>N</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toggleBtn, form.compactado && styles.toggleBtnActiveBlue, lockOthers && { opacity: 0.55 }]}
+            onPress={() => !lockOthers && setForm({ ...form, compactado: true })}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.toggleBtnText, form.compactado && { color: '#fff' }]}>Y</Text>
+          </TouchableOpacity>
+        </View>
+        <FormField
+          label="Otros datos de consegna"
+          value={form.otros_datos}
+          onChangeText={(t) => setForm({ ...form, otros_datos: t })}
+          placeholder="Pega aquí el texto de la consegna (WhatsApp)..."
+          multiline
+          style={{ marginTop: S.md }}
+          editable={!lockOthers}
+        />
+
+        <Text style={styles.formSection}>Foto de la bolla (DDT)</Text>
+        <ImageUpload
+          value={form.foto_bolla}
+          onChange={(url) => setForm({ ...form, foto_bolla: url })}
+          onClear={() => setForm({ ...form, foto_bolla: '' })}
+          label="Subir foto de la bolla"
+          variant="wide"
+        />
+
         {editing && (
           <>
             <Text style={styles.formSection}>Estado</Text>
@@ -483,9 +705,90 @@ export default function OperacionesScreen() {
               options={ALL_ESTADOS.map((e) => ({ value: e, label: estadoMeta(e).label }))}
               placeholder="Selecciona un estado"
               searchable={false}
+              disabled={lockOthers}
             />
           </>
         )}
+
+        <View style={styles.sectionRow}>
+          <Wallet size={16} color={C.info} />
+          <Text style={styles.formSectionInline}>Rendición / Gastos</Text>
+        </View>
+        <FormField
+          label={`Anticipo recibido (${moneda || 'EUR'})`}
+          value={form.anticipo}
+          onChangeText={(t) => setForm({ ...form, anticipo: t })}
+          placeholder="0.00"
+          keyboardType="numeric"
+        />
+
+        {form.gastos.map((g, i) => (
+          <View key={i} style={styles.gastoCard}>
+            <Select
+              label="Tipo"
+              value={g.tipo}
+              onChange={(v) => updateGasto(i, { tipo: v })}
+              options={GASTO_TIPOS}
+              searchable={false}
+            />
+            <FormField
+              label={`Monto (${moneda || 'EUR'})`}
+              value={g.monto}
+              onChangeText={(t) => updateGasto(i, { monto: t })}
+              placeholder="0.00"
+              keyboardType="numeric"
+            />
+            {g.tipo === 'OTRO' && (
+              <FormField
+                label="Descripción"
+                value={g.descripcion}
+                onChangeText={(t) => updateGasto(i, { descripcion: t })}
+                placeholder="¿En qué se gastó?"
+              />
+            )}
+            {g.tipo === 'PEAJE' && (
+              <FormField
+                label="Nº de mancato"
+                value={g.numero_mancato}
+                onChangeText={(t) => updateGasto(i, { numero_mancato: t })}
+                placeholder="Número de mancato pagamento"
+              />
+            )}
+            <Text style={styles.fieldLabelSm}>Comprobante(s)</Text>
+            <MultiFileUpload
+              value={g.comprobantes}
+              onChange={(urls) => updateGasto(i, { comprobantes: urls })}
+            />
+            <TouchableOpacity style={styles.removeGasto} onPress={() => removeGasto(i)} activeOpacity={0.7}>
+              <Trash2 size={14} color={C.danger} />
+              <Text style={styles.removeGastoText}>Quitar gasto</Text>
+            </TouchableOpacity>
+          </View>
+        ))}
+
+        <TouchableOpacity style={styles.addGasto} onPress={addGasto} activeOpacity={0.7}>
+          <Plus size={16} color={C.textMuted} />
+          <Text style={styles.addGastoText}>Agregar gasto</Text>
+        </TouchableOpacity>
+
+        <View style={styles.saldoBox}>
+          <View style={styles.saldoRow}>
+            <Text style={styles.saldoLabel}>Anticipo</Text>
+            <Text style={styles.saldoVal}>{formatMoney(anticipoNum, moneda)}</Text>
+          </View>
+          <View style={styles.saldoRow}>
+            <Text style={styles.saldoLabel}>Total gastado</Text>
+            <Text style={styles.saldoVal}>− {formatMoney(totalGastos, moneda)}</Text>
+          </View>
+          <View style={[styles.saldoRow, styles.saldoTotal]}>
+            <Text style={[styles.saldoLabel, { fontWeight: '700', color: saldo < 0 ? C.danger : C.success }]}>
+              {saldo < 0 ? 'Excedido (falta)' : 'A devolver'}
+            </Text>
+            <Text style={[styles.saldoVal, { fontWeight: '700', color: saldo < 0 ? C.danger : C.success }]}>
+              {formatMoney(Math.abs(saldo), moneda)}
+            </Text>
+          </View>
+        </View>
 
         <FormField
           label="Notas adicionales"
@@ -494,6 +797,7 @@ export default function OperacionesScreen() {
           placeholder="Instrucciones especiales para el conductor..."
           multiline
           style={{ marginTop: S.md }}
+          editable={!lockOthers}
         />
       </FormModal>
     </Screen>
@@ -574,4 +878,28 @@ const makeStyles = () => StyleSheet.create({
   chipEmpty: { fontSize: 13, color: C.textFaint, paddingVertical: 8 },
   dateRow: { flexDirection: 'row', gap: S.md },
   estadoWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: S.sm },
+
+  roleBanner: { backgroundColor: C.warningSoft, borderRadius: Theme.radius.md, padding: S.md, marginBottom: S.sm },
+  roleBannerText: { fontSize: 12, color: C.warning },
+  sectionRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: S.lg, marginBottom: S.sm },
+  formSectionInline: { fontSize: 13, fontWeight: '700', color: C.text, textTransform: 'uppercase' },
+  fieldLabelSm: { fontSize: 13, fontWeight: '500', color: C.textMuted, marginBottom: 6 },
+  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: S.sm },
+  estadoChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: S.md, paddingVertical: 9, borderRadius: Theme.radius.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.surfaceAlt },
+  estadoChipActive: { backgroundColor: C.info, borderColor: C.info },
+  estadoChipText: { fontSize: 13, fontWeight: '600', color: C.textMuted },
+  toggleBtn: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: Theme.radius.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.surfaceAlt },
+  toggleBtnActiveDark: { backgroundColor: C.primary, borderColor: C.primary },
+  toggleBtnActiveBlue: { backgroundColor: C.info, borderColor: C.info },
+  toggleBtnText: { fontSize: 15, fontWeight: '700', color: C.textMuted },
+  gastoCard: { backgroundColor: C.surfaceAlt, borderRadius: Theme.radius.lg, borderWidth: 1, borderColor: C.border, padding: S.md, marginBottom: S.sm },
+  removeGasto: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 4 },
+  removeGastoText: { fontSize: 12, fontWeight: '600', color: C.danger },
+  addGasto: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: Theme.radius.md, borderWidth: 1, borderStyle: 'dashed', borderColor: C.borderStrong, marginBottom: S.sm },
+  addGastoText: { fontSize: 14, fontWeight: '600', color: C.textMuted },
+  saldoBox: { backgroundColor: C.surface, borderRadius: Theme.radius.lg, borderWidth: 1, borderColor: C.border, padding: S.md, gap: 6 },
+  saldoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  saldoTotal: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border, paddingTop: 6, marginTop: 2 },
+  saldoLabel: { fontSize: 13, color: C.textMuted },
+  saldoVal: { fontSize: 13, color: C.text },
 });

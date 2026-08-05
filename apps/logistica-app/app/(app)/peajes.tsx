@@ -32,7 +32,6 @@ const S = Theme.spacing;
 // con la forma paginada { items, total, counts }.
 interface Peaje {
   id: string;
-  id_multa?: string | null;
   estado?: string | null;
   fecha?: string | null;
   hora?: string | null;
@@ -41,6 +40,8 @@ interface Peaje {
   trabajador_id?: string | null;
   comentarios?: string | null;
   tipo?: string | null;
+  // Filas que provienen de gastos de operación (solo lectura).
+  _origen?: string | null;
 }
 
 const ESTADOS = ['PENDIENTE', 'PAGADO', 'ANULADO'] as const;
@@ -98,6 +99,11 @@ export default function PeajesScreen() {
   const styles = useMemo(() => makeStyles(), [themeKey]);
   const moneda = user?.moneda;
 
+  // Un chofer (no admin) no elige conductor: se asigna automáticamente él mismo.
+  const canEditAll = !!user && (user.es_admin === true || user.role === 'ADMIN' || user.role === 'SUPERADMIN');
+  const myWorkerId = user?.trabajador_id || '';
+  const hideConductor = !canEditAll && !!myWorkerId;
+
   const [items, setItems] = useState<Peaje[]>([]);
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
   const [trabajadores, setTrabajadores] = useState<Trabajador[]>([]);
@@ -134,6 +140,14 @@ export default function PeajesScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  // Resuelve el trabajador del chofer al UUID que usa el backend, buscándolo
+  // en la lista por `id` o `id_trabajador` (con fallback al valor crudo).
+  const resolvedMyWorkerId = useMemo(() => {
+    if (!myWorkerId) return '';
+    const match = trabajadores.find((t) => t.id === myWorkerId || t.id_trabajador === myWorkerId);
+    return match?.id || myWorkerId;
+  }, [trabajadores, myWorkerId]);
+
   // El vínculo es por UUID; para mostrar usamos el nombre del trabajador.
   const trabajadorLabel = useCallback(
     (id?: string | null) => trabajadores.find((t) => t.id === id)?.nombre_completo || id || '',
@@ -164,11 +178,13 @@ export default function PeajesScreen() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm(emptyForm);
+    setForm({ ...emptyForm, trabajador_id: hideConductor ? resolvedMyWorkerId : '' });
     setFormVisible(true);
   };
 
   const openEdit = (p: Peaje) => {
+    // Las filas provenientes de operaciones son de solo lectura.
+    if (p._origen === 'operacion') return;
     setEditing(p);
     setForm({
       targa: p.targa || '',
@@ -178,7 +194,7 @@ export default function PeajesScreen() {
         : 'PENDIENTE'),
       tipo: p.tipo || '',
       fecha: p.fecha ? String(p.fecha).split('T')[0] : todayISO(),
-      trabajador_id: p.trabajador_id || '',
+      trabajador_id: hideConductor ? resolvedMyWorkerId : (p.trabajador_id || ''),
       comentarios: p.comentarios || '',
     });
     setDetail(null);
@@ -216,6 +232,8 @@ export default function PeajesScreen() {
   };
 
   const remove = (p: Peaje) => {
+    // Las filas provenientes de operaciones no se pueden eliminar.
+    if (p._origen === 'operacion') return;
     Alert.alert('Eliminar registro', `¿Eliminar el peaje/multa de ${p.targa || 'la unidad'}?`, [
       { text: 'Cancelar', style: 'cancel' },
       {
@@ -234,15 +252,26 @@ export default function PeajesScreen() {
     ]);
   };
 
-  const renderCard = ({ item: p }: { item: Peaje }) => (
-    <TouchableOpacity activeOpacity={0.7} style={styles.card} onPress={() => setDetail(p)}>
+  const renderCard = ({ item: p }: { item: Peaje }) => {
+    const isOperacion = p._origen === 'operacion';
+    return (
+    <TouchableOpacity
+      activeOpacity={isOperacion ? 1 : 0.7}
+      disabled={isOperacion}
+      style={styles.card}
+      onPress={isOperacion ? undefined : () => setDetail(p)}
+    >
       <View style={styles.cardIcon}>
         <Receipt size={20} color={C.warning} />
       </View>
       <View style={{ flex: 1 }}>
         <View style={styles.cardTop}>
           <Text style={styles.plate}>{p.targa || 'Sin placa'}</Text>
-          <Badge label={p.estado || 'N/A'} variant={estadoVariant(p.estado)} />
+          {isOperacion ? (
+            <Badge label="Operación" variant="info" />
+          ) : (
+            <Badge label={p.estado || 'N/A'} variant={estadoVariant(p.estado)} />
+          )}
         </View>
         <Text style={styles.desc} numberOfLines={1}>
           {p.tipo || 'Sin tipo'}
@@ -257,7 +286,8 @@ export default function PeajesScreen() {
       </View>
       <Text style={styles.cost} numberOfLines={1}>{formatMoney(p.monto, moneda)}</Text>
     </TouchableOpacity>
-  );
+    );
+  };
 
   return (
     <Screen>
@@ -303,7 +333,7 @@ export default function PeajesScreen() {
         onClose={() => setDetail(null)}
         title={detail?.targa || 'Detalle'}
         footer={
-          detail && (
+          detail && detail._origen !== 'operacion' && (
             <View style={{ flexDirection: 'row', gap: S.sm }}>
               <Button title="Editar" icon={Pencil} variant="secondary" style={{ flex: 1 }} onPress={() => detail && openEdit(detail)} />
               <Button title="Eliminar" icon={Trash2} variant="danger" style={{ flex: 1 }} onPress={() => detail && remove(detail)} />
@@ -322,7 +352,6 @@ export default function PeajesScreen() {
             <InfoRow label="Estado" value={detail.estado} />
             <InfoRow label="Fecha" value={formatDate(detail.fecha)} />
             <InfoRow label="Trabajador" value={trabajadorLabel(detail.trabajador_id)} />
-            <InfoRow label="N° multa" value={detail.id_multa} />
             <View style={styles.detailDesc}>
               <Text style={styles.detailDescLabel}>Comentarios</Text>
               <Text style={styles.detailDescText}>{detail.comentarios || '—'}</Text>
@@ -385,14 +414,16 @@ export default function PeajesScreen() {
           value={form.fecha}
           onChange={(v) => setForm({ ...form, fecha: v })}
         />
-        <Select
-          label="Trabajador"
-          value={form.trabajador_id}
-          onChange={(v) => setForm({ ...form, trabajador_id: v })}
-          options={trabajadores.map((t) => ({ value: t.id, label: t.nombre_completo }))}
-          placeholder="Selecciona un trabajador"
-          searchable
-        />
+        {!hideConductor && (
+          <Select
+            label="Trabajador"
+            value={form.trabajador_id}
+            onChange={(v) => setForm({ ...form, trabajador_id: v })}
+            options={trabajadores.map((t) => ({ value: t.id, label: t.nombre_completo }))}
+            placeholder="Selecciona un trabajador"
+            searchable
+          />
+        )}
         <FormField
           label="Comentarios"
           value={form.comentarios}

@@ -19,10 +19,12 @@ interface Props {
   label?: string;
   placeholder?: string;
   searchable?: boolean;
+  disabled?: boolean;
+  clearable?: boolean;
 }
 
 /** Select móvil buscable (modal con lista filtrable). Contrato: value/onChange(value). */
-export default function Select({ value, onChange, options, label, placeholder = 'Seleccionar...', searchable = true }: Props) {
+export default function Select({ value, onChange, options, label, placeholder = 'Seleccionar...', searchable = true, disabled = false, clearable = false }: Props) {
   const { themeKey } = useTheme();
   const styles = useMemo(() => makeStyles(), [themeKey]);
   const [open, setOpen] = useState(false);
@@ -40,11 +42,20 @@ export default function Select({ value, onChange, options, label, placeholder = 
   return (
     <View style={{ marginBottom: S.md }}>
       {!!label && <Text style={styles.label}>{label}</Text>}
-      <TouchableOpacity style={styles.trigger} onPress={openModal} activeOpacity={0.7}>
+      <TouchableOpacity
+        style={[styles.trigger, disabled && { opacity: 0.55 }]}
+        onPress={openModal}
+        activeOpacity={0.7}
+        disabled={disabled}
+      >
         <Text style={[styles.triggerText, { color: selected ? C.text : C.textFaint }]} numberOfLines={1}>
           {selected ? selected.label : placeholder}
         </Text>
-        <ChevronDown size={16} color={C.textFaint} />
+        {clearable && selected && !disabled ? (
+          <TouchableOpacity onPress={() => onChange('')} hitSlop={8}><X size={16} color={C.textFaint} /></TouchableOpacity>
+        ) : (
+          <ChevronDown size={16} color={C.textFaint} />
+        )}
       </TouchableOpacity>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>

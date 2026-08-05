@@ -31,7 +31,6 @@ const S = Theme.spacing;
 // Modelo de un registro de combustible (según el backend /combustible).
 type Combustible = {
   id: string;
-  id_registro?: string | null;
   trabajador_id?: string | null;
   fecha?: string | null;
   monto?: number | null;
@@ -40,6 +39,7 @@ type Combustible = {
   area?: string | null;
   mes?: string | null;
   archivo?: string | null;
+  _origen?: string | null;
 };
 
 const AREAS = ['DHL', 'FARMACIA'] as const;
@@ -220,27 +220,39 @@ export default function CombustibleScreen() {
     ]);
   };
 
-  const renderCard = ({ item: c }: { item: Combustible }) => (
-    <TouchableOpacity activeOpacity={0.7} style={styles.card} onPress={() => setDetail(c)}>
-      <View style={styles.cardIcon}>
-        <Fuel size={20} color={C.textMuted} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <View style={styles.cardTop}>
-          <Text style={styles.plate}>{c.targa || 'Sin placa'}</Text>
-          {c.area ? <Badge label={c.area} variant={areaVariant(c.area)} /> : null}
+  const renderCard = ({ item: c }: { item: Combustible }) => {
+    const isOperacion = c._origen === 'operacion';
+    return (
+      <TouchableOpacity
+        activeOpacity={isOperacion ? 1 : 0.7}
+        disabled={isOperacion}
+        style={styles.card}
+        onPress={isOperacion ? undefined : () => setDetail(c)}
+      >
+        <View style={styles.cardIcon}>
+          <Fuel size={20} color={C.textMuted} />
         </View>
-        <View style={styles.metaRow}>
-          <View style={styles.metaItem}>
-            <Calendar size={13} color={C.textFaint} />
-            <Text style={styles.meta}>{formatDate(c.fecha)}</Text>
+        <View style={{ flex: 1 }}>
+          <View style={styles.cardTop}>
+            <Text style={styles.plate}>{c.targa || 'Sin placa'}</Text>
+            {isOperacion ? (
+              <Badge label="Operación" variant="info" />
+            ) : c.area ? (
+              <Badge label={c.area} variant={areaVariant(c.area)} />
+            ) : null}
           </View>
-          {c.metodo ? <Text style={styles.meta}>· {c.metodo}</Text> : null}
+          <View style={styles.metaRow}>
+            <View style={styles.metaItem}>
+              <Calendar size={13} color={C.textFaint} />
+              <Text style={styles.meta}>{formatDate(c.fecha)}</Text>
+            </View>
+            {c.metodo ? <Text style={styles.meta}>· {c.metodo}</Text> : null}
+          </View>
         </View>
-      </View>
-      <Text style={styles.cost} numberOfLines={1}>{formatMoney(c.monto, moneda)}</Text>
-    </TouchableOpacity>
-  );
+        <Text style={styles.cost} numberOfLines={1}>{formatMoney(c.monto, moneda)}</Text>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <Screen>
