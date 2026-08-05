@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -45,6 +45,7 @@ import Select from '../../components/Select';
 import ImageUpload from '../../components/ImageUpload';
 import MultiFileUpload from '../../components/MultiFileUpload';
 import MapboxWebView from '../../components/MapboxWebView';
+import RouteReport from '../../components/RouteReport';
 import api from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -66,6 +67,15 @@ const ESTADO_META: Record<string, { label: string; variant: BadgeVariant }> = {
 };
 const ALL_ESTADOS = Object.keys(ESTADO_META);
 const estadoMeta = (e?: string) => ESTADO_META[e || 'PENDIENTE'] || ESTADO_META.PENDIENTE;
+
+// En BD pueden convivir códigos en español e inglés; cada filtro cubre sus variantes.
+const ESTADO_VARIANTS: Record<string, string[]> = {
+  PENDIENTE: ['PENDIENTE', 'PENDING'],
+  RETIRADO: ['RETIRADO', 'IN_TRANSIT'],
+  ENTREGADO: ['ENTREGADO', 'COMPLETED'],
+  ANULADO: ['ANULADO', 'FAILED', 'CANCELLED'],
+  REPROGRAMADO: ['REPROGRAMADO'],
+};
 
 const fmtDate = (d?: string) => {
   if (!d) return '—';
@@ -143,8 +153,10 @@ export default function OperacionesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
+  const [selectedEstado, setSelectedEstado] = useState<string | null>(null);
 
   const [detail, setDetail] = useState<Programacion | null>(null);
+  const [detailDeviceId, setDetailDeviceId] = useState<string>('');
   const [formVisible, setFormVisible] = useState(false);
   const [editing, setEditing] = useState<Programacion | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
@@ -155,8 +167,11 @@ export default function OperacionesScreen() {
 
   const load = useCallback(async () => {
     try {
-      // /programacion devuelve { items, total, counts } (paginado, 60 más recientes).
-      const res = await api.get('/programacion', { params: { take: 100 } });
+      // /programacion devuelve { items, total, counts } (paginado). Filtra por estado
+      // cuando hay un filtro activo (cubriendo variantes ES/EN del mismo estado).
+      const params: Record<string, any> = { take: 100 };
+      if (selectedEstado) params.estados = (ESTADO_VARIANTS[selectedEstado] || [selectedEstado]).join(',');
+      const res = await api.get('/programacion', { params });
       const data = res.data;
       if (Array.isArray(data)) {
         setItems(data);
@@ -173,9 +188,22 @@ export default function OperacionesScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [selectedEstado]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // Al abrir el detalle, resolvemos el dispositivo GPS del chofer (por su código) para
+  // mostrar el historial de ruta de esa operación dentro del detalle.
+  useEffect(() => {
+    const code = detail?.trabajador_id;
+    if (!code) { setDetailDeviceId(''); return; }
+    let cancelled = false;
+    setDetailDeviceId('');
+    api.get(`/gps/trabajador/${encodeURIComponent(code)}/dispositivo`)
+      .then((res) => { if (!cancelled) setDetailDeviceId(res.data?.deviceId || ''); })
+      .catch(() => { if (!cancelled) setDetailDeviceId(''); });
+    return () => { cancelled = true; };
+  }, [detail?.trabajador_id, detail?.id]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -424,9 +452,41 @@ export default function OperacionesScreen() {
           <StatCard label="Entregados" value={stats.entregados} icon={CheckCircle2} color={C.success} />
         </View>
 
-        <View style={{ marginBottom: S.md }}>
+        <View style={{ marginBottom: S.sm }}>
           <SearchBar value={query} onChangeText={setQuery} placeholder="Buscar cliente, placa, destino..." />
         </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: S.sm, paddingBottom: S.sm }}
+          style={{ marginBottom: S.sm, flexGrow: 0 }}
+        >
+          {(() => {
+            const totalAll = Object.values(counts).reduce((s, n) => s + n, 0);
+            const chip = (key: string | null, label: string, count: number) => {
+              const active = selectedEstado === key;
+              return (
+                <TouchableOpacity
+                  key={key || 'ALL'}
+                  style={[styles.filterChip, active && styles.filterChipActive]}
+                  onPress={() => setSelectedEstado(key)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.filterChipText, active && { color: '#fff' }]}>
+                    {label}{count ? ` · ${count}` : ''}
+                  </Text>
+                </TouchableOpacity>
+              );
+            };
+            return [
+              chip(null, 'Todos', totalAll),
+              ...ALL_ESTADOS.map((e) =>
+                chip(e, estadoMeta(e).label, (ESTADO_VARIANTS[e] || [e]).reduce((s, v) => s + (counts[v] || 0), 0)),
+              ),
+            ];
+          })()}
+        </ScrollView>
 
         {loading ? (
           <LoadingState text="Cargando operaciones..." />
@@ -501,6 +561,14 @@ export default function OperacionesScreen() {
               />
             ) : null}
             <InfoRow label="Nota" value={detail.nota} />
+
+            <Text style={styles.formSection}>Historial de ruta</Text>
+            <RouteReport
+              key={detail.id}
+              deviceId={detailDeviceId}
+              initialDate={(detail.fecha_retiro || detail.fecha || '').split('T')[0] || undefined}
+              showDaySelector
+            />
           </View>
         )}
       </FormModal>
@@ -878,6 +946,9 @@ const makeStyles = () => StyleSheet.create({
   chipEmpty: { fontSize: 13, color: C.textFaint, paddingVertical: 8 },
   dateRow: { flexDirection: 'row', gap: S.md },
   estadoWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: S.sm },
+  filterChip: { paddingHorizontal: S.md, paddingVertical: 8, borderRadius: Theme.radius.full, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface },
+  filterChipActive: { backgroundColor: C.primary, borderColor: C.primary },
+  filterChipText: { fontSize: 13, fontWeight: '600', color: C.textMuted },
 
   roleBanner: { backgroundColor: C.warningSoft, borderRadius: Theme.radius.md, padding: S.md, marginBottom: S.sm },
   roleBannerText: { fontSize: 12, color: C.warning },

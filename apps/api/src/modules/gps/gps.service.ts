@@ -43,6 +43,21 @@ export class GpsService {
         });
     }
 
+    // Device de un trabajador aceptando UUID o CÓDIGO (id_trabajador). Las operaciones
+    // guardan el código, así que resolvemos código→UUID antes de buscar el dispositivo.
+    async getDeviceForTrabajador(tenantId: string, idOrCode: string) {
+        const trabajador = await this.prisma.trabajador.findFirst({
+            where: { tenant_id: tenantId, OR: [{ id: idOrCode }, { id_trabajador: idOrCode }] },
+            select: { id: true },
+        });
+        if (!trabajador) return { deviceId: null };
+        const device = await this.prisma.device.findFirst({
+            where: { tenant_id: tenantId, trabajador_id: trabajador.id },
+            select: { id: true },
+        });
+        return { deviceId: device?.id || null };
+    }
+
     // Última ubicación conocida de un trabajador (vía el dispositivo que tiene asignado).
     async getTrabajadorLocation(tenantId: string, trabajadorId: string) {
         const device = await this.prisma.device.findFirst({

@@ -98,6 +98,7 @@ export default function MiResumenScreen() {
   const [consegnas, setConsegnas] = useState<Consegna[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [deviceId, setDeviceId] = useState<string>('');
 
   const load = useCallback(async () => {
     try {
@@ -114,6 +115,11 @@ export default function MiResumenScreen() {
       setLoading(false);
       setRefreshing(false);
     }
+    // Dispositivo GPS del chofer (para abrir el Historial de Ruta con datos).
+    try {
+      const dev = await api.get('/gps/mi-dispositivo');
+      setDeviceId(dev.data?.id || '');
+    } catch { /* el chofer puede no tener dispositivo */ }
   }, []);
 
   useFocusEffect(
@@ -183,7 +189,7 @@ export default function MiResumenScreen() {
           <Navigation size={20} color={C.primary} />
           <Text style={styles.quickText}>Mi Ruta</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.quick} activeOpacity={0.7} onPress={() => router.push('/(app)/historial' as any)}>
+        <TouchableOpacity style={styles.quick} activeOpacity={0.7} onPress={() => router.push({ pathname: '/(app)/historial', params: { deviceId } } as any)}>
           <MapPinned size={20} color={C.info} />
           <Text style={styles.quickText}>Mapa recorrido</Text>
         </TouchableOpacity>

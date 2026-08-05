@@ -55,6 +55,13 @@ export class GpsController {
         return this.gpsService.getTrabajadorLocation(req.user.tenantId, trabajadorId);
     }
 
+    // Device (id) de un trabajador por UUID o código, para abrir su historial de ruta.
+    @UseGuards(JwtAuthGuard)
+    @Get('trabajador/:idOrCode/dispositivo')
+    async getDeviceForTrabajador(@Param('idOrCode') idOrCode: string, @Req() req) {
+        return this.gpsService.getDeviceForTrabajador(req.user.tenantId, idOrCode);
+    }
+
     @UseGuards(JwtAuthGuard)
     @Patch('devices/:id')
     async updateDevice(@Param('id') id: string, @Body() body: any, @Req() req) {

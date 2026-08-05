@@ -4,11 +4,12 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, RefreshControl, Linking } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { FileText, ExternalLink, Phone, Mail, MapPin, BadgeCheck } from 'lucide-react-native';
+import { FileText, ExternalLink, Phone, Mail, MapPin, BadgeCheck, Route, Clock, Moon, ClipboardList } from 'lucide-react-native';
 import {
   Screen,
   AppHeader,
   Card,
+  StatCard,
   Badge,
   LoadingState,
   SectionTitle,
@@ -61,6 +62,22 @@ interface Archivo {
   fecha_vencimiento?: string | null;
 }
 
+// Métricas del mes del chofer (GET /registros/mias/resumen).
+interface Resumen {
+  totalPartes: number;
+  km: number;
+  oreMattina: number;
+  oreSera: number;
+  oreTotal: number;
+}
+
+// Horas de manejo en decimales (p. ej. 5.5 = 5h 30m).
+function horasLabel(h: number): string {
+  const horas = Math.floor(h);
+  const min = Math.round((h - horas) * 60);
+  return min > 0 ? `${horas}h ${min}m` : `${horas}h`;
+}
+
 // Documentos del perfil: [etiqueta, campo número, campo vencimiento]
 const DOCS: [string, keyof Perfil, keyof Perfil][] = [
   ['Licencia de conducir', 'licencia_conducir', 'fecha_vencimiento_licencia'],
@@ -96,18 +113,21 @@ export default function MiPerfilScreen() {
 
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [archivos, setArchivos] = useState<Archivo[]>([]);
+  const [resumen, setResumen] = useState<Resumen | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [perfilRes, docsRes] = await Promise.all([
+      const [perfilRes, docsRes, resumenRes] = await Promise.all([
         api.get('/trabajadores/mi/perfil'),
         // El backend fuerza entidad=TRABAJADOR + su propio id para usuarios solo_propios.
         api.get('/documentos'),
+        api.get('/registros/mias/resumen'),
       ]);
       setPerfil(perfilRes.data ?? null);
       setArchivos(Array.isArray(docsRes.data) ? docsRes.data : []);
+      setResumen(resumenRes.data ?? null);
     } catch {
       // Silencioso: pull-to-refresh permite reintentar.
     } finally {
@@ -180,6 +200,17 @@ export default function MiPerfilScreen() {
         <InfoRow label="Área" value={perfil?.area_trabajo || '—'} />
       </Card>
 
+      {/* Actividad del mes (km, horas de manejo, horas noche, partes) */}
+      <SectionTitle style={{ marginTop: S.lg }}>Actividad del mes</SectionTitle>
+      <View style={styles.statsRow}>
+        <StatCard label="Km del mes" value={`${resumen?.km ?? 0} km`} icon={Route} color={C.info} style={{ flex: 1 }} />
+        <StatCard label="Horas de manejo" value={horasLabel(resumen?.oreTotal ?? 0)} icon={Clock} color={C.primary} style={{ flex: 1 }} />
+      </View>
+      <View style={styles.statsRow}>
+        <StatCard label="Horas noche" value={horasLabel(resumen?.oreSera ?? 0)} icon={Moon} color={C.accent} style={{ flex: 1 }} />
+        <StatCard label="Partes" value={resumen?.totalPartes ?? 0} icon={ClipboardList} color={C.success} style={{ flex: 1 }} />
+      </View>
+
       {/* Documentos con vencimiento */}
       <SectionTitle style={{ marginTop: S.lg }}>Mis documentos</SectionTitle>
       {docs.length === 0 ? (
@@ -244,6 +275,7 @@ const makeStyles = () => StyleSheet.create({
   avatarText: { color: '#fff', fontSize: 20, fontWeight: '700' },
   name: { fontSize: F.size.lg, fontWeight: '700', color: C.text },
   cargo: { fontSize: F.size.sm, color: C.textMuted, marginTop: 2 },
+  statsRow: { flexDirection: 'row', gap: S.sm, marginTop: S.sm },
   docRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm, marginTop: S.sm },
   docIcon: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   docLabel: { fontSize: F.size.md, fontWeight: '600', color: C.text },
