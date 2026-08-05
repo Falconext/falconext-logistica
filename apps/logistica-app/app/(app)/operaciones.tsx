@@ -314,6 +314,28 @@ export default function OperacionesScreen() {
     api.get(`/programacion/${r.id}`).then((res) => { if (res.data) populate({ ...r, ...res.data }); }).catch(() => {});
   };
 
+  // Eliminar operación (solo responsables/admins). Corrige entregas hechas por error.
+  const remove = (r: Programacion) => {
+    Alert.alert(
+      'Eliminar operación',
+      `¿Eliminar esta operación${r.cliente ? ` de "${r.cliente}"` : ''}? Esta acción no se puede deshacer.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar', style: 'destructive', onPress: async () => {
+            try {
+              await api.delete(`/programacion/${r.id}`);
+              setDetail(null);
+              load();
+            } catch (e: any) {
+              Alert.alert('Error', e?.response?.data?.message || 'No se pudo eliminar la operación.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   // --- Origen: posición actual (GPS del teléfono) ---
   const usarPosicionActual = async () => {
     try {
@@ -550,7 +572,16 @@ export default function OperacionesScreen() {
         title={detail?.cliente || 'Operación'}
         footer={
           detail && (
-            <Button title="Editar" icon={Pencil} variant="secondary" onPress={() => detail && openEdit(detail)} />
+            <View style={{ flexDirection: 'row', gap: S.md }}>
+              <View style={{ flex: 1 }}>
+                <Button title="Editar" icon={Pencil} variant="secondary" onPress={() => openEdit(detail)} />
+              </View>
+              {canEditAll && (
+                <View style={{ flex: 1 }}>
+                  <Button title="Eliminar" icon={Trash2} variant="danger" onPress={() => remove(detail)} />
+                </View>
+              )}
+            </View>
           )
         }
       >
