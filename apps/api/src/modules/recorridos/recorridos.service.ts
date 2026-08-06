@@ -472,4 +472,109 @@ export class RecorridosService {
             };
         });
     }
+
+    // ===================== Pago por hora del chofer =====================
+    // Tarifas (euros/hora). Noche = 19:00–06:00 (hora local de Italia).
+    private static readonly TARIFA_DIA = 10;
+    private static readonly TARIFA_NOCHE = 12;
+    private static readonly NOCHE_DESDE_H = 19; // 19:00
+    private static readonly NOCHE_HASTA_H = 6;  // 06:00
+
+    /** Offset (min) de una zona horaria respecto a UTC en un instante dado (respeta DST). */
+    private tzOffsetMin(date: Date, tz = 'Europe/Rome'): number {
+        const dtf = new Intl.DateTimeFormat('en-US', {
+            timeZone: tz, hour12: false,
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+        });
+        const p: any = {};
+        for (const part of dtf.formatToParts(date)) p[part.type] = part.value;
+        const h = +p.hour === 24 ? 0 : +p.hour;
+        const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, h, +p.minute, +p.second);
+        return (asUTC - date.getTime()) / 60000;
+    }
+
+    /** Reparte los minutos del intervalo en diurnos/nocturnos según la hora local de Italia. */
+    private splitDiaNoche(start: Date, end: Date): { diaMin: number; nocheMin: number } {
+        const totalMin = Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000));
+        if (totalMin === 0) return { diaMin: 0, nocheMin: 0 };
+        const off = this.tzOffsetMin(start);
+        const localStartMin = Math.floor(start.getTime() / 60000) + off;
+        let diaMin = 0, nocheMin = 0;
+        const D = RecorridosService.NOCHE_DESDE_H, H = RecorridosService.NOCHE_HASTA_H;
+        for (let i = 0; i < totalMin; i++) {
+            const minuteOfDay = ((((localStartMin + i) % 1440) + 1440) % 1440);
+            const hour = Math.floor(minuteOfDay / 60);
+            if (hour >= D || hour < H) nocheMin++; else diaMin++;
+        }
+        return { diaMin, nocheMin };
+    }
+
+    /** Resumen de ganancias del chofer: horas trabajadas (total − descansos) por
+     *  franja día/noche y su pago, en hoy / semana / mes / total. */
+    async resumenPago(tenantId: string, trabajadorId: string) {
+        const TARIFA_DIA = RecorridosService.TARIFA_DIA;
+        const TARIFA_NOCHE = RecorridosService.TARIFA_NOCHE;
+        const meta = {
+            tarifaDia: TARIFA_DIA, tarifaNoche: TARIFA_NOCHE, moneda: 'EUR',
+            nocheDesde: '19:00', nocheHasta: '06:00',
+        };
+        const mk = () => ({ recorridos: 0, minutos: 0, diaMin: 0, nocheMin: 0, ganancia: 0 });
+        const round = (b: any) => ({
+            recorridos: b.recorridos,
+            horas: Math.round((b.minutos / 60) * 10) / 10,
+            horasDia: Math.round((b.diaMin / 60) * 10) / 10,
+            horasNoche: Math.round((b.nocheMin / 60) * 10) / 10,
+            ganancia: Math.round(b.ganancia * 100) / 100,
+        });
+        if (!trabajadorId) {
+            const z = round(mk());
+            return { hoy: z, semana: z, mes: z, total: z, ...meta };
+        }
+
+        const recorridos = await this.prisma.recorrido.findMany({
+            where: { tenant_id: tenantId, trabajador_id: trabajadorId, estado: 'COMPLETADO', finalizado_en: { not: null } },
+            select: { iniciado_en: true, finalizado_en: true, descanso_min: true },
+        });
+
+        // Límites de tiempo en hora local de Italia (hoy / lunes de esta semana / 1° del mes).
+        const now = new Date();
+        const off = this.tzOffsetMin(now);
+        const localNow = new Date(now.getTime() + off * 60000);
+        const y = localNow.getUTCFullYear(), mo = localNow.getUTCMonth(), da = localNow.getUTCDate();
+        const isoDow = localNow.getUTCDay() === 0 ? 7 : localNow.getUTCDay();
+        const localMidnight = (Y: number, M: number, Dd: number) => new Date(Date.UTC(Y, M, Dd, 0, 0, 0) - off * 60000);
+        const startHoy = localMidnight(y, mo, da);
+        const startSemana = localMidnight(y, mo, da - (isoDow - 1));
+        const startMes = localMidnight(y, mo, 1);
+
+        const buckets = { hoy: mk(), semana: mk(), mes: mk(), total: mk() };
+        const add = (b: any, workedMin: number, diaMin: number, nocheMin: number) => {
+            b.recorridos += 1; b.minutos += workedMin; b.diaMin += diaMin; b.nocheMin += nocheMin;
+            b.ganancia += (diaMin / 60) * TARIFA_DIA + (nocheMin / 60) * TARIFA_NOCHE;
+        };
+
+        for (const r of recorridos) {
+            if (!r.finalizado_en) continue;
+            const start = new Date(r.iniciado_en);
+            const end = new Date(r.finalizado_en);
+            const totalMin = Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000));
+            if (totalMin === 0) continue;
+            const descanso = Math.min(totalMin, Math.round(r.descanso_min || 0));
+            const workedMin = totalMin - descanso;
+            const { diaMin: dGross, nocheMin: nGross } = this.splitDiaNoche(start, end);
+            const factor = workedMin / totalMin; // prorratea el descanso entre franjas
+            const diaMin = dGross * factor;
+            const nocheMin = nGross * factor;
+            add(buckets.total, workedMin, diaMin, nocheMin);
+            if (end >= startHoy) add(buckets.hoy, workedMin, diaMin, nocheMin);
+            if (end >= startSemana) add(buckets.semana, workedMin, diaMin, nocheMin);
+            if (end >= startMes) add(buckets.mes, workedMin, diaMin, nocheMin);
+        }
+
+        return {
+            hoy: round(buckets.hoy), semana: round(buckets.semana),
+            mes: round(buckets.mes), total: round(buckets.total), ...meta,
+        };
+    }
 }

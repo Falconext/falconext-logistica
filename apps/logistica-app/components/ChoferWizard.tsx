@@ -184,6 +184,24 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
     finally { setBusy(false); }
   };
 
+  // Finalizar no exige rendición, pero si el chofer no registró ningún gasto le
+  // pedimos confirmación explícita (evita cerrar la consegna sin querer).
+  const handleFinalizar = () => {
+    const hayGastos = form.gastos.some((g) => g.monto !== '' || g.comprobantes.length > 0 || g.descripcion || g.numero_mancato);
+    if (!hayGastos) {
+      Alert.alert(
+        'Finalizar sin rendición',
+        'No registraste ningún peaje ni gasto de este trayecto. ¿Seguro que quieres finalizar sin rendición de gastos?',
+        [
+          { text: 'Volver', style: 'cancel' },
+          { text: 'Sí, finalizar', style: 'destructive', onPress: () => { void finalizarConsegna(); } },
+        ],
+      );
+      return;
+    }
+    void finalizarConsegna();
+  };
+
   const stops = [form.lugar_entrega, ...form.destinos].map((s) => (s || '').trim()).filter(Boolean);
 
   return (
@@ -374,7 +392,7 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
         {loaded && phase === 'tracking' && showRendicion && (
           <View style={styles.footer}>
             <TouchableOpacity style={styles.backBtn} onPress={() => setShowRendicion(false)} activeOpacity={0.7}><ChevronLeft size={20} color={C.text} /><Text style={styles.backText}>Atrás</Text></TouchableOpacity>
-            <TouchableOpacity style={[styles.nextBtn, { backgroundColor: C.success }, busy && { opacity: 0.6 }]} disabled={busy} onPress={finalizarConsegna} activeOpacity={0.85}>
+            <TouchableOpacity style={[styles.nextBtn, { backgroundColor: C.success }, busy && { opacity: 0.6 }]} disabled={busy} onPress={handleFinalizar} activeOpacity={0.85}>
               {busy ? <ActivityIndicator color="#fff" size="small" /> : <Check size={20} color="#fff" />}<Text style={styles.nextText}>Finalizar consegna</Text>
             </TouchableOpacity>
           </View>

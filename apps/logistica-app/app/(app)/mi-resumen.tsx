@@ -60,6 +60,12 @@ interface Consegna {
   estado?: string | null;
 }
 
+interface PagoBucket { recorridos: number; horas: number; horasDia: number; horasNoche: number; ganancia: number; }
+interface Pago {
+  hoy: PagoBucket; semana: PagoBucket; mes: PagoBucket; total: PagoBucket;
+  tarifaDia: number; tarifaNoche: number; moneda: string; nocheDesde: string; nocheHasta: string;
+}
+
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
 // Las horas de manejo (ore guida) se registran en decimales (p. ej. 5.5 = 5h 30m).
@@ -95,6 +101,7 @@ export default function MiResumenScreen() {
   const { user } = useAuth();
 
   const [resumen, setResumen] = useState<Resumen | null>(null);
+  const [pago, setPago] = useState<Pago | null>(null);
   const [consegnas, setConsegnas] = useState<Consegna[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -102,11 +109,13 @@ export default function MiResumenScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [resRes, progRes] = await Promise.all([
+      const [resRes, progRes, pagoRes] = await Promise.all([
         api.get('/registros/mias/resumen'),
         api.get('/programacion', { params: { estados: 'PENDING,PENDIENTE,IN_TRANSIT,REPROGRAMADO', take: 5 } }),
+        api.get('/recorridos/mio/pago').catch(() => null),
       ]);
       setResumen(resRes.data ?? null);
+      setPago(pagoRes?.data ?? null);
       const prog = progRes.data;
       setConsegnas(Array.isArray(prog) ? prog : prog?.data ?? []);
     } catch {
@@ -166,6 +175,33 @@ export default function MiResumenScreen() {
           <Text style={styles.earningsHint}>Registra tus partes del día para ver tu ganancia.</Text>
         )}
       </Card>
+
+      {/* Ganancia por horas reales de ruta (Iniciar ruta → Finalizar), 10€ día / 12€ noche */}
+      {pago && (
+        <Card style={styles.pagoCard}>
+          <View style={styles.pagoHeader}>
+            <Clock size={16} color={C.primary} />
+            <Text style={styles.pagoTitle}>Ganancia por horas de ruta</Text>
+          </View>
+          <View style={styles.pagoRow}>
+            {([
+              { k: 'Hoy', v: pago.hoy },
+              { k: 'Semana', v: pago.semana },
+              { k: 'Mes', v: pago.mes },
+              { k: 'Total', v: pago.total },
+            ] as const).map((it) => (
+              <View key={it.k} style={styles.pagoTile}>
+                <Text style={styles.pagoTileVal}>{formatMoney(it.v.ganancia, pago.moneda)}</Text>
+                <Text style={styles.pagoTileLbl}>{it.k}</Text>
+                <Text style={styles.pagoTileHrs}>{horasLabel(it.v.horas)}</Text>
+              </View>
+            ))}
+          </View>
+          <Text style={styles.pagoHint}>
+            {formatMoney(pago.tarifaDia, pago.moneda)}/h día · {formatMoney(pago.tarifaNoche, pago.moneda)}/h noche (desde {pago.nocheDesde})
+          </Text>
+        </Card>
+      )}
 
       {/* Registrar parte del día */}
       <TouchableOpacity style={styles.parteBtn} activeOpacity={0.85} onPress={() => router.push('/(app)/parte-diario' as any)}>
@@ -261,6 +297,15 @@ const makeStyles = () => StyleSheet.create({
   earningsLabel: { color: '#ffffffCC', fontSize: F.size.sm, fontWeight: '600', textTransform: 'capitalize' },
   earningsValue: { color: '#fff', fontSize: 34, fontWeight: '800', marginTop: 4 },
   earningsHint: { color: '#ffffffB3', fontSize: F.size.sm, marginTop: 6, lineHeight: 18 },
+  pagoCard: { marginTop: S.md, padding: S.md },
+  pagoHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: S.sm },
+  pagoTitle: { fontSize: F.size.md, fontWeight: '700', color: C.text },
+  pagoRow: { flexDirection: 'row', gap: S.xs },
+  pagoTile: { flex: 1, alignItems: 'center', backgroundColor: C.surfaceAlt, borderRadius: R.md, paddingVertical: S.sm, paddingHorizontal: 4 },
+  pagoTileVal: { fontSize: F.size.md, fontWeight: '800', color: C.success },
+  pagoTileLbl: { fontSize: F.size.xs, color: C.textMuted, marginTop: 2, fontWeight: '600' },
+  pagoTileHrs: { fontSize: 10, color: C.textFaint, marginTop: 1 },
+  pagoHint: { fontSize: F.size.xs, color: C.textMuted, marginTop: S.sm, textAlign: 'center' },
   parteBtn: {
     flexDirection: 'row',
     alignItems: 'center',
