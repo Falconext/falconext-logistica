@@ -59,6 +59,7 @@ function labelDay(dateStr: string): string {
 
 interface Props {
   deviceId?: string | null;
+  programacionId?: string; // modo operación: muestra la traza del recorrido (iniciar→finalizar)
   initialDate?: string; // YYYY-MM-DD; por defecto hoy
   showDaySelector?: boolean;
 }
@@ -67,39 +68,52 @@ interface Props {
  * Reporte de ruta GPS de un dispositivo para un día: mapa + estadísticas + timeline
  * de tramos/paradas. Reutilizable en Historial de Ruta y en el detalle de Operación.
  */
-export default function RouteReport({ deviceId, initialDate, showDaySelector = true }: Props) {
+export default function RouteReport({ deviceId, programacionId, initialDate, showDaySelector = true }: Props) {
   const { themeKey } = useTheme();
   const styles = useMemo(() => makeStyles(), [themeKey]);
+  const opMode = !!programacionId;
 
   const [dateStr, setDateStr] = useState<string>(initialDate || todayStr());
   const [coords, setCoords] = useState<[number, number][]>([]);
   const [trip, setTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState(false);
+  const [noRecorrido, setNoRecorrido] = useState(false);
 
   const load = useCallback(async () => {
-    if (!deviceId) { setLoading(false); return; }
+    if (!deviceId && !programacionId) { setLoading(false); return; }
     setLoading(true);
     try {
-      const start = new Date(dateStr + 'T00:00:00');
-      const end = new Date(dateStr + 'T23:59:59');
-      const p = { from: start.toISOString(), to: end.toISOString() };
-      const [resHist, resTrip] = await Promise.all([
-        api.get(`/gps/history/${deviceId}`, { params: p }),
-        api.get(`/gps/history/${deviceId}/analisis`, { params: p }),
-      ]);
-      const pts: [number, number][] = (resHist.data || [])
-        .map((d: any) => [parseFloat(d.longitude), parseFloat(d.latitude)] as [number, number])
-        .filter((c: [number, number]) => !isNaN(c[0]) && !isNaN(c[1]))
-        .reverse();
-      setCoords(pts);
-      setTrip(resTrip.data || null);
+      if (programacionId) {
+        // Modo operación: traza del recorrido (acotada a iniciar→finalizar).
+        const { data } = await api.get(`/recorridos/programacion/${programacionId}/traza`);
+        setNoRecorrido(!data?.recorrido);
+        const pts: [number, number][] = (data?.path || [])
+          .map((p: any) => [Number(p.lng), Number(p.lat)] as [number, number])
+          .filter((c: [number, number]) => !isNaN(c[0]) && !isNaN(c[1]));
+        setCoords(pts);
+        setTrip(data?.analisis || null);
+      } else {
+        const start = new Date(dateStr + 'T00:00:00');
+        const end = new Date(dateStr + 'T23:59:59');
+        const p = { from: start.toISOString(), to: end.toISOString() };
+        const [resHist, resTrip] = await Promise.all([
+          api.get(`/gps/history/${deviceId}`, { params: p }),
+          api.get(`/gps/history/${deviceId}/analisis`, { params: p }),
+        ]);
+        const pts: [number, number][] = (resHist.data || [])
+          .map((d: any) => [parseFloat(d.longitude), parseFloat(d.latitude)] as [number, number])
+          .filter((c: [number, number]) => !isNaN(c[0]) && !isNaN(c[1]))
+          .reverse();
+        setCoords(pts);
+        setTrip(resTrip.data || null);
+      }
     } catch (e) {
       console.error('Error cargando reporte de ruta', e);
       setTrip(null); setCoords([]);
     } finally {
       setLoading(false);
     }
-  }, [deviceId, dateStr]);
+  }, [deviceId, programacionId, dateStr]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -127,7 +141,7 @@ export default function RouteReport({ deviceId, initialDate, showDaySelector = t
   const hasData = coords.length > 0 || (trip?.points ?? 0) > 0;
 
   // Sin dispositivo GPS asignado al chofer (evita el spinner infinito).
-  if (!deviceId) {
+  if (!deviceId && !opMode) {
     return (
       <View style={styles.empty}>
         <Satellite size={28} color={C.textFaint} />
@@ -137,9 +151,20 @@ export default function RouteReport({ deviceId, initialDate, showDaySelector = t
     );
   }
 
+  // Modo operación sin recorrido: el chofer aún no inició la ruta de esta operación.
+  if (opMode && noRecorrido && !loading && coords.length === 0) {
+    return (
+      <View style={styles.empty}>
+        <Satellite size={28} color={C.textFaint} />
+        <Text style={styles.emptyTitle}>Sin recorrido aún</Text>
+        <Text style={styles.emptySub}>El chofer todavía no ha iniciado la ruta de esta operación. El recorrido aparecerá cuando dé "Iniciar ruta".</Text>
+      </View>
+    );
+  }
+
   return (
     <View>
-      {showDaySelector && (
+      {showDaySelector && !opMode && (
         <View style={styles.dateBar}>
           <TouchableOpacity style={styles.dateBtn} onPress={() => setDateStr((d) => shiftDay(d, -1))}>
             <ChevronLeft size={20} color={C.text} />

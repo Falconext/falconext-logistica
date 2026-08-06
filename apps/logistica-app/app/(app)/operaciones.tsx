@@ -505,8 +505,8 @@ export default function OperacionesScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: S.sm, paddingBottom: S.sm }}
-          style={{ marginBottom: S.sm, flexGrow: 0 }}
+          contentContainerStyle={{ gap: S.sm, alignItems: 'center', paddingRight: S.md }}
+          style={{ marginBottom: S.sm, maxHeight: 46 }}
         >
           {(() => {
             const totalAll = Object.values(counts).reduce((s, n) => s + n, 0);
@@ -632,13 +632,8 @@ export default function OperacionesScreen() {
             ) : null}
             <InfoRow label="Nota" value={detail.nota} />
 
-            <Text style={styles.formSection}>Historial de ruta</Text>
-            <RouteReport
-              key={detail.id}
-              deviceId={detailDeviceId}
-              initialDate={(detail.fecha_retiro || detail.fecha || '').split('T')[0] || undefined}
-              showDaySelector
-            />
+            <Text style={styles.formSection}>Recorrido de la operación</Text>
+            <RouteReport key={detail.id} programacionId={detail.id} />
           </View>
         )}
       </FormModal>

@@ -69,7 +69,7 @@ function dot(color){return {path:google.maps.SymbolPath.CIRCLE,scale:8,fillColor
 window.__markers=[];
 window.initMap=function(){try{
   var isSat=(CFG.mapStyle||'streets')==='satellite';
-  var center=CFG.center?LL(CFG.center[0],CFG.center[1]):LL(-77.04,-12.04);
+  var center=CFG.center?LL(CFG.center[0],CFG.center[1]):LL(9.19,45.4642);
   var map=new google.maps.Map(document.getElementById('map'),{center:center,zoom:CFG.zoom||11,disableDefaultUI:true,zoomControl:true,clickableIcons:false,mapTypeId:isSat?'satellite':'roadmap',styles:isSat?[]:stylesFor(CFG.preset||'day'),gestureHandling:'greedy'});
   window.__map=map;window.__center=center;
   // Reajuste de tamaño (dentro de modales/scroll el contenedor puede iniciar en 0x0).
@@ -98,13 +98,13 @@ window.initMap=function(){try{
     bounds.extend(LL(dc.lng,dc.lat));has=true;
   }
   if(CFG.route){drawRoute(map,CFG.route);return;}
-  if(CFG.fit&&has){try{map.fitBounds(bounds,60);}catch(e){}}
+  if(CFG.fit&&has){try{map.fitBounds(bounds,60);google.maps.event.addListenerOnce(map,'idle',function(){if(map.getZoom()>16)map.setZoom(16);});}catch(e){}}
 }catch(err){post({type:'error',message:String(err)});}};
 
 function drawRoute(map,route){
   var done=function(path){
     new google.maps.Polyline({path:path,map:map,strokeColor:'#FFC933',strokeWeight:5,strokeOpacity:0.9});
-    var b=new google.maps.LatLngBounds();path.forEach(function(p){b.extend(p);});try{map.fitBounds(b,50);}catch(e){}
+    var b=new google.maps.LatLngBounds();path.forEach(function(p){b.extend(p);});try{map.fitBounds(b,50);google.maps.event.addListenerOnce(map,'idle',function(){if(map.getZoom()>16)map.setZoom(16);});}catch(e){}
   };
   if(route.coordinates){done(route.coordinates.map(function(c){return LL(c[0],c[1]);}));return;}
   var geo=new google.maps.Geocoder();
@@ -112,7 +112,7 @@ function drawRoute(map,route){
     if(!addr){res(null);return;}
     var m=(''+addr).trim().match(/^(-?\\d{1,3}(?:\\.\\d+)?),\\s*(-?\\d{1,3}(?:\\.\\d+)?)$/);
     if(m){res(LL(parseFloat(m[2]),parseFloat(m[1])));return;}
-    geo.geocode({address:addr},function(r,st){res(st==='OK'&&r[0]?r[0].geometry.location:null);});
+    geo.geocode({address:addr,region:'it'},function(r,st){res(st==='OK'&&r[0]?r[0].geometry.location:null);});
   });};
   var wps=(route.waypoints||[]).filter(function(w){return !!w;});
   Promise.all([g(route.originAddress),g(route.destinationAddress)].concat(wps.map(g))).then(function(rr){

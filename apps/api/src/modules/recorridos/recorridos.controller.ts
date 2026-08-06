@@ -28,6 +28,12 @@ export class RecorridosController {
         return this.service.traza(req.user.tenantId, id);
     }
 
+    // Traza del recorrido de una operación (para el detalle de Operaciones).
+    @Get('programacion/:programacionId/traza')
+    trazaByProgramacion(@Param('programacionId') programacionId: string, @Req() req) {
+        return this.service.trazaByProgramacion(req.user.tenantId, programacionId);
+    }
+
     // Cierre forzado por el supervisor de un recorrido atascado.
     @Post(':id/cerrar')
     cerrar(@Param('id') id: string, @Req() req) {

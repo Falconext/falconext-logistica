@@ -86,10 +86,6 @@ export default function DashboardScreen() {
   const router = useRouter();
   const { user } = useAuth();
 
-  // El dashboard muestra datos de la empresa: los choferes van a su resumen
-  // personal. (Condición estable durante toda la sesión: no rompe hooks.)
-  if (isChofer(user)) return <Redirect href={'/(app)/mi-resumen' as any} />;
-
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [alerts, setAlerts] = useState<DashboardAlert[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,6 +108,11 @@ export default function DashboardScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // El dashboard muestra datos de la empresa: los choferes van a su resumen personal.
+  // La redirección va DESPUÉS de todos los hooks (si no, se saltan hooks y React rompe
+  // con "Rendered more hooks than during the previous render" al cargar el usuario).
+  if (isChofer(user)) return <Redirect href={'/(app)/mi-resumen' as any} />;
 
   const onRefresh = () => {
     setRefreshing(true);

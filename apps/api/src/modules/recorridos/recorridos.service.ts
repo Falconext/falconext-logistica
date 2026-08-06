@@ -372,6 +372,18 @@ export class RecorridosService {
 
     /** Traza detallada de un recorrido: recorrido + ruta GPS real + análisis (distancia,
      *  tiempos, paradas) reusando getTripAnalysis sobre la ventana del recorrido. */
+    // Traza del recorrido más reciente de una operación (para mostrarla en su detalle).
+    // Devuelve el recorrido acotado a iniciar→finalizar (no el GPS del día completo).
+    async trazaByProgramacion(tenantId: string, programacionId: string) {
+        const r = await this.prisma.recorrido.findFirst({
+            where: { tenant_id: tenantId, programacion_id: programacionId },
+            orderBy: { iniciado_en: 'desc' },
+            select: { id: true },
+        });
+        if (!r) return { recorrido: null, path: [], analisis: null };
+        return this.traza(tenantId, r.id);
+    }
+
     async traza(tenantId: string, id: string) {
         const r = await this.getOwned(tenantId, id);
         const hasta = r.finalizado_en ?? new Date();
