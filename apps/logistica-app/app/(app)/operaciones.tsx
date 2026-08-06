@@ -1034,14 +1034,16 @@ const makeStyles = () => StyleSheet.create({
   routeText: { flex: 1, fontSize: 12, color: C.textMuted },
   metaRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: S.md,
+    columnGap: S.lg,
+    rowGap: S.sm,
     marginTop: S.md,
     paddingTop: S.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: C.border,
   },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   meta: { fontSize: 12, color: C.textFaint },
   formSection: {
     fontSize: 13,
