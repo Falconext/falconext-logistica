@@ -195,18 +195,23 @@ export default function RouteReport({ deviceId, programacionId, initialDate, sho
         </View>
       )}
 
-      <MapboxWebView
-        key={mapKey}
-        style={styles.map}
-        mapStyle="streets"
-        route={hasData ? { coordinates: (trip?.matchedGeometry?.coordinates?.length ? trip.matchedGeometry.coordinates : coords) } : undefined}
-        markers={markers}
-        fit
-      />
-
+      {/* El mapa se monta SOLO cuando la data ya cargó, para que `initMap` corra con
+          las coordenadas presentes. En iOS el WebView no recarga de forma fiable al
+          cambiar `source.html`, así que montarlo con los datos listos es lo robusto. */}
       {loading ? (
-        <View style={styles.loading}><ActivityIndicator color={C.primary} /></View>
-      ) : !hasData ? (
+        <View style={[styles.map, styles.mapLoading]}><ActivityIndicator color={C.primary} /></View>
+      ) : hasData ? (
+        <MapboxWebView
+          key={mapKey}
+          style={styles.map}
+          mapStyle="streets"
+          route={{ coordinates: (trip?.matchedGeometry?.coordinates?.length ? trip.matchedGeometry.coordinates : coords) }}
+          markers={markers}
+          fit
+        />
+      ) : null}
+
+      {loading ? null : !hasData ? (
         <View style={styles.empty}>
           <MapPin size={28} color={C.textFaint} />
           <Text style={styles.emptyTitle}>Sin recorrido este día</Text>
@@ -281,6 +286,7 @@ const makeStyles = () => StyleSheet.create({
   dateLabel: { fontSize: 15, fontWeight: '700', color: C.text, textTransform: 'capitalize' },
   dateSub: { fontSize: 12, color: C.textMuted, marginTop: 1 },
   map: { height: 300, borderRadius: Theme.radius.lg, marginBottom: S.md, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border },
+  mapLoading: { alignItems: 'center', justifyContent: 'center', backgroundColor: C.surfaceAlt },
   loading: { paddingVertical: 40, alignItems: 'center' },
   empty: { paddingVertical: 36, alignItems: 'center', gap: 6 },
   emptyTitle: { fontSize: 15, fontWeight: '700', color: C.text, marginTop: 4 },
