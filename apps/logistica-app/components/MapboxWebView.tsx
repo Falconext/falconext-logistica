@@ -73,8 +73,12 @@ window.initMap=function(){try{
   var map=new google.maps.Map(document.getElementById('map'),{center:center,zoom:CFG.zoom||11,disableDefaultUI:true,zoomControl:true,clickableIcons:false,mapTypeId:isSat?'satellite':'roadmap',styles:isSat?[]:stylesFor(CFG.preset||'day'),gestureHandling:'greedy'});
   window.__map=map;window.__center=center;
   // Reajuste de tamaño (dentro de modales/scroll el contenedor puede iniciar en 0x0).
-  try{if(window.ResizeObserver){new ResizeObserver(function(){try{google.maps.event.trigger(map,'resize');map.setCenter(window.__center);}catch(e){}}).observe(document.getElementById('map'));}}catch(e){}
-  setTimeout(function(){try{google.maps.event.trigger(map,'resize');map.setCenter(window.__center);}catch(e){}},350);
+  // Si hay un recorrido/encuadre activo re-encuadramos a esos límites; si no, recentramos
+  // al centro. OJO: NO forzar el centro por defecto cuando hay ruta, o el mapa "salta"
+  // de vuelta al default (p.ej. Milano) tapando el trazado en cada resize.
+  var reapply=function(){try{google.maps.event.trigger(map,'resize');if(window.__fitBounds){map.fitBounds(window.__fitBounds,50);}else{map.setCenter(window.__center);}}catch(e){}};
+  try{if(window.ResizeObserver){new ResizeObserver(reapply).observe(document.getElementById('map'));}}catch(e){}
+  setTimeout(reapply,350);
   window.__setPreset=function(p){try{if(!isSat)map.setOptions({styles:stylesFor(p)});}catch(e){}};
   window.__focus=function(lng,lat){try{map.panTo(LL(lng,lat));map.setZoom(15);var best=null,bd=1e9;window.__markers.forEach(function(o){var dd=Math.abs(o.lng-lng)+Math.abs(o.lat-lat);if(dd<bd){bd=dd;best=o;}});if(best&&best.info){window.__markers.forEach(function(o){o.info&&o.info.close();});best.info.open({map:map,anchor:best.mk});}}catch(e){}};
 
@@ -98,13 +102,13 @@ window.initMap=function(){try{
     bounds.extend(LL(dc.lng,dc.lat));has=true;
   }
   if(CFG.route){drawRoute(map,CFG.route);return;}
-  if(CFG.fit&&has){try{map.fitBounds(bounds,60);google.maps.event.addListenerOnce(map,'idle',function(){if(map.getZoom()>16)map.setZoom(16);});}catch(e){}}
+  if(CFG.fit&&has){try{window.__fitBounds=bounds;map.fitBounds(bounds,60);google.maps.event.addListenerOnce(map,'idle',function(){if(map.getZoom()>16)map.setZoom(16);});}catch(e){}}
 }catch(err){post({type:'error',message:String(err)});}};
 
 function drawRoute(map,route){
   var done=function(path){
     new google.maps.Polyline({path:path,map:map,strokeColor:'#FFC933',strokeWeight:5,strokeOpacity:0.9});
-    var b=new google.maps.LatLngBounds();path.forEach(function(p){b.extend(p);});try{map.fitBounds(b,50);google.maps.event.addListenerOnce(map,'idle',function(){if(map.getZoom()>16)map.setZoom(16);});}catch(e){}
+    var b=new google.maps.LatLngBounds();path.forEach(function(p){b.extend(p);});window.__fitBounds=b;try{map.fitBounds(b,50);google.maps.event.addListenerOnce(map,'idle',function(){if(map.getZoom()>16)map.setZoom(16);});}catch(e){}
   };
   if(route.coordinates){done(route.coordinates.map(function(c){return LL(c[0],c[1]);}));return;}
   var geo=new google.maps.Geocoder();
