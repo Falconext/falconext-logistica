@@ -124,12 +124,13 @@ export class ProgramacionService {
 
     // Normaliza un gasto del frontend a la forma de la BD, denormalizando chofer/vehículo
     // desde la operación para poder listarlo luego en los módulos de Peaje/Combustible.
-    private normalizeGasto(g: any, op: { id: string; trabajador_id?: string | null; vehiculo_id?: string | null }, tenantId: string) {
+    private normalizeGasto(g: any, op: { id: string; trabajador_id?: string | null; vehiculo_id?: string | null; fecha?: Date | null; fecha_retiro?: Date | null; fecha_entrega?: Date | null }, tenantId: string) {
         return {
             programacion_id: op.id,
             tipo: String(g.tipo || 'OTRO'),
             monto: g.monto != null && g.monto !== '' ? Number(g.monto) : 0,
-            fecha: g.fecha ? new Date(g.fecha) : null,
+            // Sin fecha propia usa la de la operación, para que ordene con su fecha en los módulos.
+            fecha: g.fecha ? new Date(g.fecha) : (op.fecha_entrega || op.fecha_retiro || op.fecha || null),
             descripcion: g.descripcion || null,
             numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null,
             comprobantes: Array.isArray(g.comprobantes) ? g.comprobantes.filter(Boolean) : [],
