@@ -516,8 +516,8 @@ export default function OperacionesScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: S.sm, paddingRight: S.md, paddingVertical: 2 }}
-          style={{ marginBottom: S.sm, flexGrow: 0 }}
+          contentContainerStyle={{ gap: S.sm, paddingRight: S.md, alignItems: 'center' }}
+          style={{ marginBottom: S.sm, height: 44, flexGrow: 0, flexShrink: 0 }}
         >
           {(() => {
             const totalAll = Object.values(counts).reduce((s, n) => s + n, 0);
