@@ -228,6 +228,17 @@ export default function OperacionesScreen() {
     }
   }, []);
 
+  // El trabajador_id de una operación puede venir como UUID o como código
+  // (id_trabajador); mapeamos ambos al nombre para mostrarlo en vez del id.
+  const trabajadorNombre = useCallback(
+    (id?: string | null): string | null => {
+      if (!id) return null;
+      const w = trabajadores.find((t) => t.id === id || t.id_trabajador === id);
+      return w?.nombre_completo || null;
+    },
+    [trabajadores]
+  );
+
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
     const data = items.filter(
@@ -463,7 +474,7 @@ export default function OperacionesScreen() {
           <View style={styles.metaItem}>
             <User size={12} color={C.textFaint} />
             <Text style={styles.meta} numberOfLines={1}>
-              {r.trabajador_id || 'Sin asignar'}
+              {trabajadorNombre(r.trabajador_id) || 'Sin asignar'}
             </Text>
           </View>
           <View style={styles.metaItem}>
@@ -614,7 +625,7 @@ export default function OperacionesScreen() {
             <InfoRow label="Fecha entrega" value={fmtDate(detail.fecha_entrega)} />
             <InfoRow label="ETA" value={detail.eta} />
             <InfoRow label="Vehículo" value={detail.vehiculo_id} />
-            <InfoRow label="Conductor" value={detail.trabajador_nombre || detail.trabajador_id || 'Sin asignar'} />
+            <InfoRow label="Conductor" value={detail.trabajador_nombre || trabajadorNombre(detail.trabajador_id) || 'Sin asignar'} />
             {detail.km != null && detail.km !== 0 ? <InfoRow label="KM" value={`${detail.km} km`} /> : null}
             {detail.ciudad ? <InfoRow label="Ciudad" value={detail.ciudad} /> : null}
             {detail.app ? <InfoRow label="App" value={detail.app} /> : null}
