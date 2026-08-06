@@ -474,7 +474,7 @@ export default function OperacionesScreen() {
           <View style={styles.metaItem}>
             <User size={12} color={C.textFaint} />
             <Text style={styles.meta} numberOfLines={1}>
-              {trabajadorNombre(r.trabajador_id) || 'Sin asignar'}
+              {r.trabajador_nombre || trabajadorNombre(r.trabajador_id) || 'Sin asignar'}
             </Text>
           </View>
           <View style={styles.metaItem}>
@@ -516,8 +516,8 @@ export default function OperacionesScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: S.sm, alignItems: 'center', paddingRight: S.md }}
-          style={{ marginBottom: S.sm, maxHeight: 46 }}
+          contentContainerStyle={{ gap: S.sm, paddingRight: S.md, paddingVertical: 2 }}
+          style={{ marginBottom: S.sm, flexGrow: 0 }}
         >
           {(() => {
             const totalAll = Object.values(counts).reduce((s, n) => s + n, 0);
