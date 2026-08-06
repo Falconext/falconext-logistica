@@ -140,6 +140,18 @@ export default function RouteReport({ deviceId, programacionId, initialDate, sho
 
   const hasData = coords.length > 0 || (trip?.points ?? 0) > 0;
 
+  // Firma de la ruta a dibujar. En iOS el WebView no siempre recarga cuando solo
+  // cambia `source.html` (la traza llega async DESPUÉS de montar), así que forzamos
+  // un remonte limpio del mapa cuando cambian las coordenadas para que `initMap`
+  // vuelva a correr y pinte el polyline. Solo afecta a este mapa (no al live).
+  const mapKey = useMemo(() => {
+    const geo = trip?.matchedGeometry?.coordinates;
+    const src = geo?.length ? geo : coords;
+    const first = src[0];
+    const last = src[src.length - 1];
+    return `${opMode ? 'op' : dateStr}-${src.length}-${first ? first.join(',') : ''}-${last ? last.join(',') : ''}`;
+  }, [coords, trip?.matchedGeometry, opMode, dateStr]);
+
   // Sin dispositivo GPS asignado al chofer (evita el spinner infinito).
   if (!deviceId && !opMode) {
     return (
@@ -184,6 +196,7 @@ export default function RouteReport({ deviceId, programacionId, initialDate, sho
       )}
 
       <MapboxWebView
+        key={mapKey}
         style={styles.map}
         mapStyle="streets"
         route={hasData ? { coordinates: (trip?.matchedGeometry?.coordinates?.length ? trip.matchedGeometry.coordinates : coords) } : undefined}
