@@ -16,6 +16,8 @@ import {
   Package,
   CircleUser,
   PlusCircle,
+  Fuel,
+  Ticket,
 } from 'lucide-react-native';
 import {
   Screen,
@@ -60,10 +62,10 @@ interface Consegna {
   estado?: string | null;
 }
 
-interface PagoBucket { recorridos: number; horas: number; horasDia: number; horasNoche: number; ganancia: number; }
-interface Pago {
-  hoy: PagoBucket; semana: PagoBucket; mes: PagoBucket; total: PagoBucket;
-  tarifaDia: number; tarifaNoche: number; moneda: string; nocheDesde: string; nocheHasta: string;
+interface ResumenChofer {
+  entregas: { total: number; entregadas: number; canceladas: number; pendientes: number; enRuta: number };
+  gastos: { combustible: number; peajes: number; otros: number; total: number };
+  moneda: string;
 }
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -101,7 +103,7 @@ export default function MiResumenScreen() {
   const { user } = useAuth();
 
   const [resumen, setResumen] = useState<Resumen | null>(null);
-  const [pago, setPago] = useState<Pago | null>(null);
+  const [chofer, setChofer] = useState<ResumenChofer | null>(null);
   const [consegnas, setConsegnas] = useState<Consegna[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -109,13 +111,13 @@ export default function MiResumenScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [resRes, progRes, pagoRes] = await Promise.all([
+      const [resRes, progRes, choferRes] = await Promise.all([
         api.get('/registros/mias/resumen'),
         api.get('/programacion', { params: { estados: 'PENDING,PENDIENTE,IN_TRANSIT,REPROGRAMADO', take: 5 } }),
-        api.get('/recorridos/mio/pago').catch(() => null),
+        api.get('/recorridos/mio/resumen').catch(() => null),
       ]);
       setResumen(resRes.data ?? null);
-      setPago(pagoRes?.data ?? null);
+      setChofer(choferRes?.data ?? null);
       const prog = progRes.data;
       setConsegnas(Array.isArray(prog) ? prog : prog?.data ?? []);
     } catch {
@@ -152,8 +154,7 @@ export default function MiResumenScreen() {
 
   const nombre = (user?.nombre || user?.email?.split('@')[0] || 'Chofer').split(' ')[0];
   const mes = MESES[new Date().getMonth()];
-  const moneda = resumen?.moneda || user?.moneda;
-  const tarifas = resumen?.tarifas;
+  const moneda = chofer?.moneda || resumen?.moneda || user?.moneda;
 
   return (
     <Screen
@@ -163,45 +164,54 @@ export default function MiResumenScreen() {
     >
       <AppHeader title={`Hola, ${nombre}`} subtitle={`Tu resumen de ${mes}`} />
 
-      {/* Ganancia del mes (horas de manejo × tarifa) */}
-      <Card style={styles.earningsCard}>
-        <Text style={styles.earningsLabel}>Ganancia estimada · {mes}</Text>
-        <Text style={styles.earningsValue}>{formatMoney(resumen?.gananciaEstimada ?? 0, moneda)}</Text>
-        {tarifas ? (
-          <Text style={styles.earningsHint}>
-            {horasLabel(resumen?.oreMattina ?? 0)} día × {formatMoney(tarifas.giorno, moneda)}  +  {horasLabel(resumen?.oreSera ?? 0)} noche × {formatMoney(tarifas.notte, moneda)}
-          </Text>
-        ) : (
-          <Text style={styles.earningsHint}>Registra tus partes del día para ver tu ganancia.</Text>
-        )}
+      {/* Resumen de entregas del mes */}
+      <Card style={styles.entregasCard}>
+        <View style={styles.pagoHeader}>
+          <Package size={16} color={C.primary} />
+          <Text style={styles.pagoTitle}>Entregas de {mes}</Text>
+        </View>
+        <View style={styles.pagoRow}>
+          {([
+            { k: 'Total', v: chofer?.entregas.total ?? 0, c: C.text },
+            { k: 'Entregadas', v: chofer?.entregas.entregadas ?? 0, c: C.success },
+            { k: 'Canceladas', v: chofer?.entregas.canceladas ?? 0, c: C.danger },
+            { k: 'Pendientes', v: chofer?.entregas.pendientes ?? 0, c: C.warning },
+          ] as const).map((it) => (
+            <View key={it.k} style={styles.pagoTile}>
+              <Text style={[styles.pagoTileVal, { color: it.c }]}>{it.v}</Text>
+              <Text style={styles.pagoTileLbl}>{it.k}</Text>
+            </View>
+          ))}
+        </View>
       </Card>
 
-      {/* Ganancia por horas reales de ruta (Iniciar ruta → Finalizar), 10€ día / 12€ noche */}
-      {pago && (
-        <Card style={styles.pagoCard}>
-          <View style={styles.pagoHeader}>
-            <Clock size={16} color={C.primary} />
-            <Text style={styles.pagoTitle}>Ganancia por horas de ruta</Text>
+      {/* Gastos del mes (combustible / peajes) */}
+      <Card style={styles.entregasCard}>
+        <View style={styles.pagoHeader}>
+          <Fuel size={16} color={C.primary} />
+          <Text style={styles.pagoTitle}>Gastos de {mes}</Text>
+        </View>
+        <View style={styles.gastoRow}>
+          <View style={styles.gastoItem}>
+            <Fuel size={18} color={C.info} />
+            <View>
+              <Text style={styles.gastoLabel}>Combustible</Text>
+              <Text style={styles.gastoVal}>{formatMoney(chofer?.gastos.combustible ?? 0, moneda)}</Text>
+            </View>
           </View>
-          <View style={styles.pagoRow}>
-            {([
-              { k: 'Hoy', v: pago.hoy },
-              { k: 'Semana', v: pago.semana },
-              { k: 'Mes', v: pago.mes },
-              { k: 'Total', v: pago.total },
-            ] as const).map((it) => (
-              <View key={it.k} style={styles.pagoTile}>
-                <Text style={styles.pagoTileVal}>{formatMoney(it.v.ganancia, pago.moneda)}</Text>
-                <Text style={styles.pagoTileLbl}>{it.k}</Text>
-                <Text style={styles.pagoTileHrs}>{horasLabel(it.v.horas)}</Text>
-              </View>
-            ))}
+          <View style={styles.gastoItem}>
+            <Ticket size={18} color={C.accent} />
+            <View>
+              <Text style={styles.gastoLabel}>Peajes</Text>
+              <Text style={styles.gastoVal}>{formatMoney(chofer?.gastos.peajes ?? 0, moneda)}</Text>
+            </View>
           </View>
-          <Text style={styles.pagoHint}>
-            {formatMoney(pago.tarifaDia, pago.moneda)}/h día · {formatMoney(pago.tarifaNoche, pago.moneda)}/h noche (desde {pago.nocheDesde})
-          </Text>
-        </Card>
-      )}
+        </View>
+        <View style={styles.gastoTotalRow}>
+          <Text style={styles.gastoTotalLbl}>Total gastado</Text>
+          <Text style={styles.gastoTotalVal}>{formatMoney(chofer?.gastos.total ?? 0, moneda)}</Text>
+        </View>
+      </Card>
 
       {/* Registrar parte del día */}
       <TouchableOpacity style={styles.parteBtn} activeOpacity={0.85} onPress={() => router.push('/(app)/parte-diario' as any)}>
@@ -277,7 +287,6 @@ export default function MiResumenScreen() {
                     {r.km} km · {horasLabel(r.oreMattina)} día + {horasLabel(r.oreSera)} noche
                   </Text>
                 </View>
-                <Text style={styles.parteGanancia}>{formatMoney(r.ganancia, moneda)}</Text>
                 <ChevronRight size={18} color={C.textFaint} />
               </Card>
             </TouchableOpacity>
@@ -297,6 +306,14 @@ const makeStyles = () => StyleSheet.create({
   earningsLabel: { color: '#ffffffCC', fontSize: F.size.sm, fontWeight: '600', textTransform: 'capitalize' },
   earningsValue: { color: '#fff', fontSize: 34, fontWeight: '800', marginTop: 4 },
   earningsHint: { color: '#ffffffB3', fontSize: F.size.sm, marginTop: 6, lineHeight: 18 },
+  entregasCard: { marginTop: S.md, padding: S.md },
+  gastoRow: { flexDirection: 'row', gap: S.sm },
+  gastoItem: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: S.sm, backgroundColor: C.surfaceAlt, borderRadius: R.md, padding: S.sm },
+  gastoLabel: { fontSize: F.size.xs, color: C.textMuted },
+  gastoVal: { fontSize: F.size.md, fontWeight: '800', color: C.text, marginTop: 1 },
+  gastoTotalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: S.sm, paddingTop: S.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border },
+  gastoTotalLbl: { fontSize: F.size.sm, color: C.textMuted, fontWeight: '600' },
+  gastoTotalVal: { fontSize: F.size.md, fontWeight: '800', color: C.text },
   pagoCard: { marginTop: S.md, padding: S.md },
   pagoHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: S.sm },
   pagoTitle: { fontSize: F.size.md, fontWeight: '700', color: C.text },

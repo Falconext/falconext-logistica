@@ -51,10 +51,16 @@ export class RecorridosController {
         return this.service.activoDeTrabajador(req.user.tenantId, req.user.trabajadorId);
     }
 
-    // Resumen de ganancias por hora del chofer (hoy/semana/mes/total).
+    // Resumen de ganancias por hora del chofer (hoy/semana/mes/total). Uso interno/admin.
     @Get('mio/pago')
     miPago(@Req() req) {
         return this.service.resumenPago(req.user.tenantId, req.user.trabajadorId);
+    }
+
+    // Resumen del chofer SIN ganancias: entregas del mes + gastos combustible/peajes.
+    @Get('mio/resumen')
+    miResumen(@Req() req) {
+        return this.service.resumenChofer(req.user.tenantId, req.user.trabajadorId);
     }
 
     @Post('iniciar')

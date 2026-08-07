@@ -590,4 +590,68 @@ export class RecorridosService {
             mes: round(buckets.mes), total: round(buckets.total), ...meta,
         };
     }
+
+    /** Resumen del chofer (SIN ganancias): entregas del mes por estado + gastos
+     *  del mes (combustible/peajes). El empresario prefiere no mostrarle ingresos. */
+    async resumenChofer(tenantId: string, trabajadorId: string) {
+        const empty = {
+            entregas: { total: 0, entregadas: 0, canceladas: 0, pendientes: 0, enRuta: 0 },
+            gastos: { combustible: 0, peajes: 0, otros: 0, total: 0 },
+            moneda: 'EUR',
+        };
+        if (!trabajadorId) return empty;
+
+        const trab = await this.prisma.trabajador.findFirst({
+            where: { id: trabajadorId, tenant_id: tenantId },
+            select: { id: true, id_trabajador: true },
+        });
+        const codigos = [trabajadorId, trab?.id_trabajador].filter(Boolean) as string[];
+
+        // Inicio del mes en hora de Italia.
+        const now = new Date();
+        const off = this.tzOffsetMin(now);
+        const localNow = new Date(now.getTime() + off * 60000);
+        const startMes = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), 1) - off * 60000);
+
+        const [progs, gastos] = await Promise.all([
+            this.prisma.programacion.findMany({
+                where: { tenant_id: tenantId, trabajador_id: { in: codigos } },
+                select: { estado: true, fecha_entrega: true, fecha: true },
+            }),
+            this.prisma.gastoOperacion.findMany({
+                where: { tenant_id: tenantId, trabajador_id: { in: codigos } },
+                select: { tipo: true, monto: true, fecha: true, creado_en: true },
+            }),
+        ]);
+
+        const entregas = { total: 0, entregadas: 0, canceladas: 0, pendientes: 0, enRuta: 0 };
+        for (const p of progs) {
+            const ref = p.fecha_entrega || p.fecha;
+            if (!ref || new Date(ref) < startMes) continue;
+            entregas.total++;
+            const e = (p.estado || 'PENDIENTE').toUpperCase();
+            if (e === 'ENTREGADO') entregas.entregadas++;
+            else if (e === 'CANCELADO') entregas.canceladas++;
+            else if (e === 'RETIRADO' || e === 'IN_TRANSIT') entregas.enRuta++;
+            else entregas.pendientes++;
+        }
+
+        const g = { combustible: 0, peajes: 0, otros: 0, total: 0 };
+        for (const x of gastos) {
+            const ref = x.fecha || x.creado_en;
+            if (!ref || new Date(ref) < startMes) continue;
+            const m = Number(x.monto) || 0;
+            g.total += m;
+            const t = (x.tipo || '').toUpperCase();
+            if (t === 'COMBUSTIBLE') g.combustible += m;
+            else if (t === 'PEAJE') g.peajes += m;
+            else g.otros += m;
+        }
+        const r2 = (n: number) => Math.round(n * 100) / 100;
+        return {
+            entregas,
+            gastos: { combustible: r2(g.combustible), peajes: r2(g.peajes), otros: r2(g.otros), total: r2(g.total) },
+            moneda: 'EUR',
+        };
+    }
 }
