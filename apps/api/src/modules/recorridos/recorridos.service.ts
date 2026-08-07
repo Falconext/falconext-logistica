@@ -302,15 +302,18 @@ export class RecorridosService {
         });
         if (recorridos.length === 0) return [];
 
-        // Resolver nombres de chofer y placas en lote.
+        // Resolver nombres de chofer, placas y la operación (para cliente + hora límite).
         const trabIds = Array.from(new Set(recorridos.map((r) => r.trabajador_id)));
         const vehIds = Array.from(new Set(recorridos.map((r) => r.vehiculo_id).filter(Boolean) as string[]));
-        const [trabs, vehs] = await Promise.all([
+        const progIds = Array.from(new Set(recorridos.map((r) => r.programacion_id).filter(Boolean) as string[]));
+        const [trabs, vehs, progs] = await Promise.all([
             this.prisma.trabajador.findMany({ where: { id: { in: trabIds } }, select: { id: true, nombre_completo: true, url_foto: true } }),
             vehIds.length ? this.prisma.vehiculo.findMany({ where: { id: { in: vehIds } }, select: { id: true, placa: true } }) : Promise.resolve([]),
+            progIds.length ? this.prisma.programacion.findMany({ where: { id: { in: progIds } }, select: { id: true, cliente: true, fecha_entrega: true } }) : Promise.resolve([]),
         ]);
         const trabMap = new Map(trabs.map((t) => [t.id, t]));
         const vehMap = new Map(vehs.map((v) => [v.id, v]));
+        const progMap = new Map(progs.map((p) => [p.id, p]));
         const now = Date.now();
 
         return Promise.all(
@@ -331,8 +334,18 @@ export class RecorridosService {
                     r.estado === 'EN_RUTA_VUELTA' && r.retorno_en ? r.retorno_en :
                         r.estado === 'EN_DESTINO' && r.llegada_en ? r.llegada_en : r.iniciado_en;
 
+                const prog = r.programacion_id ? progMap.get(r.programacion_id) : null;
+                // Minutos que faltan (o de retraso, si es negativo) para la hora límite de entrega.
+                const restanEntregaMin = prog?.fecha_entrega
+                    ? Math.round((new Date(prog.fecha_entrega).getTime() - now) / 60000)
+                    : null;
+
                 return {
                     id: r.id,
+                    cliente: prog?.cliente || null,
+                    fecha_entrega: prog?.fecha_entrega || null,
+                    // + = faltan min para la entrega; - = ya está retrasado.
+                    restanEntregaMin,
                     trabajador: trabMap.get(r.trabajador_id)?.nombre_completo || 'Chofer',
                     url_foto: trabMap.get(r.trabajador_id)?.url_foto || null,
                     placa: r.vehiculo_id ? vehMap.get(r.vehiculo_id)?.placa || null : null,

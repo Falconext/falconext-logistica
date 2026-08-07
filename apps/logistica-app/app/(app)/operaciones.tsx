@@ -18,6 +18,7 @@ import {
   User,
   Pencil,
   CalendarClock,
+  AlarmClock,
   ClipboardList,
   CheckCircle2,
   Navigation,
@@ -162,6 +163,7 @@ export default function OperacionesScreen() {
   const [detail, setDetail] = useState<Programacion | null>(null);
   const [wizardOp, setWizardOp] = useState<Programacion | null>(null); // chofer: flujo por pasos
   const [detailDeviceId, setDetailDeviceId] = useState<string>('');
+  const [detailActivo, setDetailActivo] = useState<any>(null);
   const [formVisible, setFormVisible] = useState(false);
   const [editing, setEditing] = useState<Programacion | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
@@ -209,6 +211,21 @@ export default function OperacionesScreen() {
       .catch(() => { if (!cancelled) setDetailDeviceId(''); });
     return () => { cancelled = true; };
   }, [detail?.trabajador_id, detail?.id]);
+
+  // Recorrido activo de esta operación (para mostrar ETA en vivo + contómetro de entrega).
+  useEffect(() => {
+    if (!detail?.id) { setDetailActivo(null); return; }
+    let cancelled = false;
+    setDetailActivo(null);
+    api.get('/recorridos/activos')
+      .then((res) => {
+        if (cancelled) return;
+        const arr = Array.isArray(res.data) ? res.data : [];
+        setDetailActivo(arr.find((a: any) => a.programacion_id === detail.id) || null);
+      })
+      .catch(() => { if (!cancelled) setDetailActivo(null); });
+    return () => { cancelled = true; };
+  }, [detail?.id]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -643,6 +660,33 @@ export default function OperacionesScreen() {
             ) : null}
             <InfoRow label="Nota" value={detail.nota} />
 
+            {detailActivo && (
+              <View style={styles.liveCard}>
+                <View style={styles.liveRow}>
+                  <Navigation size={16} color={C.info} />
+                  <Text style={styles.liveText}>
+                    {detailActivo.estado === 'EN_RUTA_IDA'
+                      ? `Chofer llega en ~${detailActivo.disponibleEnMin ?? detailActivo.etaMin ?? '—'} min (Maps)`
+                      : detailActivo.estado === 'EN_DESTINO'
+                        ? 'Chofer en el destino'
+                        : detailActivo.descansando
+                          ? 'Chofer en descanso'
+                          : `Disponible en ~${detailActivo.disponibleEnMin ?? detailActivo.etaMin ?? '—'} min`}
+                  </Text>
+                </View>
+                {detailActivo.restanEntregaMin != null && (
+                  <View style={styles.liveRow}>
+                    <AlarmClock size={16} color={detailActivo.restanEntregaMin < 0 ? C.danger : detailActivo.restanEntregaMin <= 30 ? '#B45309' : C.success} />
+                    <Text style={[styles.liveText, { fontWeight: '700', color: detailActivo.restanEntregaMin < 0 ? C.danger : detailActivo.restanEntregaMin <= 30 ? '#B45309' : C.success }]}>
+                      {detailActivo.restanEntregaMin < 0
+                        ? `Entrega retrasada ${Math.abs(detailActivo.restanEntregaMin)} min`
+                        : `Faltan ${detailActivo.restanEntregaMin} min para la entrega${detailActivo.restanEntregaMin <= 30 ? ' · llama al cliente' : ''}`}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+
             <Text style={styles.formSection}>Recorrido de la operación</Text>
             <RouteReport key={detail.id} programacionId={detail.id} />
           </View>
@@ -1044,6 +1088,9 @@ const makeStyles = () => StyleSheet.create({
     borderTopColor: C.border,
   },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  liveCard: { gap: S.sm, backgroundColor: C.surfaceAlt, borderRadius: Theme.radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, padding: S.md, marginTop: S.sm },
+  liveRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
+  liveText: { flex: 1, fontSize: 13, color: C.text },
   meta: { fontSize: 12, color: C.textFaint },
   formSection: {
     fontSize: 13,

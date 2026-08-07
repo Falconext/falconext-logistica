@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, RefreshControl, Alert, TouchableOpacity } from 
 import { useFocusEffect } from 'expo-router';
 import {
   Navigation, MapPin, CornerUpLeft, Clock, Timer, Coffee, WifiOff, History, ArrowUp, ArrowDown,
-  Route as RouteIcon, Radio, X,
+  Route as RouteIcon, Radio, X, AlarmClock,
 } from 'lucide-react-native';
 import { Screen, AppHeader, Card, StatCard, Badge, Button, LoadingState, EmptyState, Theme } from '../../components/ui';
 import api from '../../services/api';
@@ -29,6 +29,9 @@ interface RecorridoActivo {
   etaMin: number | null;
   disponibleEnMin: number | null;
   sinGps: boolean;
+  cliente: string | null;
+  fecha_entrega: string | null;
+  restanEntregaMin: number | null;
 }
 
 interface RecorridoHistorial {
@@ -257,7 +260,7 @@ export default function RecorridosScreen() {
                           : <Timer size={14} color={C.info} />}
                         <View>
                           <Text style={styles.metricLabel}>
-                            {r.estado === 'EN_DESCANSO' ? 'Descansando hace' : r.estado === 'EN_DESTINO' ? 'Estado' : 'Disponible en'}
+                            {r.estado === 'EN_DESCANSO' ? 'Descansando hace' : r.estado === 'EN_DESTINO' ? 'Estado' : r.estado === 'EN_RUTA_IDA' ? 'Llega en (Maps)' : 'Disponible en'}
                           </Text>
                           <Text style={[styles.metricValue, { color: r.estado === 'EN_DESCANSO' ? C.warning : C.info }]}>
                             {r.estado === 'EN_DESCANSO'
@@ -269,6 +272,29 @@ export default function RecorridosScreen() {
                         </View>
                       </View>
                     </View>
+
+                    {/* Contómetro: tiempo restante para la hora límite de entrega (leta). */}
+                    {r.restanEntregaMin != null && (
+                      <View
+                        style={[
+                          styles.entregaBadge,
+                          r.restanEntregaMin < 0 ? styles.entregaLate : r.restanEntregaMin <= 30 ? styles.entregaUrgent : styles.entregaOk,
+                        ]}
+                      >
+                        <AlarmClock size={15} color={r.restanEntregaMin < 0 ? C.danger : r.restanEntregaMin <= 30 ? '#B45309' : C.success} />
+                        <Text
+                          style={[
+                            styles.entregaText,
+                            { color: r.restanEntregaMin < 0 ? C.danger : r.restanEntregaMin <= 30 ? '#B45309' : C.success },
+                          ]}
+                        >
+                          {r.restanEntregaMin < 0
+                            ? `Entrega retrasada ${fmtMin(Math.abs(r.restanEntregaMin))}`
+                            : `Faltan ${fmtMin(r.restanEntregaMin)} para la entrega`}
+                          {r.restanEntregaMin >= 0 && r.restanEntregaMin <= 30 ? ' · llama al cliente' : ''}
+                        </Text>
+                      </View>
+                    )}
 
                     <Button
                       title="Cerrar"
@@ -415,6 +441,11 @@ const makeStyles = () =>
     metric: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
     metricLabel: { fontSize: 10, color: C.textMuted, fontWeight: '700', textTransform: 'uppercase' },
     metricValue: { fontSize: 14, fontWeight: '700', color: C.text },
+    entregaBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: S.md, paddingVertical: 8, borderRadius: Theme.radius.md, borderWidth: 1, marginTop: S.sm },
+    entregaText: { flex: 1, fontSize: 13, fontWeight: '700' },
+    entregaOk: { backgroundColor: C.success + '14', borderColor: C.success + '44' },
+    entregaUrgent: { backgroundColor: '#F59E0B22', borderColor: '#F59E0B66' },
+    entregaLate: { backgroundColor: C.danger + '18', borderColor: C.danger + '55' },
     cerrarBtn: { height: 40, alignSelf: 'flex-start', paddingHorizontal: S.md },
     histMetrics: {
       flexDirection: 'row',
