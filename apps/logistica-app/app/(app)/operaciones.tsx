@@ -48,6 +48,7 @@ import ImageUpload from '../../components/ImageUpload';
 import MultiFileUpload from '../../components/MultiFileUpload';
 import MapboxWebView from '../../components/MapboxWebView';
 import RouteReport from '../../components/RouteReport';
+import { etaInfo } from '../../constants/eta';
 import ChoferWizard from '../../components/ChoferWizard';
 import api from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
@@ -639,7 +640,7 @@ export default function OperacionesScreen() {
             <InfoRow label="Fecha retiro" value={fmtDate(detail.fecha_retiro || detail.fecha)} />
             <InfoRow label="Hora retiro" value={detail.hora_retiro} />
             <InfoRow label="Destino (entrega)" value={detail.lugar_entrega} />
-            <InfoRow label="Fecha entrega" value={fmtDate(detail.fecha_entrega)} />
+            <InfoRow label="ETA (entrega máx)" value={etaInfo(detail.fecha_entrega)?.deadline || fmtDate(detail.fecha_entrega)} />
             <InfoRow label="ETA" value={detail.eta} />
             <InfoRow label="Vehículo" value={detail.vehiculo_id} />
             <InfoRow label="Conductor" value={detail.trabajador_nombre || trabajadorNombre(detail.trabajador_id) || 'Sin asignar'} />
@@ -674,16 +675,18 @@ export default function OperacionesScreen() {
                           : `Disponible en ~${detailActivo.disponibleEnMin ?? detailActivo.etaMin ?? '—'} min`}
                   </Text>
                 </View>
-                {detailActivo.restanEntregaMin != null && (
-                  <View style={styles.liveRow}>
-                    <AlarmClock size={16} color={detailActivo.restanEntregaMin < 0 ? C.danger : detailActivo.restanEntregaMin <= 30 ? '#B45309' : C.success} />
-                    <Text style={[styles.liveText, { fontWeight: '700', color: detailActivo.restanEntregaMin < 0 ? C.danger : detailActivo.restanEntregaMin <= 30 ? '#B45309' : C.success }]}>
-                      {detailActivo.restanEntregaMin < 0
-                        ? `Entrega retrasada ${Math.abs(detailActivo.restanEntregaMin)} min`
-                        : `Faltan ${detailActivo.restanEntregaMin} min para la entrega${detailActivo.restanEntregaMin <= 30 ? ' · llama al cliente' : ''}`}
-                    </Text>
-                  </View>
-                )}
+                {(() => {
+                  const eta = etaInfo(detailActivo.fecha_entrega ?? detail.fecha_entrega);
+                  if (!eta) return null;
+                  return (
+                    <View style={styles.liveRow}>
+                      <AlarmClock size={16} color={eta.color} />
+                      <Text style={[styles.liveText, { fontWeight: '700', color: eta.color }]}>
+                        ETA · entrega máx {eta.deadline} — {eta.countdown}
+                      </Text>
+                    </View>
+                  );
+                })()}
               </View>
             )}
 

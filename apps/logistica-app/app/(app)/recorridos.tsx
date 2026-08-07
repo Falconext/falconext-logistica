@@ -8,6 +8,7 @@ import {
 import { Screen, AppHeader, Card, StatCard, Badge, Button, LoadingState, EmptyState, Theme } from '../../components/ui';
 import api from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
+import { etaInfo } from '../../constants/eta';
 
 const C = Theme.colors;
 const S = Theme.spacing;
@@ -273,28 +274,20 @@ export default function RecorridosScreen() {
                       </View>
                     </View>
 
-                    {/* Contómetro: tiempo restante para la hora límite de entrega (leta). */}
-                    {r.restanEntregaMin != null && (
-                      <View
-                        style={[
-                          styles.entregaBadge,
-                          r.restanEntregaMin < 0 ? styles.entregaLate : r.restanEntregaMin <= 30 ? styles.entregaUrgent : styles.entregaOk,
-                        ]}
-                      >
-                        <AlarmClock size={15} color={r.restanEntregaMin < 0 ? C.danger : r.restanEntregaMin <= 30 ? '#B45309' : C.success} />
-                        <Text
-                          style={[
-                            styles.entregaText,
-                            { color: r.restanEntregaMin < 0 ? C.danger : r.restanEntregaMin <= 30 ? '#B45309' : C.success },
-                          ]}
-                        >
-                          {r.restanEntregaMin < 0
-                            ? `Entrega retrasada ${fmtMin(Math.abs(r.restanEntregaMin))}`
-                            : `Faltan ${fmtMin(r.restanEntregaMin)} para la entrega`}
-                          {r.restanEntregaMin >= 0 && r.restanEntregaMin <= 30 ? ' · llama al cliente' : ''}
-                        </Text>
-                      </View>
-                    )}
+                    {/* ETA = hora límite de entrega (leta) + contador. */}
+                    {(() => {
+                      const eta = etaInfo(r.fecha_entrega);
+                      if (!eta) return null;
+                      return (
+                        <View style={[styles.entregaBadge, { backgroundColor: eta.color + '18', borderColor: eta.color + '55' }]}>
+                          <AlarmClock size={16} color={eta.color} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.entregaText, { color: eta.color }]}>ETA · entrega máx {eta.deadline}</Text>
+                            <Text style={[styles.entregaSub, { color: eta.color }]}>{eta.countdown}</Text>
+                          </View>
+                        </View>
+                      );
+                    })()}
 
                     <Button
                       title="Cerrar"
@@ -441,11 +434,9 @@ const makeStyles = () =>
     metric: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
     metricLabel: { fontSize: 10, color: C.textMuted, fontWeight: '700', textTransform: 'uppercase' },
     metricValue: { fontSize: 14, fontWeight: '700', color: C.text },
-    entregaBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: S.md, paddingVertical: 8, borderRadius: Theme.radius.md, borderWidth: 1, marginTop: S.sm },
-    entregaText: { flex: 1, fontSize: 13, fontWeight: '700' },
-    entregaOk: { backgroundColor: C.success + '14', borderColor: C.success + '44' },
-    entregaUrgent: { backgroundColor: '#F59E0B22', borderColor: '#F59E0B66' },
-    entregaLate: { backgroundColor: C.danger + '18', borderColor: C.danger + '55' },
+    entregaBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: S.md, paddingVertical: 8, borderRadius: Theme.radius.md, borderWidth: 1, marginTop: S.sm },
+    entregaText: { fontSize: 13, fontWeight: '700' },
+    entregaSub: { fontSize: 12, fontWeight: '600', marginTop: 1 },
     cerrarBtn: { height: 40, alignSelf: 'flex-start', paddingHorizontal: S.md },
     histMetrics: {
       flexDirection: 'row',

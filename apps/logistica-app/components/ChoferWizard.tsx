@@ -3,7 +3,7 @@ import { Modal, View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet,
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  X, ChevronLeft, ChevronRight, Check, Package, FileText, MapPin, Flag, Plus, Trash2, Navigation, Truck, User, Clock, Smartphone, Play, CornerUpLeft, Coffee,
+  X, ChevronLeft, ChevronRight, Check, Package, FileText, MapPin, Flag, Plus, Trash2, Navigation, Truck, User, Clock, Smartphone, Play, CornerUpLeft, Coffee, AlarmClock,
 } from 'lucide-react-native';
 import { Theme } from './ui';
 import Select from './Select';
@@ -15,6 +15,7 @@ import { startTracking, stopTracking } from '../services/LocationService';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { formatMoney } from '../constants/currency';
+import { etaInfo } from '../constants/eta';
 import { CONSEGNA_ACTIONS, RETIRO_PRESETS, GASTO_TIPOS, isCoords } from '../constants/operaciones';
 import type { Programacion } from '../types';
 
@@ -238,6 +239,21 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
           <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <ScrollView contentContainerStyle={{ padding: S.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
 
+              {/* ETA = hora límite de entrega + contador (visible en todo el flujo). */}
+              {(() => {
+                const eta = etaInfo(op?.fecha_entrega);
+                if (!eta) return null;
+                return (
+                  <View style={[styles.etaBanner, { backgroundColor: eta.color + '14', borderColor: eta.color + '55' }]}>
+                    <AlarmClock size={20} color={eta.color} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.etaTitle, { color: eta.color }]}>ETA · entrega máx {eta.deadline}</Text>
+                      <Text style={[styles.etaSub, { color: eta.color }]}>{eta.countdown}</Text>
+                    </View>
+                  </View>
+                );
+              })()}
+
               {/* ===================== FASE PREPARACIÓN ===================== */}
               {phase === 'prep' && step === 0 && (
                 <View>
@@ -441,6 +457,9 @@ const makeStyles = () => StyleSheet.create({
   stepBar: { flex: 1, height: 2, backgroundColor: C.border, marginBottom: 18 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   stepHeading: { fontSize: 16, fontWeight: '800', color: C.text, marginTop: S.md, marginBottom: S.sm },
+  etaBanner: { flexDirection: 'row', alignItems: 'center', gap: S.sm, borderWidth: 1, borderRadius: Theme.radius.md, paddingHorizontal: S.md, paddingVertical: S.sm, marginBottom: S.sm },
+  etaTitle: { fontSize: 14, fontWeight: '800' },
+  etaSub: { fontSize: 13, fontWeight: '600', marginTop: 1 },
   hint: { fontSize: 13, color: C.textMuted, marginTop: S.md },
   card: { backgroundColor: C.surface, borderRadius: Theme.radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, padding: S.md },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
