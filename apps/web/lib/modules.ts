@@ -39,6 +39,8 @@ interface UserLike {
   role?: string | null;
   modulos?: string[] | null;
   es_admin?: boolean | null;
+  solo_propios?: boolean | null;
+  trabajador_id?: string | null;
 }
 
 /** ¿El usuario es administrador (ve todo)? Usa es_admin del rol; fallback a role string. */
@@ -46,6 +48,12 @@ export function isAdmin(user: UserLike | null | undefined): boolean {
   if (!user) return false;
   if (typeof user.es_admin === 'boolean') return user.es_admin;
   return isAdminRole(user.role);
+}
+
+/** Modo chofer: restringido a "lo suyo" y vinculado a un trabajador. Los supervisores
+ *  (con módulos asignados pero sin ser chofer) NO caen aquí y sí pueden gestionar. */
+export function isChofer(user: UserLike | null | undefined): boolean {
+  return !!user?.solo_propios && !!user?.trabajador_id;
 }
 
 /** Los admins ven todos los módulos; el resto solo los asignados por su rol. */

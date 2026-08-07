@@ -54,6 +54,7 @@ import api from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatMoney } from '../../constants/currency';
+import { isChofer } from '../../constants/modules';
 import { APP_OPTIONS, GASTO_TIPOS, CONSEGNA_ACTIONS, estadoConsegnaMeta, RETIRO_PRESETS, isCoords } from '../../constants/operaciones';
 import type { Programacion, Vehiculo, Trabajador } from '../../types';
 
@@ -148,9 +149,10 @@ export default function OperacionesScreen() {
   const { themeKey } = useTheme();
   const styles = useMemo(() => makeStyles(), [themeKey]);
   const { user } = useAuth();
-  // Solo admins editan todo. El chofer (rol USER) solo edita itinerario, estado de
-  // consegna, bolla y gastos; el resto es de solo lectura, y no crea ni elimina.
-  const canEditAll = !!user && (user.es_admin === true || user.role === 'ADMIN' || user.role === 'SUPERADMIN');
+  // Gestión completa (crear/editar/eliminar) para TODOS los que no son chofer:
+  // admin y supervisores con el módulo de operaciones. Solo el chofer queda
+  // restringido a su flujo (itinerario, estado, bolla y gastos).
+  const canEditAll = !!user && !isChofer(user);
   const lockOthers = !canEditAll;
   const moneda = user?.moneda;
   const [items, setItems] = useState<Programacion[]>([]);

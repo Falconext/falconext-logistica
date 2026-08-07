@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import clsx from 'clsx';
 import { useCurrency } from '../../lib/useCurrency';
 import { useAuthStore } from '../../lib/store';
+import { isChofer } from '../../lib/modules';
 import { useT, useDateLocale } from '../../lib/i18n';
 
 const MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyDJ-Y0SukxfjbACOUjPY7CoV6qnaQkKSZg";
@@ -132,9 +133,10 @@ export default function OperacionesPage() {
     const t = useT();
     const { format } = useCurrency();
     const user = useAuthStore((s) => s.user);
-    // Solo admins editan todo. El chofer/autista (rol USER, no admin) sólo puede
-    // editar el origen (retiro) y el destino (entrega); el resto es de solo lectura.
-    const canEditAll = !!user && (user.es_admin === true || user.role === 'ADMIN' || user.role === 'SUPERADMIN');
+    // Gestión completa (crear/editar/eliminar) para todos los que NO son chofer:
+    // admin y supervisores con el módulo de operaciones. Solo el chofer/autista
+    // queda restringido a editar origen/destino, estado, bolla y gastos.
+    const canEditAll = !!user && !isChofer(user);
     const WINDOW_OPTIONS = WINDOW_OPTIONS_BASE.map(o => ({ ...o, label: t(`operaciones.ventana.${o.key}`) }));
     const [rutas, setRutas] = useState<Programacion[]>([]);
     const [total, setTotal] = useState(0);
