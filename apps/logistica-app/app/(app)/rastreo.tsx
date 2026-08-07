@@ -22,6 +22,9 @@ export default function RastreoScreen() {
   const [deviceName, setDeviceName] = useState<string | null>(null);
   const [isTracking, setIsTracking] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Si el chofer tiene un recorrido en curso NO puede apagar el rastreo (evita
+  // que desactiven el GPS en plena consegna y "saquen la vuelta").
+  const [enRecorrido, setEnRecorrido] = useState(false);
 
   // Obtiene el dispositivo del usuario logueado. Si es rastreable, guarda su
   // token durable en AsyncStorage para que la tarea en segundo plano reporte.
@@ -49,6 +52,13 @@ export default function RastreoScreen() {
   const checkStatus = useCallback(async () => {
     const reg = await TaskManager.isTaskRegisteredAsync(LOCATION_TASK_NAME);
     setIsTracking(reg);
+    // ¿Tiene un recorrido activo? Si sí, se bloquea el apagado del rastreo.
+    try {
+      const res = await api.get('/recorridos/mio/activo');
+      setEnRecorrido(!!res.data);
+    } catch {
+      setEnRecorrido(false);
+    }
   }, []);
 
   useFocusEffect(
@@ -59,6 +69,14 @@ export default function RastreoScreen() {
   );
 
   const toggle = async () => {
+    // No permitir detener el rastreo con un recorrido en curso.
+    if (isTracking && enRecorrido) {
+      Alert.alert(
+        'Rastreo bloqueado',
+        'No puedes detener el rastreo mientras tienes un recorrido en curso. Finaliza la consegna primero.',
+      );
+      return;
+    }
     setBusy(true);
     try {
       if (isTracking) {
@@ -111,7 +129,7 @@ export default function RastreoScreen() {
           </Card>
 
           <TouchableOpacity
-            style={[styles.mainButton, isTracking ? styles.stopButton : styles.startButton]}
+            style={[styles.mainButton, isTracking ? styles.stopButton : styles.startButton, isTracking && enRecorrido && { opacity: 0.5 }]}
             onPress={toggle}
             activeOpacity={0.85}
             disabled={busy}
@@ -127,6 +145,15 @@ export default function RastreoScreen() {
               </>
             )}
           </TouchableOpacity>
+
+          {isTracking && enRecorrido && (
+            <Card style={styles.lockedNote}>
+              <ShieldAlert size={20} color={C.warning} />
+              <Text style={styles.lockedNoteText}>
+                Tienes un recorrido en curso. No puedes detener el rastreo hasta finalizar la consegna.
+              </Text>
+            </Card>
+          )}
 
           <Card style={styles.infoRow}>
             <MapPin size={22} color={C.primary} />
@@ -168,6 +195,8 @@ const makeStyles = () =>
     stopButton: { backgroundColor: C.danger },
     mainButtonText: { color: '#fff', fontSize: 17, fontWeight: '900', letterSpacing: 1 },
     infoRow: { flexDirection: 'row', alignItems: 'center', gap: S.md },
+    lockedNote: { flexDirection: 'row', alignItems: 'center', gap: S.sm, backgroundColor: C.warning + '18', borderColor: C.warning + '55', borderWidth: 1 },
+    lockedNoteText: { flex: 1, fontSize: 13, color: C.text, lineHeight: 18 },
     infoLabel: { fontSize: 12, color: C.textMuted, fontWeight: '600', textTransform: 'uppercase' },
     infoValue: { fontSize: 15, color: C.text, fontWeight: '700' },
   });
