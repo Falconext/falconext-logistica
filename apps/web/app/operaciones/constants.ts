@@ -3,7 +3,7 @@
 // Direcciones fijas de retiro (bodegas): casi todos los recorridos salen de estas dos.
 export const RETIRO_PRESETS: { label: string; value: string }[] = [
     { label: 'Roma (Casal Lumbroso)', value: "Via Gaspare D'Urso, 98, 00166 La Massimina-Casal Lumbroso RM" },
-    { label: 'Milano (Bettola)', value: 'Via Walter Tobagi, 8, 20068 Bettola-Zeloforamagno MI' },
+    { label: 'Peschiera Borromeo (Bettola)', value: 'Via Walter Tobagi, 8, 20068 Bettola-Zeloforamagno MI' },
 ];
 
 // "Posición actual" se guarda como coordenadas planas "lat,lng" (el mapa las rutea directo).
@@ -21,6 +21,7 @@ export const APP_OPTIONS: { value: string; label: string }[] = [
 
 // Estados de consegna (italiano). El value es el código canónico persistido.
 export const ESTADO_CONSEGNA_OPTIONS: { value: string; label: string }[] = [
+    { value: 'RICHIESTA', label: 'Richiesta' },
     { value: 'CONSEGNATO', label: 'Consegnato' },
     { value: 'IN_CONSEGNA', label: 'In Consegna' },
     { value: 'IN_SOSPESO', label: 'In Sospeso' },
@@ -31,6 +32,7 @@ export const ESTADO_CONSEGNA_OPTIONS: { value: string; label: string }[] = [
 
 // Colores del badge por estado de consegna (mismo criterio que la imagen de referencia).
 export const ESTADO_CONSEGNA_META: Record<string, { label: string; badge: string; dot: string }> = {
+    RICHIESTA: { label: 'Richiesta', badge: 'text-blue-600 border-blue-200 bg-blue-50', dot: 'bg-blue-500' },
     CONSEGNATO: { label: 'Consegnato', badge: 'text-emerald-600 border-emerald-200 bg-emerald-50', dot: 'bg-emerald-500' },
     IN_CONSEGNA: { label: 'In Consegna', badge: 'text-orange-600 border-orange-200 bg-orange-50', dot: 'bg-orange-500' },
     IN_SOSPESO: { label: 'In Sospeso', badge: 'text-blue-600 border-blue-200 bg-blue-50', dot: 'bg-blue-500' },

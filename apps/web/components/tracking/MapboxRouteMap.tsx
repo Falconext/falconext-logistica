@@ -30,7 +30,9 @@ async function geocode(addr: string): Promise<google.maps.LatLng | null> {
   if (m) return new google.maps.LatLng(parseFloat(m[1]), parseFloat(m[2]));
   if (geoCache.has(addr)) return geoCache.get(addr)!;
   try {
-    const { results } = await getGeocoder().geocode({ address: addr });
+    // region:'it' sesga a Italia: evita que una dirección ambigua (p.ej. "Lima")
+    // se resuelva a otro país. El móvil ya aplica el mismo sesgo.
+    const { results } = await getGeocoder().geocode({ address: addr, region: 'it' });
     const loc = results?.[0]?.geometry?.location ?? null;
     geoCache.set(addr, loc);
     return loc;

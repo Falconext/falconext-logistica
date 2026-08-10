@@ -107,5 +107,6 @@ export interface GastoOperacion {
     fecha?: string | null;
     descripcion?: string | null;
     numero_mancato?: string | null; // Nº de mancato pagamento (solo PEAJE)
+    link_peaje?: string | null; // Link/URL del peaje (solo PEAJE)
     comprobantes: string[]; // URLs de los comprobantes (uno o varios)
 }

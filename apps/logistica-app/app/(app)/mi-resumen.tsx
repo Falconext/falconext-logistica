@@ -17,7 +17,6 @@ import {
   CircleUser,
   PlusCircle,
   Fuel,
-  Ticket,
 } from 'lucide-react-native';
 import {
   Screen,
@@ -65,6 +64,8 @@ interface Consegna {
 interface ResumenChofer {
   entregas: { total: number; entregadas: number; canceladas: number; pendientes: number; enRuta: number };
   gastos: { combustible: number; peajes: number; otros: number; total: number };
+  anticipo: number; // "Bonifico" — adelanto recibido en el mes
+  saldo: number;    // "Saldo" — bonifico menos lo gastado
   moneda: string;
 }
 
@@ -185,31 +186,43 @@ export default function MiResumenScreen() {
         </View>
       </Card>
 
-      {/* Gastos del mes (combustible / peajes) */}
+      {/* Gastos del mes: carburante / peaje / spesa / total + bonifico + saldo */}
       <Card style={styles.entregasCard}>
         <View style={styles.pagoHeader}>
           <Fuel size={16} color={C.primary} />
           <Text style={styles.pagoTitle}>Gastos de {mes}</Text>
         </View>
-        <View style={styles.gastoRow}>
-          <View style={styles.gastoItem}>
-            <Fuel size={18} color={C.info} />
-            <View>
-              <Text style={styles.gastoLabel}>Combustible</Text>
-              <Text style={styles.gastoVal}>{formatMoney(chofer?.gastos.combustible ?? 0, moneda)}</Text>
+        <View style={styles.pagoRow}>
+          {([
+            { k: 'Carburante', v: chofer?.gastos.combustible ?? 0, c: C.info },
+            { k: 'Peaje', v: chofer?.gastos.peajes ?? 0, c: C.accent },
+            { k: 'Spesa', v: chofer?.gastos.otros ?? 0, c: C.warning },
+            { k: 'Total', v: chofer?.gastos.total ?? 0, c: C.danger },
+          ] as const).map((it) => (
+            <View key={it.k} style={styles.pagoTile}>
+              <Text style={[styles.pagoTileVal, { color: it.c }]} numberOfLines={1} adjustsFontSizeToFit>{formatMoney(it.v, moneda)}</Text>
+              <Text style={styles.pagoTileLbl}>{it.k}</Text>
             </View>
-          </View>
-          <View style={styles.gastoItem}>
-            <Ticket size={18} color={C.accent} />
-            <View>
-              <Text style={styles.gastoLabel}>Peajes</Text>
-              <Text style={styles.gastoVal}>{formatMoney(chofer?.gastos.peajes ?? 0, moneda)}</Text>
-            </View>
-          </View>
+          ))}
         </View>
-        <View style={styles.gastoTotalRow}>
-          <Text style={styles.gastoTotalLbl}>Total gastado</Text>
-          <Text style={styles.gastoTotalVal}>{formatMoney(chofer?.gastos.total ?? 0, moneda)}</Text>
+        {/* Bonifico (adelanto) y saldo restante */}
+        <View style={styles.saldoBox}>
+          <View style={styles.saldoRow}>
+            <Text style={styles.saldoLbl}>Bonifico (adelanto)</Text>
+            <Text style={styles.saldoVal}>{formatMoney(chofer?.anticipo ?? 0, moneda)}</Text>
+          </View>
+          <View style={styles.saldoRow}>
+            <Text style={styles.saldoLbl}>Total gastos</Text>
+            <Text style={styles.saldoVal}>− {formatMoney(chofer?.gastos.total ?? 0, moneda)}</Text>
+          </View>
+          <View style={[styles.saldoRow, styles.saldoTotalRow]}>
+            <Text style={[styles.saldoLbl, styles.saldoStrong, { color: (chofer?.saldo ?? 0) < 0 ? C.danger : C.success }]}>
+              {(chofer?.saldo ?? 0) < 0 ? 'Saldo (falta)' : 'Saldo a favor'}
+            </Text>
+            <Text style={[styles.saldoVal, styles.saldoStrong, { color: (chofer?.saldo ?? 0) < 0 ? C.danger : C.success }]}>
+              {formatMoney(Math.abs(chofer?.saldo ?? 0), moneda)}
+            </Text>
+          </View>
         </View>
       </Card>
 
@@ -323,6 +336,12 @@ const makeStyles = () => StyleSheet.create({
   pagoTileLbl: { fontSize: F.size.xs, color: C.textMuted, marginTop: 2, fontWeight: '600' },
   pagoTileHrs: { fontSize: 10, color: C.textFaint, marginTop: 1 },
   pagoHint: { fontSize: F.size.xs, color: C.textMuted, marginTop: S.sm, textAlign: 'center' },
+  saldoBox: { marginTop: S.sm, paddingTop: S.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border, gap: 6 },
+  saldoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  saldoLbl: { fontSize: F.size.sm, color: C.textMuted },
+  saldoVal: { fontSize: F.size.sm, color: C.text, fontWeight: '600' },
+  saldoTotalRow: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border, paddingTop: 6, marginTop: 2 },
+  saldoStrong: { fontWeight: '800', fontSize: F.size.md },
   parteBtn: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,9 +1,9 @@
-import { Play, CircleCheck, PauseCircle, Undo2, RefreshCw, Ban } from 'lucide-react-native';
+import { Play, CircleCheck, PauseCircle, Undo2, RefreshCw, Ban, Bell } from 'lucide-react-native';
 
 // Direcciones fijas de retiro (bodegas): casi todos los recorridos salen de estas dos.
 export const RETIRO_PRESETS: { label: string; value: string }[] = [
     { label: 'Roma (Casal Lumbroso)', value: "Via Gaspare D'Urso, 98, 00166 La Massimina-Casal Lumbroso RM" },
-    { label: 'Milano (Bettola)', value: 'Via Walter Tobagi, 8, 20068 Bettola-Zeloforamagno MI' },
+    { label: 'Peschiera Borromeo (Bettola)', value: 'Via Walter Tobagi, 8, 20068 Bettola-Zeloforamagno MI' },
 ];
 
 // "Posición actual" se guarda como coordenadas planas "lat,lng" (el mapa las rutea directo).
@@ -31,6 +31,7 @@ type BadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
 // Estado de consegna → etiqueta + variante de Badge móvil.
 export const ESTADO_CONSEGNA_META: Record<string, { label: string; variant: BadgeVariant }> = {
+    RICHIESTA: { label: 'Richiesta', variant: 'info' },
     CONSEGNATO: { label: 'Consegnato', variant: 'success' },
     IN_CONSEGNA: { label: 'In Consegna', variant: 'warning' },
     IN_SOSPESO: { label: 'In Sospeso', variant: 'info' },
@@ -41,8 +42,20 @@ export const ESTADO_CONSEGNA_META: Record<string, { label: string; variant: Badg
 
 export const estadoConsegnaMeta = (e?: string | null) => (e && ESTADO_CONSEGNA_META[e]) || null;
 
+// Una consegna "ya realizada" (entregada / consegnato) no debe poder editarse:
+// se considera cerrada cuando el estado es ENTREGADO/COMPLETED o el estado de
+// consegna es CONSEGNATO. Cubre variantes ES/EN que conviven en la BD.
+export const ESTADOS_ENTREGADO = ['ENTREGADO', 'COMPLETED'];
+export const isConsegnaRealizada = (
+    r?: { estado?: string | null; estado_consegna?: string | null } | null,
+) =>
+    !!r &&
+    (ESTADOS_ENTREGADO.includes((r.estado || '').toUpperCase()) ||
+        (r.estado_consegna || '').toUpperCase() === 'CONSEGNATO');
+
 // Acciones de estado que el chofer/admin marca según avanza la ruta.
 export const CONSEGNA_ACTIONS: { value: string; label: string; Icon: any }[] = [
+    { value: 'RICHIESTA', label: 'Richiesta', Icon: Bell },
     { value: 'IN_CONSEGNA', label: 'Iniciar consegna', Icon: Play },
     { value: 'CONSEGNATO', label: 'Consegnato', Icon: CircleCheck },
     { value: 'IN_SOSPESO', label: 'In Sospeso', Icon: PauseCircle },

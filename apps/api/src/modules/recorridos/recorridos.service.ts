@@ -11,37 +11,43 @@ type LatLng = { lat: number; lng: number };
 export class RecorridosService {
     constructor(private prisma: PrismaService, private gps: GpsService) { }
 
-    private token() {
-        return process.env.MAPBOX_TOKEN || '';
+    // Key de Google del lado servidor (Directions + Geocoding). Debe ser una key SIN
+    // restricción de referrer (restringida por IP o sin restricción) y con billing.
+    // Todo el ruteo/geocoding va por Google (sin Mapbox).
+    private googleKey() {
+        return process.env.GOOGLE_MAPS_SERVER_KEY || process.env.GOOGLE_DIRECTIONS_KEY || process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
     }
 
-    // Geocodifica una dirección a coords (best-effort; null si falla o no hay token).
+    // Geocodifica una dirección a coords con Google (best-effort; null si falla o no hay key).
     private async geocode(address?: string | null): Promise<LatLng | null> {
-        const token = this.token();
-        if (!token || !address?.trim()) return null;
+        if (!address?.trim()) return null;
+        const gkey = this.googleKey();
+        if (!gkey) return null;
         try {
-            const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?limit=1&access_token=${token}`;
+            const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&region=it&key=${gkey}`;
             const res = await fetch(url);
             const j: any = await res.json();
-            const c = j?.features?.[0]?.center;
-            if (Array.isArray(c) && c.length === 2) return { lng: c[0], lat: c[1] };
+            const loc = j?.results?.[0]?.geometry?.location;
+            if (loc && typeof loc.lat === 'number' && typeof loc.lng === 'number') return { lat: loc.lat, lng: loc.lng };
         } catch (e) {
-            console.warn('[Recorridos] geocode falló:', (e as any)?.message);
+            console.warn('[Recorridos] geocode Google falló:', (e as any)?.message);
         }
         return null;
     }
 
-    // ETA en minutos manejando de A a B (con tráfico). null si falla.
+    // ETA en minutos manejando de A a B (con tráfico), vía Google Directions. null si falla.
     private async etaMin(from: LatLng, to: LatLng): Promise<number | null> {
-        const token = this.token();
-        if (!token) return null;
+        const gkey = this.googleKey();
+        if (!gkey) return null;
         try {
-            const url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${from.lng},${from.lat};${to.lng},${to.lat}?overview=false&access_token=${token}`;
+            const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${from.lat},${from.lng}&destination=${to.lat},${to.lng}&departure_time=now&key=${gkey}`;
             const res = await fetch(url);
             const j: any = await res.json();
-            if (j?.routes?.length) return Math.round(j.routes[0].duration / 60);
+            const leg = j?.routes?.[0]?.legs?.[0];
+            const secs = leg?.duration_in_traffic?.value ?? leg?.duration?.value;
+            if (typeof secs === 'number') return Math.round(secs / 60);
         } catch (e) {
-            console.warn('[Recorridos] directions falló:', (e as any)?.message);
+            console.warn('[Recorridos] directions Google falló:', (e as any)?.message);
         }
         return null;
     }
@@ -342,6 +348,7 @@ export class RecorridosService {
 
                 return {
                     id: r.id,
+                    trabajador_id: r.trabajador_id,
                     cliente: prog?.cliente || null,
                     fecha_entrega: prog?.fecha_entrega || null,
                     // + = faltan min para la entrega; - = ya está retrasado.
@@ -597,6 +604,8 @@ export class RecorridosService {
         const empty = {
             entregas: { total: 0, entregadas: 0, canceladas: 0, pendientes: 0, enRuta: 0 },
             gastos: { combustible: 0, peajes: 0, otros: 0, total: 0 },
+            anticipo: 0,
+            saldo: 0,
             moneda: 'EUR',
         };
         if (!trabajadorId) return empty;
@@ -616,7 +625,7 @@ export class RecorridosService {
         const [progs, gastos] = await Promise.all([
             this.prisma.programacion.findMany({
                 where: { tenant_id: tenantId, trabajador_id: { in: codigos } },
-                select: { estado: true, fecha_entrega: true, fecha: true },
+                select: { estado: true, fecha_entrega: true, fecha: true, anticipo: true },
             }),
             this.prisma.gastoOperacion.findMany({
                 where: { tenant_id: tenantId, trabajador_id: { in: codigos } },
@@ -625,10 +634,13 @@ export class RecorridosService {
         ]);
 
         const entregas = { total: 0, entregadas: 0, canceladas: 0, pendientes: 0, enRuta: 0 };
+        // Bonifico = suma de anticipos (dinero adelantado al chofer) del mes.
+        let anticipo = 0;
         for (const p of progs) {
             const ref = p.fecha_entrega || p.fecha;
             if (!ref || new Date(ref) < startMes) continue;
             entregas.total++;
+            anticipo += Number(p.anticipo) || 0;
             const e = (p.estado || 'PENDIENTE').toUpperCase();
             if (e === 'ENTREGADO') entregas.entregadas++;
             else if (e === 'CANCELADO') entregas.canceladas++;
@@ -651,6 +663,8 @@ export class RecorridosService {
         return {
             entregas,
             gastos: { combustible: r2(g.combustible), peajes: r2(g.peajes), otros: r2(g.otros), total: r2(g.total) },
+            anticipo: r2(anticipo),           // "Bonifico" — adelanto recibido
+            saldo: r2(anticipo - g.total),    // "Saldo" — bonifico menos lo gastado
             moneda: 'EUR',
         };
     }

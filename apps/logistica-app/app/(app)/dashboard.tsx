@@ -13,6 +13,7 @@ import {
   TrendingDown,
   CheckCircle2,
   Clock,
+  UserCheck,
   ChevronRight,
   ArrowUpRight,
   Fuel,
@@ -88,17 +89,24 @@ export default function DashboardScreen() {
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [alerts, setAlerts] = useState<DashboardAlert[]>([]);
+  const [ops, setOps] = useState<any[]>([]); // operaciones (para "consegnas del supervisor")
+  const [trabajadores, setTrabajadores] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [statsRes, alertsRes] = await Promise.all([
+      const [statsRes, alertsRes, opsRes, wRes] = await Promise.all([
         api.get('/dashboard/stats'),
         api.get('/dashboard/alerts'),
+        api.get('/programacion', { params: { take: 200 } }),
+        api.get('/trabajadores'),
       ]);
       setStats(statsRes.data ?? null);
       setAlerts(Array.isArray(alertsRes.data) ? alertsRes.data : []);
+      const opsData = Array.isArray(opsRes.data) ? opsRes.data : (opsRes.data?.items ?? []);
+      setOps(Array.isArray(opsData) ? opsData : []);
+      setTrabajadores(Array.isArray(wRes.data) ? wRes.data : []);
     } catch (e) {
       console.error('Error cargando dashboard', e);
     } finally {
@@ -108,6 +116,33 @@ export default function DashboardScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // Consegnas del supervisor: del mes en curso, separadas en "mías" (asignadas al
+  // usuario logueado) y "de supervisores" (asignadas a trabajadores con cargo supervisor).
+  // Debe ir ANTES del return del chofer: los hooks no pueden quedar tras un return.
+  const consegnasSup = useMemo(() => {
+    const now = new Date();
+    const supIds = new Set(
+      trabajadores
+        .filter((t) => /supervis/i.test(t?.cargo || ''))
+        .flatMap((t) => [t?.id, t?.id_trabajador].filter(Boolean)),
+    );
+    const misKeys = [user?.trabajador_id, user?.trabajador_codigo].filter(Boolean) as string[];
+    const delMes = ops.filter((r) => {
+      const d = new Date(r?.fecha_entrega || r?.fecha);
+      return !isNaN(d.getTime()) && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    });
+    const entregada = (r: any) => (r?.estado_consegna || '').toUpperCase() === 'CONSEGNATO';
+    const mias = delMes.filter((r) => r?.trabajador_id && misKeys.includes(r.trabajador_id));
+    const deSup = delMes.filter((r) => supIds.has(r?.trabajador_id));
+    return {
+      tieneVinculo: misKeys.length > 0,
+      miasTotal: mias.length,
+      miasEntregadas: mias.filter(entregada).length,
+      supTotal: deSup.length,
+      supEntregadas: deSup.filter(entregada).length,
+    };
+  }, [ops, trabajadores, user?.trabajador_id, user?.trabajador_codigo]);
 
   // El dashboard muestra datos de la empresa: los choferes van a su resumen personal.
   // La redirección va DESPUÉS de todos los hooks (si no, se saltan hooks y React rompe
@@ -207,6 +242,43 @@ export default function DashboardScreen() {
             <Text style={styles.rateLabel}>tasa de éxito</Text>
           </View>
         </Card>
+
+        {/* Mis consegnas: entregas del propio usuario (supervisor por metas), del mes */}
+        {consegnasSup.tieneVinculo && (
+          <Card style={styles.opCard}>
+            <View style={styles.cardHead}>
+              <View style={styles.cardHeadLeft}>
+                <View style={[styles.cardIcon, { backgroundColor: C.info }]}>
+                  <UserCheck size={16} color="#fff" />
+                </View>
+                <Text style={styles.cardTitle} numberOfLines={1}>Mis consegnas</Text>
+              </View>
+              <TouchableOpacity style={styles.linkBtn} onPress={() => go('/(app)/operaciones?mias=1')} hitSlop={8}>
+                <Text style={styles.linkText}>Ver</Text>
+                <ArrowUpRight size={15} color={C.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.opRow}>
+              <View style={styles.opStat}>
+                <Package size={16} color={C.info} />
+                <Text style={styles.opValue}>{consegnasSup.miasTotal}</Text>
+                <Text style={styles.opLabel}>Total</Text>
+              </View>
+              <View style={styles.opStat}>
+                <CheckCircle2 size={16} color={C.success} />
+                <Text style={styles.opValue}>{consegnasSup.miasEntregadas}</Text>
+                <Text style={styles.opLabel}>Entregadas</Text>
+              </View>
+              <View style={styles.opStat}>
+                <Clock size={16} color={C.warning} />
+                <Text style={styles.opValue}>{Math.max(0, consegnasSup.miasTotal - consegnasSup.miasEntregadas)}</Text>
+                <Text style={styles.opLabel}>Pendientes</Text>
+              </View>
+            </View>
+            <Text style={styles.supNote}>Tus entregas del mes en curso · base para tus metas.</Text>
+          </Card>
+        )}
 
         {/* Costos del mes */}
         {(() => {
@@ -388,6 +460,7 @@ const makeStyles = () => StyleSheet.create({
   rateRow: { flexDirection: 'row', alignItems: 'baseline', gap: S.sm, marginTop: S.md },
   rateValue: { fontSize: F.size.xxl, fontWeight: F.weight.bold, color: C.success },
   rateLabel: { fontSize: F.size.sm, color: C.textMuted },
+  supNote: { fontSize: F.size.xs, color: C.textFaint, marginTop: S.md },
 
   costTotalRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: S.sm },
   costTotal: { fontSize: F.size.display, fontWeight: F.weight.bold, color: C.text },

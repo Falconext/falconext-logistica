@@ -26,7 +26,7 @@ import {
 import { Screen, AppHeader, Card, Theme } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { canAccessModule, isAdmin as isAdminUser } from '../../constants/modules';
+import { canAccessModule, isAdmin as isAdminUser, isChofer } from '../../constants/modules';
 
 const C = Theme.colors;
 const S = Theme.spacing;
@@ -39,6 +39,7 @@ interface Item {
   icon: LucideIcon;
   color: string;
   adminOnly?: boolean;
+  supervisorView?: boolean; // visible a cualquier no-chofer (admin/supervisor)
 }
 
 const items: Item[] = [
@@ -76,7 +77,9 @@ export default function MasScreen() {
   };
 
   // Solo módulos permitidos por el rol; admin además ve la sección de empresas.
-  const visible = items.filter((i) => (i.adminOnly ? isAdmin : canAccessModule(user, i.key)));
+  const visible = items.filter((i) =>
+    i.adminOnly ? isAdmin : i.supervisorView ? !isChofer(user) : canAccessModule(user, i.key),
+  );
 
   return (
     <Screen scroll padded>

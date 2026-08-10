@@ -109,6 +109,7 @@ export class PeajesService {
                 g.numero_mancato ? `Mancato ${g.numero_mancato}` : null,
             ].filter(Boolean).join(' · '),
             numero_mancato: g.numero_mancato || null,
+            link_peaje: g.link_peaje || null,
             fecha: g.fecha,
             hora: null,
             tipo: 'PEAJE',

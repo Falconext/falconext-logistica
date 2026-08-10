@@ -9,7 +9,7 @@ import {
   Alert,
   ScrollView,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Location from 'expo-location';
 import {
   Package,
@@ -26,6 +26,9 @@ import {
   Wallet,
   Plus,
   Trash2,
+  Lock,
+  Ban,
+  Gauge,
 } from 'lucide-react-native';
 import {
   Screen,
@@ -55,7 +58,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatMoney } from '../../constants/currency';
 import { isChofer } from '../../constants/modules';
-import { APP_OPTIONS, GASTO_TIPOS, CONSEGNA_ACTIONS, estadoConsegnaMeta, RETIRO_PRESETS, isCoords } from '../../constants/operaciones';
+import { APP_OPTIONS, GASTO_TIPOS, CONSEGNA_ACTIONS, estadoConsegnaMeta, RETIRO_PRESETS, isCoords, isConsegnaRealizada } from '../../constants/operaciones';
 import type { Programacion, Vehiculo, Trabajador } from '../../types';
 
 const C = Theme.colors;
@@ -71,7 +74,22 @@ const ESTADO_META: Record<string, { label: string; variant: BadgeVariant }> = {
   REPROGRAMADO: { label: 'Reprogramado', variant: 'neutral' },
 };
 const ALL_ESTADOS = Object.keys(ESTADO_META);
+
+// Hora (HH:MM) en horario de Italia — para "Arribo estimado" y "ETA máx" en la tarjeta.
+const fmtHoraIt = (d: Date): string => {
+  try {
+    return new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }).format(d);
+  } catch {
+    return d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  }
+};
 const estadoMeta = (e?: string) => ESTADO_META[e || 'PENDIENTE'] || ESTADO_META.PENDIENTE;
+
+// Estado "efectivo" para mostrar: `Consegnato` y `Entregado` son el mismo hecho
+// (mercancía entregada). Si la consegna ya está realizada, mostramos "Entregado"
+// aunque el estado principal no se haya actualizado, para no confundir con "Pendiente".
+const estadoEfectivo = (r?: { estado?: string | null; estado_consegna?: string | null } | null) =>
+  isConsegnaRealizada(r) ? 'ENTREGADO' : (r?.estado || 'PENDIENTE');
 
 // En BD pueden convivir códigos en español e inglés; cada filtro cubre sus variantes.
 const ESTADO_VARIANTS: Record<string, string[]> = {
@@ -155,6 +173,10 @@ export default function OperacionesScreen() {
   const canEditAll = !!user && !isChofer(user);
   const lockOthers = !canEditAll;
   const moneda = user?.moneda;
+  // Al entrar desde el menú llegamos con un filtro pre-activado:
+  //  ?mias=1 → «Mis consegnas» (las asignadas al usuario logueado)
+  //  ?sup=1  → «Supervisores» (asignadas a cualquier supervisor)
+  const { sup, mias } = useLocalSearchParams<{ sup?: string; mias?: string }>();
   const [items, setItems] = useState<Programacion[]>([]);
   const [total, setTotal] = useState(0);
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -162,6 +184,12 @@ export default function OperacionesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
   const [selectedEstado, setSelectedEstado] = useState<string | null>(null);
+  const [soloSupervisores, setSoloSupervisores] = useState(false); // filtro: consegnas de supervisores
+  const [soloMias, setSoloMias] = useState(false); // filtro: mis consegnas (del usuario logueado)
+  // Resumen personal (igual que el chofer): entregadas/canceladas + km del mes.
+  const [miResumen, setMiResumen] = useState<{ total: number; entregadas: number; canceladas: number; km: number } | null>(null);
+  // Recorridos activos indexados por operación → ETA de Maps en vivo en las tarjetas.
+  const [activosById, setActivosById] = useState<Record<string, any>>({});
 
   const [detail, setDetail] = useState<Programacion | null>(null);
   const [wizardOp, setWizardOp] = useState<Programacion | null>(null); // chofer: flujo por pasos
@@ -192,6 +220,14 @@ export default function OperacionesScreen() {
         setTotal(data?.total ?? data?.items?.length ?? 0);
         setCounts(data?.counts ?? {});
       }
+      // ETA en vivo (Maps): recorridos activos indexados por operación.
+      try {
+        const aRes = await api.get('/recorridos/activos');
+        const arr = Array.isArray(aRes.data) ? aRes.data : [];
+        const map: Record<string, any> = {};
+        arr.forEach((a: any) => { if (a?.programacion_id) map[a.programacion_id] = a; });
+        setActivosById(map);
+      } catch { setActivosById({}); }
     } catch (e) {
       console.error('Error cargando operaciones', e);
     } finally {
@@ -201,6 +237,36 @@ export default function OperacionesScreen() {
   }, [selectedEstado]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // Filtro pre-activado desde el menú. Solo aplica a supervisores/admin.
+  useEffect(() => {
+    if (mias === '1' && canEditAll) setSoloMias(true);
+    if (sup === '1' && canEditAll) setSoloSupervisores(true);
+  }, [mias, sup, canEditAll]);
+
+  // Al activar "Mis consegnas" cargamos el mismo resumen que ve el chofer
+  // (endpoints scopeados al trabajador del usuario, no dependen de solo_propios).
+  useEffect(() => {
+    if (!soloMias) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [rr, reg] = await Promise.all([
+          api.get('/recorridos/mio/resumen').catch(() => null),
+          api.get('/registros/mias/resumen').catch(() => null),
+        ]);
+        if (cancelled) return;
+        const e = rr?.data?.entregas || {};
+        setMiResumen({
+          total: e.total ?? 0,
+          entregadas: e.entregadas ?? 0,
+          canceladas: e.canceladas ?? 0,
+          km: Number(reg?.data?.km ?? 0),
+        });
+      } catch { if (!cancelled) setMiResumen(null); }
+    })();
+    return () => { cancelled = true; };
+  }, [soloMias]);
 
   // Al abrir el detalle, resolvemos el dispositivo GPS del chofer (por su código) para
   // mostrar el historial de ruta de esa operación dentro del detalle.
@@ -259,22 +325,44 @@ export default function OperacionesScreen() {
     [trabajadores]
   );
 
+  // Una operación es "de supervisor" si su trabajador asignado tiene cargo de supervisor.
+  const esSupervisorId = useCallback(
+    (id?: string | null): boolean => {
+      if (!id) return false;
+      const w = trabajadores.find((t) => t.id === id || t.id_trabajador === id);
+      return !!w && /supervis/i.test(w.cargo || '');
+    },
+    [trabajadores]
+  );
+
+  // Una operación es "mía" si está asignada al trabajador vinculado al usuario logueado.
+  const misKeys = useMemo(
+    () => [user?.trabajador_id, user?.trabajador_codigo].filter(Boolean) as string[],
+    [user?.trabajador_id, user?.trabajador_codigo]
+  );
+  const esMiaId = useCallback(
+    (id?: string | null): boolean => !!id && misKeys.includes(id),
+    [misKeys]
+  );
+
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
     const data = items.filter(
       (r) =>
-        (r.cliente?.toLowerCase() || '').includes(q) ||
-        (r.vehiculo_id?.toLowerCase() || '').includes(q) ||
-        (r.lugar_entrega?.toLowerCase() || '').includes(q) ||
-        (r.lugar_retiro?.toLowerCase() || '').includes(q) ||
-        (r.id_programacion?.toLowerCase() || '').includes(q)
+        ((r.cliente?.toLowerCase() || '').includes(q) ||
+          (r.vehiculo_id?.toLowerCase() || '').includes(q) ||
+          (r.lugar_entrega?.toLowerCase() || '').includes(q) ||
+          (r.lugar_retiro?.toLowerCase() || '').includes(q) ||
+          (r.id_programacion?.toLowerCase() || '').includes(q)) &&
+        (!soloSupervisores || esSupervisorId(r.trabajador_id)) &&
+        (!soloMias || esMiaId(r.trabajador_id))
     );
     return data.sort(
       (a, b) =>
         new Date(b.fecha_entrega || b.fecha).getTime() -
         new Date(a.fecha_entrega || a.fecha).getTime()
     );
-  }, [items, query]);
+  }, [items, query, soloSupervisores, esSupervisorId, soloMias, esMiaId]);
 
   const stats = useMemo(() => {
     // Los totales vienen del servidor (counts/total), no solo de la página cargada.
@@ -335,6 +423,12 @@ export default function OperacionesScreen() {
   });
 
   const openEdit = (r: Programacion) => {
+    // Bloqueo pedido por dirección: una consegna ya realizada (entregado /
+    // consegnato) no se puede editar. Solo se permite eliminarla (admin).
+    if (isConsegnaRealizada(r)) {
+      Alert.alert('Consegna realizada', 'Esta operación ya fue entregada (consegnato). No se puede editar.');
+      return;
+    }
     setEditing(r);
     populate(r); // precarga rápida con lo que trae la lista
     setDetail(null);
@@ -393,6 +487,11 @@ export default function OperacionesScreen() {
   const saldo = anticipoNum - totalGastos;
 
   const save = async () => {
+    // Defensa: no permitir guardar cambios sobre una consegna ya realizada.
+    if (editing && isConsegnaRealizada(editing)) {
+      Alert.alert('Consegna realizada', 'Esta operación ya fue entregada (consegnato). No se puede editar.');
+      return;
+    }
     // Únicos obligatorios: vehículo y conductor.
     if (!form.vehiculo_id || !form.trabajador_id) {
       Alert.alert('Faltan datos', 'Vehículo y Conductor son obligatorios.');
@@ -451,7 +550,7 @@ export default function OperacionesScreen() {
   };
 
   const renderCard = ({ item: r }: { item: Programacion }) => {
-    const meta = estadoMeta(r.estado);
+    const meta = estadoMeta(estadoEfectivo(r));
     return (
       <TouchableOpacity activeOpacity={0.7} style={styles.card} onPress={() => (canEditAll ? setDetail(r) : setWizardOp(r))}>
         <View style={styles.cardTop}>
@@ -469,6 +568,44 @@ export default function OperacionesScreen() {
             <Badge label={estadoConsegnaMeta(r.estado_consegna)!.label} variant={estadoConsegnaMeta(r.estado_consegna)!.variant} />
           </View>
         )}
+
+        {/* Disponibilidad del chofer (Maps): solo con recorrido activo. En el
+            regreso, el ETA es el tiempo hasta quedar libre para otra consegna. */}
+        {(() => {
+          const activo = activosById[r.id];
+          if (!activo) return null;
+          // El ETA (min) solo existe con posición GPS válida y ruta calculable.
+          // Si no, mostramos igual el estado del recorrido para que el supervisor
+          // sepa que el chofer va/vuelve (el ETA aparece en cuanto llega el GPS).
+          const eta = activo.etaMin;
+          let label: string | null = null;
+          let color = C.info;
+          if (activo.descansando) { label = 'Chofer en descanso'; color = C.warning; }
+          else if (activo.estado === 'EN_RUTA_IDA') {
+            if (eta != null) {
+              // Arribo estimado = ahora + ETA de Maps (posición en vivo → destino).
+              // Se compara con la hora límite (ETA) para ver si llega a tiempo.
+              const arribo = new Date(Date.now() + eta * 60000);
+              const dl = r.fecha_entrega ? new Date(r.fecha_entrega) : null;
+              const late = dl ? arribo.getTime() > dl.getTime() : false;
+              color = late ? C.danger : C.success;
+              label = `Arribo ~${fmtHoraIt(arribo)}` + (dl ? ` · ETA máx ${fmtHoraIt(dl)}` : '');
+            } else {
+              label = 'En ruta al destino';
+            }
+          }
+          else if (activo.estado === 'EN_DESTINO') { label = 'En destino (entregando)'; color = C.warning; }
+          else if (activo.estado === 'EN_RUTA_VUELTA') { label = eta != null ? `Regresa · libre en ~${eta} min` : 'Regresando a base'; color = C.success; }
+          if (!label) return null;
+          return (
+            <View style={[styles.etaChip, { backgroundColor: color + '14', borderColor: color + '44' }]}>
+              <Navigation size={12} color={color} />
+              <Text style={[styles.etaChipText, { color }]}>
+                {label}{eta != null ? ' (Maps)' : ''}{activo.sinGps ? ' · sin GPS' : ''}
+              </Text>
+            </View>
+          );
+        })()}
 
         <View style={styles.routeRow}>
           <View style={styles.routeSide}>
@@ -519,15 +656,27 @@ export default function OperacionesScreen() {
 
   return (
     <Screen>
-      <AppHeader title="Operaciones" subtitle={`${total} operaciones programadas`} />
+      <AppHeader
+        title={soloMias ? 'Mis consegnas' : 'Operaciones'}
+        subtitle={soloMias ? `${filtered.length} entregas tuyas` : `${total} operaciones programadas`}
+      />
 
       <View style={styles.body}>
-        <View style={styles.statsRow}>
-          <StatCard label="Total" value={stats.total} icon={ClipboardList} color={C.primary} />
-          <StatCard label="Pendientes" value={stats.pendientes} icon={CalendarClock} color={C.warning} />
-          <StatCard label="En ruta" value={stats.enRuta} icon={Navigation} color={C.info} />
-          <StatCard label="Entregados" value={stats.entregados} icon={CheckCircle2} color={C.success} />
-        </View>
+        {soloMias ? (
+          // Resumen personal del supervisor (mismas cifras que el chofer): base de sus metas.
+          <View style={styles.statsRow}>
+            <StatCard label="Entregadas" value={miResumen?.entregadas ?? 0} icon={CheckCircle2} color={C.success} />
+            <StatCard label="Canceladas" value={miResumen?.canceladas ?? 0} icon={Ban} color={C.danger} />
+            <StatCard label="Km del mes" value={Math.round(miResumen?.km ?? 0)} icon={Gauge} color={C.info} />
+          </View>
+        ) : (
+          <View style={styles.statsRow}>
+            <StatCard label="Total" value={stats.total} icon={ClipboardList} color={C.primary} />
+            <StatCard label="Pendientes" value={stats.pendientes} icon={CalendarClock} color={C.warning} />
+            <StatCard label="En ruta" value={stats.enRuta} icon={Navigation} color={C.info} />
+            <StatCard label="Entregados" value={stats.entregados} icon={CheckCircle2} color={C.success} />
+          </View>
+        )}
 
         <View style={{ marginBottom: S.sm }}>
           <SearchBar value={query} onChangeText={setQuery} placeholder="Buscar cliente, placa, destino..." />
@@ -556,11 +705,41 @@ export default function OperacionesScreen() {
                 </TouchableOpacity>
               );
             };
+            const supCount = items.filter((r) => esSupervisorId(r.trabajador_id)).length;
+            const miasCount = items.filter((r) => esMiaId(r.trabajador_id)).length;
             return [
               chip(null, 'Todos', totalAll),
               ...ALL_ESTADOS.map((e) =>
                 chip(e, estadoMeta(e).label, (ESTADO_VARIANTS[e] || [e]).reduce((s, v) => s + (counts[v] || 0), 0)),
               ),
+              // "Mis consegnas": las entregas del propio usuario (supervisor por metas).
+              // Solo si su usuario está vinculado a un trabajador.
+              canEditAll && misKeys.length > 0 ? (
+                <TouchableOpacity
+                  key="MIAS"
+                  style={[styles.filterChip, soloMias && styles.filterChipActive]}
+                  onPress={() => setSoloMias((v) => !v)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.filterChipText, soloMias && { color: '#fff' }]}>
+                    Mis consegnas{miasCount ? ` · ${miasCount}` : ''}
+                  </Text>
+                </TouchableOpacity>
+              ) : null,
+              // Filtro por eje distinto (no estado): consegnas asignadas a supervisores.
+              // Solo para supervisores/admin — no tiene sentido para el chofer.
+              canEditAll ? (
+                <TouchableOpacity
+                  key="SUPERVISORES"
+                  style={[styles.filterChip, soloSupervisores && styles.filterChipActive]}
+                  onPress={() => setSoloSupervisores((v) => !v)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.filterChipText, soloSupervisores && { color: '#fff' }]}>
+                    Supervisores{supCount ? ` · ${supCount}` : ''}
+                  </Text>
+                </TouchableOpacity>
+              ) : null,
             ];
           })()}
         </ScrollView>
@@ -603,15 +782,34 @@ export default function OperacionesScreen() {
         title={detail?.cliente || 'Operación'}
         footer={
           detail && (
-            <View style={{ flexDirection: 'row', gap: S.md }}>
-              <View style={{ flex: 1 }}>
-                <Button title="Editar" icon={Pencil} variant="secondary" onPress={() => openEdit(detail)} />
-              </View>
-              {canEditAll && (
-                <View style={{ flex: 1 }}>
-                  <Button title="Eliminar" icon={Trash2} variant="danger" onPress={() => remove(detail)} />
-                </View>
+            <View style={{ gap: S.sm }}>
+              {/* Supervisor que también es chofer: si la consegna está asignada a él,
+                  puede operarla como chofer. Con recorrido activo permite CONTINUAR
+                  (p. ej. regreso al origen) aunque la consegna ya esté consegnata. */}
+              {esMiaId(detail.trabajador_id) && (!!activosById[detail.id] || !isConsegnaRealizada(detail)) && (
+                <Button
+                  title={activosById[detail.id] ? 'Continuar como chofer' : 'Operar como chofer (Iniciar ruta)'}
+                  icon={Navigation}
+                  onPress={() => { const op = detail; setDetail(null); setWizardOp(op); }}
+                />
               )}
+              <View style={{ flexDirection: 'row', gap: S.md }}>
+                {isConsegnaRealizada(detail) ? (
+                  <View style={[styles.lockNote, { flex: 1 }]}>
+                    <Lock size={15} color={C.textMuted} />
+                    <Text style={styles.lockNoteText}>Consegna realizada · edición bloqueada</Text>
+                  </View>
+                ) : (
+                  <View style={{ flex: 1 }}>
+                    <Button title="Editar" icon={Pencil} variant="secondary" onPress={() => openEdit(detail)} />
+                  </View>
+                )}
+                {canEditAll && (
+                  <View style={{ flex: 1 }}>
+                    <Button title="Eliminar" icon={Trash2} variant="danger" onPress={() => remove(detail)} />
+                  </View>
+                )}
+              </View>
             </View>
           )
         }
@@ -632,7 +830,7 @@ export default function OperacionesScreen() {
               );
             })()}
             <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: S.md }}>
-              <Badge label={estadoMeta(detail.estado).label} variant={estadoMeta(detail.estado).variant} />
+              <Badge label={estadoMeta(estadoEfectivo(detail)).label} variant={estadoMeta(estadoEfectivo(detail)).variant} />
               {estadoConsegnaMeta(detail.estado_consegna) && (
                 <Badge label={estadoConsegnaMeta(detail.estado_consegna)!.label} variant={estadoConsegnaMeta(detail.estado_consegna)!.variant} />
               )}
@@ -643,7 +841,17 @@ export default function OperacionesScreen() {
             <InfoRow label="Hora retiro" value={detail.hora_retiro} />
             <InfoRow label="Destino (entrega)" value={detail.lugar_entrega} />
             <InfoRow label="ETA (entrega máx)" value={etaInfo(detail.fecha_entrega)?.deadline || fmtDate(detail.fecha_entrega)} />
-            <InfoRow label="ETA" value={detail.eta} />
+            {(() => {
+              // «Tiempo per arrivare»: ETA de viaje al destino en vivo (Maps), desde que el
+              // chofer INICIÓ la ruta (EN_RUTA_IDA). Antes de arrancar no hay viaje que estimar,
+              // así que cae al campo `eta` guardado (normalmente vacío → «—»).
+              const enIda = detailActivo?.estado === 'EN_RUTA_IDA' && !detailActivo?.sinGps
+                ? (detailActivo.etaMin ?? null) : null;
+              const val = enIda != null
+                ? `Llega ~${fmtHoraIt(new Date(Date.now() + enIda * 60000))} · ${enIda} min`
+                : detail.eta;
+              return <InfoRow label="ETA (tiempo per arrivare)" value={val} />;
+            })()}
             <InfoRow label="Vehículo" value={detail.vehiculo_id} />
             <InfoRow label="Conductor" value={detail.trabajador_nombre || trabajadorNombre(detail.trabajador_id) || 'Sin asignar'} />
             {detail.km != null && detail.km !== 0 ? <InfoRow label="KM" value={`${detail.km} km`} /> : null}
@@ -653,7 +861,7 @@ export default function OperacionesScreen() {
             {detail.compactado ? <InfoRow label="Compactado" value="Sí" /> : null}
             {detail.otros_datos ? <InfoRow label="Otros datos" value={detail.otros_datos} /> : null}
             {detail.anticipo != null && detail.anticipo !== 0 ? (
-              <InfoRow label="Anticipo" value={formatMoney(detail.anticipo, moneda)} />
+              <InfoRow label="Bonifico" value={formatMoney(detail.anticipo, moneda)} />
             ) : null}
             {detail.gastos && detail.gastos.length > 0 ? (
               <InfoRow
@@ -891,13 +1099,17 @@ export default function OperacionesScreen() {
           clearable
           disabled={lockOthers}
         />
-        <FormField
-          label="Attesa"
-          value={form.attesa}
-          onChangeText={(t) => setForm({ ...form, attesa: t })}
-          placeholder="Ej: 15 min (espera al cliente)"
-          editable={!lockOthers}
-        />
+        {/* La Attesa la registra el chofer al finalizar la consegna; por eso NO
+            aparece al crear. Al EDITAR sí, para que el supervisor pueda corregirla. */}
+        {editing && (
+          <FormField
+            label="Attesa"
+            value={form.attesa}
+            onChangeText={(t) => setForm({ ...form, attesa: t })}
+            placeholder="Ej: 15 min (espera al cliente)"
+            editable={!lockOthers}
+          />
+        )}
         <Text style={styles.fieldLabelSm}>¿Compactado?</Text>
         <View style={styles.dateRow}>
           <TouchableOpacity
@@ -954,7 +1166,7 @@ export default function OperacionesScreen() {
           <Text style={styles.formSectionInline}>Rendición / Gastos</Text>
         </View>
         <FormField
-          label={`Anticipo recibido (${moneda || 'EUR'})`}
+          label={`Bonifico recibido (${moneda || 'EUR'})`}
           value={form.anticipo}
           onChangeText={(t) => setForm({ ...form, anticipo: t })}
           placeholder="0.00"
@@ -1012,7 +1224,7 @@ export default function OperacionesScreen() {
 
         <View style={styles.saldoBox}>
           <View style={styles.saldoRow}>
-            <Text style={styles.saldoLabel}>Anticipo</Text>
+            <Text style={styles.saldoLabel}>Bonifico</Text>
             <Text style={styles.saldoVal}>{formatMoney(anticipoNum, moneda)}</Text>
           </View>
           <View style={styles.saldoRow}>
@@ -1093,6 +1305,8 @@ const makeStyles = () => StyleSheet.create({
     borderTopColor: C.border,
   },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  etaChip: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', marginTop: 8, paddingHorizontal: S.sm, paddingVertical: 5, borderRadius: Theme.radius.full, backgroundColor: C.info + '14', borderWidth: 1, borderColor: C.info + '44' },
+  etaChipText: { fontSize: 12, fontWeight: '700', color: C.info },
   liveCard: { gap: S.sm, backgroundColor: C.surfaceAlt, borderRadius: Theme.radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, padding: S.md, marginTop: S.sm },
   liveRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
   liveText: { flex: 1, fontSize: 13, color: C.text },
@@ -1128,6 +1342,8 @@ const makeStyles = () => StyleSheet.create({
 
   roleBanner: { backgroundColor: C.warningSoft, borderRadius: Theme.radius.md, padding: S.md, marginBottom: S.sm },
   roleBannerText: { fontSize: 12, color: C.warning },
+  lockNote: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, paddingHorizontal: S.md, borderRadius: Theme.radius.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.surfaceAlt },
+  lockNoteText: { fontSize: 13, fontWeight: '600', color: C.textMuted, textAlign: 'center' },
   sectionRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: S.lg, marginBottom: S.sm },
   formSectionInline: { fontSize: 13, fontWeight: '700', color: C.text, textTransform: 'uppercase' },
   fieldLabelSm: { fontSize: 13, fontWeight: '500', color: C.textMuted, marginBottom: 6 },

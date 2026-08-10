@@ -8,5 +8,6 @@ import { GpsModule } from '../gps/gps.module';
     imports: [GpsModule],
     controllers: [RecorridosController],
     providers: [RecorridosService, PrismaService],
+    exports: [RecorridosService],
 })
 export class RecorridosModule { }

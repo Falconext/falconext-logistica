@@ -22,6 +22,9 @@ interface Trabajador {
   disponible: boolean;
   enOperacion: boolean;
   disponibleReal: boolean;
+  estadoRecorrido?: string | null; // EN_RUTA_IDA | EN_DESTINO | EN_RUTA_VUELTA | EN_DESCANSO
+  libreEnMin?: number | null;      // min hasta quedar libre (solo en el regreso, según Maps)
+  etaSinGps?: boolean;
 }
 interface ZonaPersonal {
   zona: string;
@@ -77,6 +80,20 @@ function fmtMin(abs: number): string {
   if (d > 0) return `${d}d ${h}h`;
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
+}
+
+// Estado del chofer según su recorrido en curso. En el regreso muestra el ETA
+// (según Maps) hasta quedar libre: le sirve al supervisor para reasignar.
+function recorridoLabel(t: Trabajador): string | null {
+  const gps = t.etaSinGps ? ' · sin GPS' : '';
+  switch (t.estadoRecorrido) {
+    case 'EN_RUTA_VUELTA':
+      return t.libreEnMin != null ? `libre en ~${t.libreEnMin} min${gps}` : `regresando${gps}`;
+    case 'EN_RUTA_IDA': return `en ruta al destino${gps}`;
+    case 'EN_DESTINO': return 'en destino';
+    case 'EN_DESCANSO': return 'en descanso';
+    default: return null;
+  }
 }
 
 // Cuenta regresiva de una entrega, recalculada en cliente para que avance sin refetch.
@@ -266,7 +283,8 @@ export default function PanelScreen() {
                     <Text style={styles.rowName} numberOfLines={1}>{t.nombre_completo}</Text>
                     <Text style={styles.rowSub} numberOfLines={1}>
                       {t.cargo || 'Sin cargo'}
-                      {t.enOperacion && <Text style={styles.enRuta}> · en ruta</Text>}
+                      {t.enOperacion && !recorridoLabel(t) && <Text style={styles.enRuta}> · en ruta</Text>}
+                      {!!recorridoLabel(t) && <Text style={[styles.enRuta, t.libreEnMin != null && { color: C.success }]}> · {recorridoLabel(t)}</Text>}
                     </Text>
                   </View>
                   <AvailabilityPill

@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { LayoutDashboard, Map, Truck, Users, LayoutGrid, Navigation, CircleUser } from 'lucide-react-native';
+import { LayoutDashboard, Map, Truck, Users, LayoutGrid, Navigation, CircleUser, UserCheck } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Theme } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
@@ -38,6 +38,9 @@ export default function AppTabsLayout() {
       <Tabs.Screen name="mi-resumen" options={{ title: 'Inicio', href: chofer ? undefined : null, tabBarIcon: ({ color, size }) => <LayoutDashboard color={color} size={size} /> }} />
       <Tabs.Screen name="dashboard" options={{ title: 'Inicio', href: gate('dashboard'), tabBarIcon: ({ color, size }) => <LayoutDashboard color={color} size={size} /> }} />
       <Tabs.Screen name="operaciones" options={{ title: chofer ? 'Consegnas' : 'Operaciones', href: gate('operaciones'), tabBarIcon: ({ color, size }) => <Map color={color} size={size} /> }} />
+      {/* Mis consegnas: entregas del propio supervisor (metas). Misma pantalla de
+          Operaciones abierta con ?mias=1. Oculta para el chofer (tiene Mi Resumen). */}
+      <Tabs.Screen name="mis-consegnas" initialParams={{ mias: '1' }} options={{ title: 'Mis consegnas', href: chofer ? null : gate('operaciones'), tabBarIcon: ({ color, size }) => <UserCheck color={color} size={size} /> }} />
       <Tabs.Screen name="mi-ruta" options={{ title: 'Mi Ruta', href: chofer ? undefined : null, tabBarIcon: ({ color, size }) => <Navigation color={color} size={size} /> }} />
       <Tabs.Screen name="mi-perfil" options={{ title: 'Mi Perfil', href: chofer ? undefined : null, tabBarIcon: ({ color, size }) => <CircleUser color={color} size={size} /> }} />
       <Tabs.Screen name="parte-diario" options={{ href: null }} />

@@ -133,6 +133,7 @@ export class ProgramacionService {
             fecha: g.fecha ? new Date(g.fecha) : (op.fecha_entrega || op.fecha_retiro || op.fecha || null),
             descripcion: g.descripcion || null,
             numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null,
+            link_peaje: g.tipo === 'PEAJE' ? (g.link_peaje || null) : null,
             comprobantes: Array.isArray(g.comprobantes) ? g.comprobantes.filter(Boolean) : [],
             trabajador_id: op.trabajador_id || null,
             targa: op.vehiculo_id || null,
@@ -175,7 +176,21 @@ export class ProgramacionService {
         });
     }
 
+    // Consegnato y Entregado son EL MISMO hecho (mercancía entregada). Hay dos
+    // estados —uno "manual" (estado_consegna) y otro "principal" (estado)— y a
+    // veces se actualiza uno y se olvida el otro, quedando desincronizados. Al
+    // guardar, si uno marca "entregado" sincronizamos el otro automáticamente.
+    private syncEstadosEntrega(data: any) {
+        if (!data) return data;
+        const consegna = String(data.estado_consegna || '').toUpperCase();
+        const estado = String(data.estado || '').toUpperCase();
+        if (consegna === 'CONSEGNATO') data.estado = 'ENTREGADO';
+        else if (estado === 'ENTREGADO') data.estado_consegna = 'CONSEGNATO';
+        return data;
+    }
+
     async create(data: any, tenantId?: string) {
+        this.syncEstadosEntrega(data);
         // `gastos` es una relación (array de objetos), no una columna: se maneja aparte.
         const { gastos, ...rest } = data;
         // Scope the new record to the caller's tenant (from the JWT). Fall back to
@@ -206,6 +221,7 @@ export class ProgramacionService {
     }
 
     async update(id: string, data: any) {
+        this.syncEstadosEntrega(data);
         // Separamos los gastos (relación) del resto de columnas.
         const { gastos, ...rest } = data;
         const updated = await this.prisma.programacion.update({

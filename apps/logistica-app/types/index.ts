@@ -101,6 +101,7 @@ export interface GastoOperacion {
   fecha?: string | null;
   descripcion?: string | null;
   numero_mancato?: string | null; // solo PEAJE
+  link_peaje?: string | null; // solo PEAJE
   comprobantes: string[];
 }
 

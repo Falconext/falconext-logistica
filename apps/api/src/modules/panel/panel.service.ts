@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
+import { RecorridosService } from '../recorridos/recorridos.service';
 
 // Panel DHL: torre de control operativa. Agrega personal (disponibilidad por zona),
 // flota (disponibilidad) y entregas activas (con cuenta regresiva por fecha_entrega).
 @Injectable()
 export class PanelService {
-    constructor(private prisma: PrismaService) { }
+    constructor(private prisma: PrismaService, private recorridos: RecorridosService) { }
 
     // Estados que cuentan como "operación activa":
     //  - RETIRADO  → IN CONSEGNA (en ruta / en entrega)
@@ -67,12 +68,31 @@ export class PanelService {
         const busyWorkers = new Set(activas.map((a) => a.trabajador_id).filter(Boolean) as string[]);
         const busyVehiculos = new Set(activas.map((a) => a.vehiculo_id).filter(Boolean) as string[]);
 
+        // ETA de retorno/disponibilidad por trabajador (de sus recorridos en curso):
+        // en el REGRESO, el ETA es el tiempo hasta que el chofer queda libre de nuevo.
+        const recByTrab = new Map<string, { estado: string; tramo: string; etaMin: number | null; sinGps: boolean }>();
+        try {
+            const activosRec = await this.recorridos.activos(tenantId);
+            for (const rec of activosRec) {
+                if (rec.trabajador_id) recByTrab.set(rec.trabajador_id, { estado: rec.estado, tramo: rec.tramo, etaMin: rec.etaMin, sinGps: rec.sinGps });
+            }
+        } catch { /* si falla el proveedor de rutas, el panel sigue sin ETA */ }
+
         // PERSONAL agrupado por zona (area_trabajo).
         const zonaMap = new Map<string, any[]>();
         for (const t of trabajadores) {
             const zona = t.area_trabajo?.trim() || 'Sin zona';
             const enOperacion = busyWorkers.has(t.id) || (!!t.id_trabajador && busyWorkers.has(t.id_trabajador));
-            const item = { ...t, enOperacion, disponibleReal: t.disponible && !enOperacion };
+            const rec = recByTrab.get(t.id) || (t.id_trabajador ? recByTrab.get(t.id_trabajador) : undefined);
+            // "Libre en X min" solo tiene sentido en el regreso (EN_RUTA_VUELTA): es el
+            // ETA hasta la base = cuándo el chofer vuelve a estar disponible.
+            const libreEnMin = rec && rec.tramo === 'EN_RUTA_VUELTA' ? rec.etaMin : null;
+            const item = {
+                ...t, enOperacion, disponibleReal: t.disponible && !enOperacion,
+                estadoRecorrido: rec?.estado ?? null,
+                libreEnMin,
+                etaSinGps: rec?.sinGps ?? false,
+            };
             if (!zonaMap.has(zona)) zonaMap.set(zona, []);
             zonaMap.get(zona)!.push(item);
         }

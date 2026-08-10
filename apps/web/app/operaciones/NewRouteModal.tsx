@@ -12,7 +12,7 @@ import { useCurrency } from '../../lib/useCurrency';
 import { APP_OPTIONS, ESTADO_CONSEGNA_META, RETIRO_PRESETS, isCoords } from './constants';
 
 // Fila de gasto en el formulario (monto como string para el input).
-type GastoRow = { tipo: string; monto: string; descripcion: string; numero_mancato: string; comprobantes: string[] };
+type GastoRow = { tipo: string; monto: string; descripcion: string; numero_mancato: string; link_peaje: string; comprobantes: string[] };
 
 const GASTO_TIPOS = [
     { value: 'PEAJE', label: 'Peaje' },
@@ -168,6 +168,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                     monto: g.monto != null ? String(g.monto) : '',
                     descripcion: g.descripcion || '',
                     numero_mancato: g.numero_mancato || '',
+                    link_peaje: g.link_peaje || '',
                     comprobantes: Array.isArray(g.comprobantes) ? g.comprobantes : [],
                 })) : [],
                 nota: src.nota || '',
@@ -261,12 +262,13 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 foto_bolla: formData.foto_bolla || null,
                 anticipo: formData.anticipo !== '' ? Number(formData.anticipo) : null,
                 gastos: formData.gastos
-                    .filter((g) => g.tipo && (g.monto !== '' || g.comprobantes.length || g.descripcion || g.numero_mancato))
+                    .filter((g) => g.tipo && (g.monto !== '' || g.comprobantes.length || g.descripcion || g.numero_mancato || g.link_peaje))
                     .map((g) => ({
                         tipo: g.tipo,
                         monto: g.monto !== '' ? Number(g.monto) : 0,
                         descripcion: g.descripcion || null,
                         numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null,
+                        link_peaje: g.tipo === 'PEAJE' ? (g.link_peaje || null) : null,
                         comprobantes: g.comprobantes,
                     })),
                 nota: formData.nota
@@ -343,7 +345,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
     };
 
     // --- Gastos (rendición) ---
-    const addGasto = () => setFormData((f) => ({ ...f, gastos: [...f.gastos, { tipo: 'PEAJE', monto: '', descripcion: '', numero_mancato: '', comprobantes: [] }] }));
+    const addGasto = () => setFormData((f) => ({ ...f, gastos: [...f.gastos, { tipo: 'PEAJE', monto: '', descripcion: '', numero_mancato: '', link_peaje: '', comprobantes: [] }] }));
     const updateGasto = (i: number, patch: Partial<GastoRow>) => setFormData((f) => ({ ...f, gastos: f.gastos.map((g, idx) => (idx === i ? { ...g, ...patch } : g)) }));
     const removeGasto = (i: number) => setFormData((f) => ({ ...f, gastos: f.gastos.filter((_, idx) => idx !== i) }));
     const totalGastos = formData.gastos.reduce((s, g) => s + (g.monto !== '' ? Number(g.monto) || 0 : 0), 0);
@@ -783,6 +785,18 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                                 className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none"
                                                 value={g.numero_mancato}
                                                 onChange={(e) => updateGasto(i, { numero_mancato: e.target.value })}
+                                            />
+                                        </div>
+                                    )}
+                                    {g.tipo === 'PEAJE' && (
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase">Link de peaje</label>
+                                            <input
+                                                type="url"
+                                                placeholder="https://…"
+                                                className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none"
+                                                value={g.link_peaje}
+                                                onChange={(e) => updateGasto(i, { link_peaje: e.target.value })}
                                             />
                                         </div>
                                     )}

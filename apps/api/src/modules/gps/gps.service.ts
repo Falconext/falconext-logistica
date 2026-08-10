@@ -298,22 +298,26 @@ export class GpsService {
         return deg * (Math.PI / 180);
     }
 
-    // ---- Enriquecimiento con Mapbox (calles reales + tiempo esperado) ----
-    private mapboxToken(): string {
-        return process.env.MAPBOX_TOKEN || '';
+    // ---- Enriquecimiento con Google (calles reales + tiempo esperado) ----
+    // Key de servidor de Google (Directions), sin restricción de referrer. Todo el
+    // ruteo va por Google (sin Mapbox).
+    private googleKey(): string {
+        return process.env.GOOGLE_MAPS_SERVER_KEY || process.env.GOOGLE_DIRECTIONS_KEY || process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
     }
 
-    // Tiempo ESPERADO (min) manejando de A a B con tráfico típico. null si falla.
+    // Tiempo ESPERADO (min) manejando de A a B con tráfico típico, vía Google. null si falla.
     private async directionsEta(from: { lng: number; lat: number }, to: { lng: number; lat: number }): Promise<number | null> {
-        const token = this.mapboxToken();
-        if (!token) return null;
+        const gkey = this.googleKey();
+        if (!gkey) return null;
         try {
-            const url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${from.lng},${from.lat};${to.lng},${to.lat}?overview=false&access_token=${token}`;
+            const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${from.lat},${from.lng}&destination=${to.lat},${to.lng}&departure_time=now&key=${gkey}`;
             const res = await fetch(url);
             const j: any = await res.json();
-            if (j.routes && j.routes.length) return j.routes[0].duration / 60;
+            const leg = j?.routes?.[0]?.legs?.[0];
+            const secs = leg?.duration_in_traffic?.value ?? leg?.duration?.value;
+            if (typeof secs === 'number') return secs / 60;
         } catch (e) {
-            console.warn('[Mapbox directions] falló:', (e as any)?.message);
+            console.warn('[Google directions] falló:', (e as any)?.message);
         }
         return null;
     }
@@ -563,7 +567,7 @@ export class GpsService {
             });
         }
 
-        // --- Estimación de tiempo con Mapbox (best-effort; si falla, se omite) ---
+        // --- Estimación de tiempo con Google (best-effort; si falla, se omite) ---
         // Tiempo ESPERADO por tramo (Directions con tráfico) vs real → demora.
         // (La distancia se mide del GPS denso: es el camino real, más fiable que
         //  un match con submuestreo que "corta camino".)

@@ -171,9 +171,10 @@ model Programacion {
   
   // Route Info
   cliente          String?  // 'CLIENTE'
-  lugar_retiro     String?  // 'LUOGO RITIRO'
+  lugar_retiro     String?  // 'LUOGO RITIRO' (primer/único origen de retiro)
+  retiros          String[] // Retiros adicionales (recogidas) tras lugar_retiro, en orden
   fecha_retiro     DateTime? // New: Specific Date+Time for pickup
-  
+
   lugar_entrega    String?  // 'LUOGO CONSEGNA' (primer/único destino)
   fecha_entrega    DateTime? // New: Specific Date+Time for delivery
   destinos         String[] // Destinos adicionales (paradas) tras lugar_entrega, en orden
@@ -224,6 +225,7 @@ model GastoOperacion {
   fecha           DateTime?
   descripcion     String?  // detalle libre (obligatorio para OTRO)
   numero_mancato  String?  // Nº de mancato pagamento (solo PEAJE)
+  link_peaje      String?  // Link/URL del peaje (solo PEAJE)
   comprobantes    String[] // URLs (S3) del/los comprobante(s)
 
   // Denormalizados de la operación para reportes/módulos (chofer y vehículo).
