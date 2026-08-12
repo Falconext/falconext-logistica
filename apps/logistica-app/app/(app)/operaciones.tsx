@@ -189,7 +189,11 @@ export default function OperacionesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
-  const [selectedEstado, setSelectedEstado] = useState<string | null>(null);
+  // Chofer: "Consegnas" abre como HISTORIAL (solo entregadas). Las pendientes se
+  // trabajan desde "Mi Ruta", no aquí (pedido del video). El supervisor ve Todos.
+  const [selectedEstado, setSelectedEstado] = useState<string | null>(
+    () => (user && isChofer(user) ? 'ENTREGADO' : null),
+  );
   const [soloSupervisores, setSoloSupervisores] = useState(false); // filtro: consegnas de supervisores
   const [soloMias, setSoloMias] = useState(false); // filtro: mis consegnas (del usuario logueado)
   // Resumen personal (igual que el chofer): entregadas/canceladas + km del mes.
