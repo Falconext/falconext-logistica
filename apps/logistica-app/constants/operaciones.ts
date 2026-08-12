@@ -19,6 +19,14 @@ export const APP_OPTIONS: { value: string; label: string }[] = [
     { value: 'APP ROMA', label: 'App Roma' },
 ];
 
+// Opciones del campo SPEDIZIONE (cliente/expedición). Las 4 fijas del negocio.
+export const SPEDIZIONE_OPTIONS: { value: string; label: string }[] = [
+    { value: 'AB', label: 'AB' },
+    { value: 'DHL', label: 'DHL' },
+    { value: 'EXTRAS ALFREDO', label: 'Extras Alfredo' },
+    { value: 'EXTRAS ESTEFANIA', label: 'Extras Estefanía' },
+];
+
 // Tipos de gasto de la rendición.
 export const GASTO_TIPOS: { value: string; label: string }[] = [
     { value: 'PEAJE', label: 'Peaje' },

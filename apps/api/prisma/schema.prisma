@@ -171,6 +171,8 @@ model Programacion {
   
   // Route Info
   cliente          String?  // 'CLIENTE'
+  spedizione       String?  // 'SPEDIZIONE' — expedición/cliente (AB, DHL, Extras Alfredo, Extras Estefanía)
+  reperibilita     Boolean? @default(false) // Reperibilità (disponibilidad on-call) marcada por el supervisor
   lugar_retiro     String?  // 'LUOGO RITIRO' (primer/único origen de retiro)
   retiros          String[] // Retiros adicionales (recogidas) tras lugar_retiro, en orden
   fecha_retiro     DateTime? // New: Specific Date+Time for pickup
