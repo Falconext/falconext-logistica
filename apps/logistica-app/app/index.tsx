@@ -79,11 +79,11 @@ export default function LoginScreen() {
       <View style={styles.content}>
         <View style={styles.brand}>
           <Image
-            source={require('../assets/images/splash-icon.png')}
+            source={require('../assets/images/logo-mark.png')}
             style={styles.logo}
             resizeMode="contain"
           />
-          <Text style={styles.title}>Gamonal Trasporti</Text>
+          <Text style={styles.title}>GAMONAL DRIVER</Text>
           <Text style={styles.subtitle}>Gestión de flota y operaciones</Text>
         </View>
 
@@ -145,7 +145,7 @@ export default function LoginScreen() {
 }
 
 const makeStyles = () => StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.background, padding: 24 },
+  container: { flex: 1, backgroundColor: '#FFFFFF', padding: 24 },
   content: { flex: 1, justifyContent: 'center' },
   brand: { alignItems: 'center', marginBottom: 32 },
   logo: {
