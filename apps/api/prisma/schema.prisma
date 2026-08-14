@@ -192,7 +192,12 @@ model Programacion {
   app              String?                  // App/plataforma (SENSA APP, MILANO 01..18, APP ROMA)
   compactado       Boolean? @default(false) // Chofer con dos rutas/consegnas en un mismo viaje (N/Y)
   estado_consegna  String?                  // CONSEGNATO | IN_CONSEGNA | IN_SOSPESO | RITIRATO | ANNULLATO | RISCHEDULATO
-  attesa           String?                  // Tiempo que el chofer espera al cliente
+  attesa           String?                  // Tiempo que el chofer espera al cliente (texto libre, legacy)
+  // Attesa estructurada con autorización: el chofer/supervisor editan las horas;
+  // SOLO el supervisor autoriza/rechaza. Se paga €10/h autorizada.
+  attesa_horas       Float?  @default(0)          // Horas de espera declaradas
+  attesa_estado      String? @default("PENDIENTE") // PENDIENTE | AUTORIZADO | DENEGADO
+  attesa_autorizado_por String?                    // User.id del supervisor que decidió
   otros_datos      String?                  // Otros datos de consegna (texto pegado desde WhatsApp)
   foto_bolla       String?                  // URL (S3) de la bolla/DDT de esta operación (la sube el chofer en Editar ruta)
 

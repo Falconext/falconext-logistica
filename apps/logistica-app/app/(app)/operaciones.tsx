@@ -201,7 +201,25 @@ export default function OperacionesScreen() {
   const [activosById, setActivosById] = useState<Record<string, any>>({});
 
   const [detail, setDetail] = useState<Programacion | null>(null);
+  const [attesaHorasEdit, setAttesaHorasEdit] = useState<string>(''); // supervisor: corregir horas de attesa
+  const [attesaBusy, setAttesaBusy] = useState(false);
   const [wizardOp, setWizardOp] = useState<Programacion | null>(null); // chofer: flujo por pasos
+
+  // Supervisor autoriza/rechaza la attesa declarada por el chofer (puede corregir horas).
+  const decidirAttesa = async (estado: 'AUTORIZADO' | 'DENEGADO') => {
+    if (!detail) return;
+    setAttesaBusy(true);
+    try {
+      const horas = attesaHorasEdit !== '' ? Number(attesaHorasEdit) : undefined;
+      const res = await api.patch(`/programacion/${detail.id}/attesa-autorizacion`, { estado, horas });
+      setDetail(res.data || null);
+      load();
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.message || 'No se pudo actualizar la attesa.');
+    } finally {
+      setAttesaBusy(false);
+    }
+  };
   const [detailDeviceId, setDetailDeviceId] = useState<string>('');
   const [detailActivo, setDetailActivo] = useState<any>(null);
   const [formVisible, setFormVisible] = useState(false);
@@ -279,6 +297,11 @@ export default function OperacionesScreen() {
 
   // Al abrir el detalle, resolvemos el dispositivo GPS del chofer (por su código) para
   // mostrar el historial de ruta de esa operación dentro del detalle.
+  // Al abrir el detalle, precargar las horas de attesa para el editor del supervisor.
+  useEffect(() => {
+    setAttesaHorasEdit(detail?.attesa_horas != null ? String(detail.attesa_horas) : '');
+  }, [detail?.id]);
+
   useEffect(() => {
     const code = detail?.trabajador_id;
     if (!code) { setDetailDeviceId(''); return; }
@@ -888,7 +911,48 @@ export default function OperacionesScreen() {
             {detail.km != null && detail.km !== 0 ? <InfoRow label="KM" value={`${detail.km} km`} /> : null}
             {detail.ciudad ? <InfoRow label="Ciudad" value={detail.ciudad} /> : null}
             {detail.app ? <InfoRow label="App" value={detail.app} /> : null}
-            {detail.attesa ? <InfoRow label="Attesa" value={detail.attesa} /> : null}
+            {/* Attesa con autorización: el supervisor ve las horas declaradas, puede
+                corregirlas y AUTORIZAR/DENEGAR. En rojo mientras está PENDIENTE. */}
+            {(() => {
+              const horas = Number(detail.attesa_horas || 0);
+              const est = (detail.attesa_estado || 'PENDIENTE').toUpperCase();
+              if (!horas && est === 'PENDIENTE' && !detail.attesa) return null;
+              const estColor = est === 'AUTORIZADO' ? C.success : est === 'DENEGADO' ? C.danger : C.warning;
+              return (
+                <View style={styles.attesaBox}>
+                  <View style={styles.attesaHead}>
+                    <Text style={styles.attesaTitle}>Attesa (espera en destino)</Text>
+                    <Text style={[styles.attesaEstado, { color: estColor }]}>
+                      {est === 'AUTORIZADO' ? 'Autorizada' : est === 'DENEGADO' ? 'Denegada' : 'Pendiente'}
+                    </Text>
+                  </View>
+                  <Text style={styles.attesaHoras}>{horas} h · {formatMoney(horas * 10, moneda)}</Text>
+                  {canEditAll && (
+                    <>
+                      <View style={styles.attesaEditRow}>
+                        <Text style={styles.attesaEditLabel}>Corregir horas</Text>
+                        <FormField
+                          label=""
+                          value={attesaHorasEdit}
+                          onChangeText={setAttesaHorasEdit}
+                          placeholder="0"
+                          keyboardType="numeric"
+                          style={{ width: 90 }}
+                        />
+                      </View>
+                      <View style={styles.attesaBtns}>
+                        <TouchableOpacity style={[styles.attesaBtn, { backgroundColor: C.success }]} disabled={attesaBusy} onPress={() => decidirAttesa('AUTORIZADO')} activeOpacity={0.8}>
+                          <Text style={styles.attesaBtnText}>Autorizar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.attesaBtn, { backgroundColor: C.danger }]} disabled={attesaBusy} onPress={() => decidirAttesa('DENEGADO')} activeOpacity={0.8}>
+                          <Text style={styles.attesaBtnText}>Denegar</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  )}
+                </View>
+              );
+            })()}
             {detail.compactado ? <InfoRow label="Compactado" value="Sí" /> : null}
             {detail.otros_datos ? <InfoRow label="Otros datos" value={detail.otros_datos} /> : null}
             {detail.anticipo != null && detail.anticipo !== 0 ? (
@@ -1335,6 +1399,16 @@ export default function OperacionesScreen() {
 }
 
 const makeStyles = () => StyleSheet.create({
+  attesaBox: { marginTop: S.sm, borderWidth: 1, borderColor: C.border, borderRadius: 12, padding: S.md, gap: 6 },
+  attesaHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  attesaTitle: { fontSize: 14, fontWeight: '700', color: C.text },
+  attesaEstado: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase' },
+  attesaHoras: { fontSize: 15, color: C.text, fontWeight: '600' },
+  attesaEditRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: S.sm, marginTop: 4 },
+  attesaEditLabel: { fontSize: 13, color: C.textMuted },
+  attesaBtns: { flexDirection: 'row', gap: S.sm, marginTop: 4 },
+  attesaBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
+  attesaBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   body: { flex: 1, paddingHorizontal: S.lg, paddingTop: S.md },
   mapBox: {
     height: 200,

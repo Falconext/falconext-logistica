@@ -1,5 +1,5 @@
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 
@@ -220,10 +220,21 @@ export class ProgramacionService {
         return this.findOne(created.id);
     }
 
-    async update(id: string, data: any) {
+    async update(id: string, data: any, opts?: { isChofer?: boolean }) {
         this.syncEstadosEntrega(data);
         // Separamos los gastos (relación) del resto de columnas.
         const { gastos, ...rest } = data;
+        // La autorización de la attesa (estado/quién autorizó) NO se cambia por el
+        // PATCH genérico: solo por el endpoint dedicado del supervisor.
+        delete rest.attesa_estado;
+        delete rest.attesa_autorizado_por;
+        // Si se editan las horas de attesa, vuelve a requerir autorización del
+        // supervisor (queda PENDIENTE) — lo edite el chofer o el propio supervisor.
+        if (rest.attesa_horas !== undefined) {
+            rest.attesa_horas = Number(rest.attesa_horas) || 0;
+            rest.attesa_estado = 'PENDIENTE';
+            rest.attesa_autorizado_por = null;
+        }
         const updated = await this.prisma.programacion.update({
             where: { id },
             data: rest,
@@ -240,6 +251,21 @@ export class ProgramacionService {
                     : []),
             ]);
         }
+        return this.findOne(id);
+    }
+
+    // Autoriza o rechaza la attesa declarada. Solo lo llama el supervisor (el
+    // controller lo restringe). Puede corregir las horas en el mismo paso.
+    async autorizarAttesa(id: string, tenantId: string, body: { estado: string; horas?: number; usuarioId?: string }) {
+        const estado = String(body.estado || '').toUpperCase();
+        if (!['AUTORIZADO', 'DENEGADO'].includes(estado)) {
+            throw new BadRequestException('Estado inválido: usa AUTORIZADO o DENEGADO.');
+        }
+        const existente = await this.prisma.programacion.findFirst({ where: { id, tenant_id: tenantId } });
+        if (!existente) throw new NotFoundException('Operación no encontrada.');
+        const data: any = { attesa_estado: estado, attesa_autorizado_por: body.usuarioId || null };
+        if (body.horas !== undefined) data.attesa_horas = Number(body.horas) || 0;
+        await this.prisma.programacion.update({ where: { id }, data });
         return this.findOne(id);
     }
 

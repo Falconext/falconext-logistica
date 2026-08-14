@@ -44,8 +44,8 @@ const fmtFechaHora = (iso?: string | null): string | undefined => {
 };
 
 type GastoRow = { tipo: string; monto: string; descripcion: string; numero_mancato: string; link_peaje: string; comprobantes: string[] };
-interface FormState { estado_consegna: string; foto_bolla: string; anticipo: string; attesa: string; gastos: GastoRow[]; lugar_retiro: string; retiros: string[]; lugar_entrega: string; destinos: string[]; }
-const emptyForm = (): FormState => ({ estado_consegna: '', foto_bolla: '', anticipo: '', attesa: '', gastos: [], lugar_retiro: '', retiros: [], lugar_entrega: '', destinos: [] });
+interface FormState { estado_consegna: string; foto_bolla: string; anticipo: string; attesa: string; attesa_horas: string; attesa_estado: string; gastos: GastoRow[]; lugar_retiro: string; retiros: string[]; lugar_entrega: string; destinos: string[]; }
+const emptyForm = (): FormState => ({ estado_consegna: '', foto_bolla: '', anticipo: '', attesa: '', attesa_horas: '', attesa_estado: 'PENDIENTE', gastos: [], lugar_retiro: '', retiros: [], lugar_entrega: '', destinos: [] });
 
 const PREP_STEPS = [
   { title: 'Consegna', Icon: Package },
@@ -113,6 +113,8 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
       foto_bolla: src.foto_bolla || '',
       anticipo: src.anticipo != null ? String(src.anticipo) : '',
       attesa: src.attesa || '',
+      attesa_horas: src.attesa_horas != null ? String(src.attesa_horas) : '',
+      attesa_estado: src.attesa_estado || 'PENDIENTE',
       gastos: Array.isArray(src.gastos) ? src.gastos.map((g: any) => ({
         tipo: g.tipo || 'OTRO', monto: g.monto != null ? String(g.monto) : '',
         descripcion: g.descripcion || '', numero_mancato: g.numero_mancato || '', link_peaje: g.link_peaje || '',
@@ -239,6 +241,7 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
         // El anticipo/bonifico lo fija el supervisor y NO lo escribe el chofer
         // (evita que lo sobrescriba/borre al finalizar). Solo rinde sus gastos.
         attesa: form.attesa.trim() || null,
+        attesa_horas: form.attesa_horas !== '' ? parseNum(form.attesa_horas) : 0,
         gastos: form.gastos
           .filter((g) => g.tipo && (g.monto !== '' || g.comprobantes.length || g.descripcion || g.numero_mancato || g.link_peaje))
           .map((g) => ({ tipo: g.tipo, monto: g.monto !== '' ? parseNum(g.monto) : 0, descripcion: g.descripcion || null, numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null, link_peaje: g.tipo === 'PEAJE' ? (g.link_peaje || null) : null, comprobantes: g.comprobantes })),
@@ -562,8 +565,13 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                   <Text style={styles.stepHeading}>Cierre de la consegna</Text>
                   {/* Attesa: lo ingresa/confirma el chofer al finalizar (auto desde el
                       contador). Queda editable por el supervisor en la operación. */}
-                  <Text style={styles.fieldLabel}>Attesa (espera en destino)</Text>
-                  <TextField value={form.attesa} onChangeText={(t) => setForm({ ...form, attesa: t })} placeholder="Ej: 15 min" styles={styles} />
+                  <Text style={styles.fieldLabel}>Attesa (horas de espera en destino)</Text>
+                  <TextField value={form.attesa_horas} onChangeText={(t) => setForm({ ...form, attesa_horas: t })} placeholder="Ej: 1.5" keyboardType="numeric" styles={styles} />
+                  <Text style={styles.hint}>
+                    {form.attesa_estado === 'AUTORIZADO' ? '✅ Autorizada por el supervisor'
+                      : form.attesa_estado === 'DENEGADO' ? '❌ Denegada por el supervisor'
+                        : '⏳ Pendiente de autorización del supervisor'}
+                  </Text>
                   <Text style={styles.stepHeading}>Peajes y gastos del trayecto</Text>
                   <Text style={styles.fieldLabel}>Bonifico recibido ({moneda || 'EUR'})</Text>
                   <TextField value={form.anticipo} onChangeText={() => { }} placeholder="0.00" keyboardType="numeric" editable={false} styles={styles} />

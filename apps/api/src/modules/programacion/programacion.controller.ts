@@ -1,5 +1,5 @@
 
-import { Controller, Get, Param, Patch, Body, Post, Delete, UseGuards, Req, Query } from '@nestjs/common';
+import { Controller, Get, Param, Patch, Body, Post, Delete, UseGuards, Req, Query, ForbiddenException } from '@nestjs/common';
 import { ProgramacionService } from './programacion.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -43,8 +43,21 @@ export class ProgramacionController {
     }
 
     @Patch(':id')
-    update(@Param('id') id: string, @Body() data: any) {
-        return this.programacionService.update(id, data);
+    update(@Param('id') id: string, @Body() data: any, @Req() req) {
+        return this.programacionService.update(id, data, { isChofer: !!req.user?.soloPropios });
+    }
+
+    // Autorizar / rechazar la attesa declarada. SOLO el supervisor (no el chofer).
+    @Patch(':id/attesa-autorizacion')
+    autorizarAttesa(@Param('id') id: string, @Body() body: any, @Req() req) {
+        if (req.user?.soloPropios) {
+            throw new ForbiddenException('Solo el supervisor puede autorizar la attesa.');
+        }
+        return this.programacionService.autorizarAttesa(id, req.user.tenantId, {
+            estado: body.estado,
+            horas: body.horas,
+            usuarioId: req.user.userId,
+        });
     }
 
     @Delete(':id')

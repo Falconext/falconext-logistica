@@ -73,6 +73,9 @@ export interface Programacion {
   lugar_entrega?: string;
   fecha_entrega?: string;
   destinos?: string[]; // Destinos adicionales (paradas) tras lugar_entrega
+  attesa_horas?: number; // Horas de espera declaradas
+  attesa_estado?: string; // PENDIENTE | AUTORIZADO | DENEGADO
+  attesa_autorizado_por?: string | null;
   hora_retiro?: string;
   eta?: string;
   nota?: string;

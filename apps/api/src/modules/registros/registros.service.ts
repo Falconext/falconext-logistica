@@ -164,13 +164,18 @@ export class RegistrosService {
         tenantId: string, trabajadorId: string, desde: Date, hasta: Date,
         tar: { giorno: number; notte: number },
     ) {
-        const [recorridos, reperibilita] = await Promise.all([
+        const [recorridos, reperibilita, attesaAgg] = await Promise.all([
             this.prisma.recorrido.findMany({
                 where: { tenant_id: tenantId, trabajador_id: trabajadorId, finalizado_en: { gte: desde, lte: hasta } },
                 select: { ida_km: true, vuelta_km: true, ida_min: true, vuelta_min: true, iniciado_en: true, llegada_en: true, retorno_en: true, finalizado_en: true, descanso_min: true },
             }),
             this.prisma.programacion.count({
                 where: { tenant_id: tenantId, trabajador_id: trabajadorId, reperibilita: true, fecha: { gte: desde, lte: hasta } },
+            }),
+            // Solo la attesa AUTORIZADA por el supervisor se paga (€10/h).
+            this.prisma.programacion.aggregate({
+                _sum: { attesa_horas: true },
+                where: { tenant_id: tenantId, trabajador_id: trabajadorId, attesa_estado: 'AUTORIZADO', fecha: { gte: desde, lte: hasta } },
             }),
         ]);
 
@@ -201,15 +206,19 @@ export class RegistrosService {
         const oreNoche = Math.round((nocheMin / 60) * 100) / 100;
         const pagoHoras = Math.round((oreDia * tar.giorno + oreNoche * tar.notte) * 100) / 100;
         const pagoReperibilita = reperibilita * 10; // €10 fijo por cada reperibilità
+        const attesaHoras = Math.round(num(attesaAgg._sum.attesa_horas) * 100) / 100;
+        const pagoAttesa = Math.round(attesaHoras * 10 * 100) / 100; // €10/h autorizada
         return {
             km: Math.round(km * 10) / 10,
             oreDia, oreNoche,
             oreTotal: Math.round((oreDia + oreNoche) * 100) / 100,
             reperibilita,
+            attesaHoras,
             recorridos: recorridos.length,
             pagoHoras,
             pagoReperibilita,
-            gananciaTotal: Math.round((pagoHoras + pagoReperibilita) * 100) / 100,
+            pagoAttesa,
+            gananciaTotal: Math.round((pagoHoras + pagoReperibilita + pagoAttesa) * 100) / 100,
         };
     }
 
