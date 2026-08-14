@@ -40,6 +40,7 @@ type BadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 // Estado de consegna → etiqueta + variante de Badge móvil.
 export const ESTADO_CONSEGNA_META: Record<string, { label: string; variant: BadgeVariant }> = {
     RICHIESTA: { label: 'Richiesta', variant: 'info' },
+    ACCETTATA: { label: 'Aceptada', variant: 'success' }, // el chofer aceptó la consegna
     CONSEGNATO: { label: 'Consegnato', variant: 'success' },
     IN_CONSEGNA: { label: 'In Consegna', variant: 'warning' },
     IN_SOSPESO: { label: 'In Sospeso', variant: 'info' },

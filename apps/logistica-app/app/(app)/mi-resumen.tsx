@@ -227,11 +227,8 @@ export default function MiResumenScreen() {
         </View>
       </Card>
 
-      {/* Registrar parte del día */}
-      <TouchableOpacity style={styles.parteBtn} activeOpacity={0.85} onPress={() => router.push('/(app)/parte-diario' as any)}>
-        <PlusCircle size={20} color="#fff" />
-        <Text style={styles.parteBtnText}>Registrar parte del día</Text>
-      </TouchableOpacity>
+      {/* "Registrar parte del día" se quitó: las horas/km ahora son automáticas
+          (desde los recorridos), el chofer ya no registra parte manual. */}
 
       {/* Métricas personales — OCULTAS al chofer/supervisor por ahora: los km/horas
           salen de los recorridos GPS y todavía no cuadran (hay que verificar el

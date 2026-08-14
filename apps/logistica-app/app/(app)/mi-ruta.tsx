@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Alert, ScrollView, TouchableOpacity } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Navigation, MapPin, CornerUpLeft, Flag, Play, Package, Clock, Coffee, Pencil, Camera, Save } from 'lucide-react-native';
+import { Navigation, MapPin, CornerUpLeft, Flag, Play, Package, Clock, Coffee, Pencil, Camera, Save, CheckCircle2 } from 'lucide-react-native';
 import { Screen, AppHeader, Card, Button, Badge, FormField, LoadingState, EmptyState, Theme } from '../../components/ui';
 import api, { DEVICE_TOKEN_KEY } from '../../services/api';
 import { startTracking, stopTracking } from '../../services/LocationService';
@@ -27,6 +27,7 @@ interface Operacion {
   lugar_entrega?: string | null;
   fecha_entrega?: string | null;
   estado?: string | null;
+  estado_consegna?: string | null;
 }
 
 const ESTADO_LABEL: Record<string, string> = {
@@ -249,6 +250,24 @@ function OperacionCard({ op, busy, onIniciar, onReload }: {
   const [entrega, setEntrega] = useState(op.lugar_entrega || '');
   const [saving, setSaving] = useState(false);
 
+  // Flujo "Aceptar consegna": el chofer primero ACEPTA (ve los datos del
+  // supervisor) y recién ahí puede "Iniciar ruta". Al aceptar se marca la
+  // consegna como ACCETTATA para que el supervisor sepa que la recibió.
+  const [accepted, setAccepted] = useState((op.estado_consegna || '').toUpperCase() === 'ACCETTATA');
+  const [accepting, setAccepting] = useState(false);
+
+  const aceptar = async () => {
+    setAccepting(true);
+    try {
+      await api.patch(`/programacion/${op.id}`, { estado_consegna: 'ACCETTATA' });
+    } catch {
+      // Si falla el guardado, igual dejamos continuar (no bloquear al chofer).
+    } finally {
+      setAccepted(true);
+      setAccepting(false);
+    }
+  };
+
   const guardar = async () => {
     if (!retiro.trim() || !entrega.trim()) {
       Alert.alert('Faltan lugares', 'Completa el lugar de retiro y el de entrega para continuar.');
@@ -300,15 +319,15 @@ function OperacionCard({ op, busy, onIniciar, onReload }: {
             <MapPin size={15} color={C.text} />
             <Text style={styles.opAddr} numberOfLines={1}>{op.lugar_entrega || '—'}</Text>
           </View>
-          <Button title="INICIAR RUTA" icon={Play} onPress={() => onIniciar(op)} loading={busy} style={{ marginTop: S.sm }} />
+          {accepted ? (
+            <Button title="INICIAR RUTA" icon={Play} onPress={() => onIniciar(op)} loading={busy} style={{ marginTop: S.sm }} />
+          ) : (
+            <Button title="ACEPTAR CONSEGNA" icon={CheckCircle2} onPress={aceptar} loading={accepting} style={{ marginTop: S.sm }} />
+          )}
           <View style={styles.opActions}>
             <TouchableOpacity onPress={() => setEditing(true)} style={styles.linkBtn} activeOpacity={0.7}>
               <Pencil size={14} color={C.primary} />
               <Text style={styles.linkText}>Editar lugares</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push('/(app)/parte-diario' as any)} style={styles.linkBtn} activeOpacity={0.7}>
-              <Camera size={14} color={C.primary} />
-              <Text style={styles.linkText}>Subir foto de la bolla</Text>
             </TouchableOpacity>
           </View>
         </>
