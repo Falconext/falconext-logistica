@@ -533,12 +533,20 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                     <>
                       {recorrido.estado === 'EN_RUTA_IDA' && <BigBtn label="Llegué al destino" Icon={Flag} onPress={() => accion('llegada')} disabled={busy} />}
                       {recorrido.estado === 'EN_DESTINO' && !yaEntregada && (<>
-                        {/* Attesa: tiempo de espera en el destino, contado desde la llegada. */}
+                        {/* Attesa: el chofer COLOCA las horas de espera (el contador es
+                            solo referencia). El supervisor luego la autoriza/rechaza. */}
                         <View style={styles.attesaCard}>
                           <Clock size={20} color={C.warning} />
                           <View style={{ flex: 1 }}>
-                            <Text style={styles.attesaLabel}>Attesa (espera en destino)</Text>
-                            <Text style={styles.attesaValue}>{attesaLabel}</Text>
+                            <Text style={styles.attesaLabel}>Attesa (horas de espera en destino)</Text>
+                            <TextField
+                              value={form.attesa_horas}
+                              onChangeText={(t) => setForm({ ...form, attesa_horas: t })}
+                              placeholder="Ej: 1.5"
+                              keyboardType="numeric"
+                              styles={styles}
+                            />
+                            <Text style={styles.attesaHint}>Contador: {attesaLabel} · lo autoriza el supervisor</Text>
                           </View>
                         </View>
                         <BigBtn label="Finalizar consegna" Icon={Check} onPress={() => { setForm((f) => ({ ...f, attesa: f.attesa || fmtEspera(attesaMin) })); setShowRendicion(true); }} disabled={busy} />
@@ -715,9 +723,10 @@ const makeStyles = () => StyleSheet.create({
   destinoRemove: { padding: 10, marginTop: 2 },
   map: { height: 240, borderRadius: Theme.radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, marginBottom: S.md },
   trackCard: { backgroundColor: C.surface, borderRadius: Theme.radius.lg, borderWidth: 1, borderColor: C.border, padding: S.md, marginBottom: S.md },
-  attesaCard: { flexDirection: 'row', alignItems: 'center', gap: S.md, backgroundColor: C.warning + '14', borderRadius: Theme.radius.lg, borderWidth: 1, borderColor: C.warning + '55', paddingHorizontal: S.md, paddingVertical: S.md, marginBottom: S.sm },
-  attesaLabel: { fontSize: 13, fontWeight: '600', color: C.textMuted },
+  attesaCard: { flexDirection: 'row', alignItems: 'flex-start', gap: S.md, backgroundColor: C.warning + '14', borderRadius: Theme.radius.lg, borderWidth: 1, borderColor: C.warning + '55', paddingHorizontal: S.md, paddingVertical: S.md, marginBottom: S.sm },
+  attesaLabel: { fontSize: 13, fontWeight: '600', color: C.textMuted, marginBottom: 6 },
   attesaValue: { fontSize: 20, fontWeight: '800', color: C.warning, marginTop: 1 },
+  attesaHint: { fontSize: 12, color: C.textMuted, marginTop: 4 },
   doneBanner: { flexDirection: 'row', alignItems: 'center', gap: S.sm, backgroundColor: C.success + '14', borderRadius: Theme.radius.lg, borderWidth: 1, borderColor: C.success + '55', paddingHorizontal: S.md, paddingVertical: S.md, marginBottom: S.sm },
   doneBannerText: { flex: 1, fontSize: 14, fontWeight: '700', color: C.success },
   trackHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: S.sm },
