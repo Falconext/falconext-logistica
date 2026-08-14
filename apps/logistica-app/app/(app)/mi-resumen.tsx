@@ -47,6 +47,7 @@ interface Resumen {
   oreMattina: number;
   oreSera: number;
   oreTotal: number;
+  reperibilita?: number; // contador de reperibilità (el chofer NO ve el monto)
   gananciaEstimada: number;
   recientes: { id: string; fecha: string; operacion: string; targa?: string | null; km: number; oreMattina: number; oreSera: number; ganancia: number }[];
 }
@@ -234,12 +235,12 @@ export default function MiResumenScreen() {
 
       {/* Métricas personales */}
       <View style={styles.statsRow}>
-        <StatCard label="Horas de manejo" value={horasLabel(resumen?.oreTotal ?? 0)} icon={Clock} color={C.primary} style={{ flex: 1 }} />
+        <StatCard label="Horas día" value={horasLabel(resumen?.oreMattina ?? 0)} icon={Clock} color={C.primary} style={{ flex: 1 }} />
         <StatCard label="Km del mes" value={`${resumen?.km ?? 0} km`} icon={Route} color={C.info} style={{ flex: 1 }} />
       </View>
       <View style={styles.statsRow}>
         <StatCard label="Horas noche" value={horasLabel(resumen?.oreSera ?? 0)} icon={Moon} color={C.accent} style={{ flex: 1 }} />
-        <StatCard label="Partes registrados" value={resumen?.totalPartes ?? 0} icon={ClipboardList} color={C.success} style={{ flex: 1 }} />
+        <StatCard label="Reperibilità" value={resumen?.reperibilita ?? 0} icon={ClipboardList} color={C.success} style={{ flex: 1 }} />
       </View>
 
       {/* Accesos rápidos */}

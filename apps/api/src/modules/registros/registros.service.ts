@@ -17,6 +17,30 @@ function inicioMesUTC(anio: number, mes1a12: number): Date {
     return new Date(Date.UTC(anio, mes1a12 - 1, 1));
 }
 
+// Offset (min) que hay que sumar a un instante UTC para obtener la hora de pared
+// en Italia (Europe/Rome). Maneja horario de verano (DST) automáticamente.
+function offsetRomaMin(d: Date): number {
+    const p = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+    }).formatToParts(d).reduce((a: any, x) => { a[x.type] = x.value; return a; }, {});
+    const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +(p.hour === '24' ? 0 : p.hour), +p.minute, +p.second);
+    return Math.round((asUTC - d.getTime()) / 60000);
+}
+
+// Reparte el tramo [start, end] en minutos de DÍA (06:00–19:00) y NOCHE (resto),
+// en hora italiana. El pago diurno/nocturno depende de esto.
+function minutosDiaNoche(start?: Date | null, end?: Date | null): { dia: number; noche: number } {
+    if (!start || !end || end.getTime() <= start.getTime()) return { dia: 0, noche: 0 };
+    const off = offsetRomaMin(start) * 60000; // offset ~constante en el tramo (DST a mitad de ruta: despreciable)
+    let dia = 0, noche = 0;
+    for (let t = start.getTime(); t < end.getTime(); t += 60000) {
+        const h = new Date(t + off).getUTCHours();
+        if (h >= 6 && h < 19) dia += 1; else noche += 1;
+    }
+    return { dia, noche };
+}
+
 @Injectable()
 export class RegistrosService {
     constructor(private prisma: PrismaService) { }
@@ -132,51 +156,113 @@ export class RegistrosService {
     }
 
     // Resumen del chofer para "Mi Resumen" de la app.
+    // Métricas AUTOMÁTICAS de un trabajador en un rango: km y horas de manejo
+    // (día/noche, sin descanso) desde los RECORRIDOS, + contador de reperibilità
+    // (consegnas marcadas por el supervisor). Incluye los montos; el caller decide
+    // si se muestran según el rol (ve_finanzas).
+    private async calcularMetricas(
+        tenantId: string, trabajadorId: string, desde: Date, hasta: Date,
+        tar: { giorno: number; notte: number },
+    ) {
+        const [recorridos, reperibilita] = await Promise.all([
+            this.prisma.recorrido.findMany({
+                where: { tenant_id: tenantId, trabajador_id: trabajadorId, finalizado_en: { gte: desde, lte: hasta } },
+                select: { ida_km: true, vuelta_km: true, iniciado_en: true, llegada_en: true, retorno_en: true, finalizado_en: true, descanso_min: true },
+            }),
+            this.prisma.programacion.count({
+                where: { tenant_id: tenantId, trabajador_id: trabajadorId, reperibilita: true, fecha: { gte: desde, lte: hasta } },
+            }),
+        ]);
+
+        let km = 0, diaMin = 0, nocheMin = 0;
+        for (const r of recorridos) {
+            km += num(r.ida_km) + num(r.vuelta_km);
+            const ida = minutosDiaNoche(r.iniciado_en, r.llegada_en);
+            const vuelta = minutosDiaNoche(r.retorno_en, r.finalizado_en);
+            const diaEl = ida.dia + vuelta.dia;
+            const nocheEl = ida.noche + vuelta.noche;
+            const elapsed = diaEl + nocheEl;
+            // Solo cuenta el manejo: se descuenta el descanso proporcionalmente.
+            const factor = elapsed > 0 ? Math.max(0, elapsed - num(r.descanso_min)) / elapsed : 0;
+            diaMin += diaEl * factor;
+            nocheMin += nocheEl * factor;
+        }
+
+        const oreDia = Math.round((diaMin / 60) * 100) / 100;
+        const oreNoche = Math.round((nocheMin / 60) * 100) / 100;
+        const pagoHoras = Math.round((oreDia * tar.giorno + oreNoche * tar.notte) * 100) / 100;
+        const pagoReperibilita = reperibilita * 10; // €10 fijo por cada reperibilità
+        return {
+            km: Math.round(km * 10) / 10,
+            oreDia, oreNoche,
+            oreTotal: Math.round((oreDia + oreNoche) * 100) / 100,
+            reperibilita,
+            recorridos: recorridos.length,
+            pagoHoras,
+            pagoReperibilita,
+            gananciaTotal: Math.round((pagoHoras + pagoReperibilita) * 100) / 100,
+        };
+    }
+
     async resumenChofer(tenantId: string, trabajadorId: string | null, from?: string, to?: string) {
         if (!trabajadorId) throw new BadRequestException('Tu usuario no está vinculado a un trabajador.');
 
         const ahora = new Date();
         const desde = from ? new Date(from) : inicioMesUTC(ahora.getUTCFullYear(), ahora.getUTCMonth() + 1);
         const hasta = to ? new Date(to) : ahora;
-
-        const [registros, tar] = await Promise.all([
-            this.prisma.registroServicio.findMany({
-                where: { tenant_id: tenantId, trabajador_id: trabajadorId, fecha: { gte: desde, lte: hasta } },
-                orderBy: { fecha: 'desc' },
-            }),
-            this.tarifas(tenantId),
-        ]);
-
-        let km = 0, oreMattina = 0, oreSera = 0, ganancia = 0;
-        for (const r of registros) {
-            km += num(r.km);
-            oreMattina += num(r.ore_mattina);
-            oreSera += num(r.ore_sera);
-            ganancia += this.ganancia(r, tar);
-        }
+        const tar = await this.tarifas(tenantId);
+        const m = await this.calcularMetricas(tenantId, trabajadorId, desde, hasta, tar);
 
         return {
             desde,
             hasta,
             moneda: tar.moneda,
             tarifas: { giorno: tar.giorno, notte: tar.notte, corte: tar.corte },
-            totalPartes: registros.length,
-            km: Math.round(km * 10) / 10,
-            oreMattina: Math.round(oreMattina * 100) / 100,
-            oreSera: Math.round(oreSera * 100) / 100,
-            oreTotal: Math.round((oreMattina + oreSera) * 100) / 100,
-            gananciaEstimada: Math.round(ganancia * 100) / 100,
-            recientes: registros.slice(0, 5).map((r) => ({
-                id: r.id,
-                fecha: r.fecha,
-                operacion: r.operacion,
-                targa: r.targa,
-                km: num(r.km),
-                oreMattina: num(r.ore_mattina),
-                oreSera: num(r.ore_sera),
-                ganancia: this.ganancia(r, tar),
-            })),
+            km: m.km,
+            oreDia: m.oreDia,
+            oreNoche: m.oreNoche,
+            oreTotal: m.oreTotal,
+            // compat con el front actual (mattina=día, sera=noche):
+            oreMattina: m.oreDia,
+            oreSera: m.oreNoche,
+            reperibilita: m.reperibilita,
+            totalPartes: m.recorridos,
+            // Montos: el controller los remueve si el rol NO ve finanzas.
+            pagoHoras: m.pagoHoras,
+            pagoReperibilita: m.pagoReperibilita,
+            gananciaTotal: m.gananciaTotal,
+            gananciaEstimada: m.gananciaTotal, // compat
+            recientes: [] as any[],
         };
+    }
+
+    // Resumen para DIRECCIÓN (solo roles con ve_finanzas): cuánto va ganando cada
+    // chofer/supervisor en el rango, con montos.
+    async resumenDireccion(tenantId: string, from?: string, to?: string) {
+        const ahora = new Date();
+        const desde = from ? new Date(from) : inicioMesUTC(ahora.getUTCFullYear(), ahora.getUTCMonth() + 1);
+        const hasta = to ? new Date(to) : ahora;
+        const [tar, trabajadores] = await Promise.all([
+            this.tarifas(tenantId),
+            this.prisma.trabajador.findMany({
+                where: { tenant_id: tenantId },
+                select: { id: true, nombre_completo: true, cargo: true },
+            }),
+        ]);
+        const filas = await Promise.all(trabajadores.map(async (w) => {
+            const m = await this.calcularMetricas(tenantId, w.id, desde, hasta, tar);
+            return {
+                trabajadorId: w.id, nombre: w.nombre_completo, cargo: w.cargo,
+                km: m.km, oreDia: m.oreDia, oreNoche: m.oreNoche, oreTotal: m.oreTotal,
+                reperibilita: m.reperibilita,
+                pagoHoras: m.pagoHoras, pagoReperibilita: m.pagoReperibilita, gananciaTotal: m.gananciaTotal,
+            };
+        }));
+        const conActividad = filas
+            .filter((f) => f.oreTotal > 0 || f.km > 0 || f.reperibilita > 0)
+            .sort((a, b) => b.gananciaTotal - a.gananciaTotal);
+        const totalPagar = Math.round(conActividad.reduce((s, f) => s + f.gananciaTotal, 0) * 100) / 100;
+        return { desde, hasta, moneda: tar.moneda, totalPagar, choferes: conActividad };
     }
 
     // Resumen mensual por chofer (panel web). Agrupa el período elegido por trabajador.

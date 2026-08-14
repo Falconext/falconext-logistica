@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Req, Query } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Req, Query, ForbiddenException } from '@nestjs/common';
 import { RegistrosService } from './registros.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { EsAdminGuard } from '../auth/es-admin.guard';
@@ -48,8 +48,23 @@ export class RegistrosController {
     // Resumen del chofer logueado (para "Mi Resumen" de la app): horas, km y
     // ganancia del período (por defecto, el mes en curso).
     @Get('mias/resumen')
-    miResumen(@Req() req, @Query('from') from?: string, @Query('to') to?: string) {
-        return this.registrosService.resumenChofer(req.user.tenantId, req.user.trabajadorId, from, to);
+    async miResumen(@Req() req, @Query('from') from?: string, @Query('to') to?: string) {
+        const r = await this.registrosService.resumenChofer(req.user.tenantId, req.user.trabajadorId, from, to);
+        // Chofer/Supervisor NO ven dinero: se quitan los montos. Ven horas, km y el
+        // contador de reperibilità. Los roles con ve_finanzas sí ven todo.
+        if (!req.user.veFinanzas) {
+            const { pagoHoras, pagoReperibilita, gananciaTotal, gananciaEstimada, ...sinDinero } = r as any;
+            return sinDinero;
+        }
+        return r;
+    }
+
+    // Resumen de DIRECCIÓN: cuánto va ganando cada chofer/supervisor. Solo roles
+    // con ve_finanzas (Supervisor General, Dir. Operaciones, Dir. General).
+    @Get('direccion/resumen')
+    resumenDireccion(@Req() req, @Query('from') from?: string, @Query('to') to?: string) {
+        if (!req.user.veFinanzas) throw new ForbiddenException('No autorizado a ver finanzas.');
+        return this.registrosService.resumenDireccion(req.user.tenantId, from, to);
     }
 
     // Árbol de navegación (año → mes → chofer) con suma de km en cada nivel.
