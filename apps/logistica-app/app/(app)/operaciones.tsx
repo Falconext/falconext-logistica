@@ -926,7 +926,10 @@ export default function OperacionesScreen() {
                       {est === 'AUTORIZADO' ? 'Autorizada' : est === 'DENEGADO' ? 'Denegada' : 'Pendiente'}
                     </Text>
                   </View>
-                  <Text style={styles.attesaHoras}>{horas} h ({Math.round(horas * 60)} min) · {formatMoney(horas * 10, moneda)}</Text>
+                  <Text style={styles.attesaHoras}>{horas} h ({Math.round(horas * 60)} min) · {formatMoney(horas >= 1 ? horas * 10 : 0, moneda)}</Text>
+                  {horas > 0 && horas < 1 && (
+                    <Text style={styles.attesaNota}>Menos de 1 hora: no se paga.</Text>
+                  )}
                   {canEditAll && (
                     <>
                       <View style={styles.attesaEditRow}>
@@ -1404,6 +1407,7 @@ const makeStyles = () => StyleSheet.create({
   attesaTitle: { fontSize: 14, fontWeight: '700', color: C.text },
   attesaEstado: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase' },
   attesaHoras: { fontSize: 15, color: C.text, fontWeight: '600' },
+  attesaNota: { fontSize: 12, color: C.warning, marginTop: 2 },
   attesaEditRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: S.sm, marginTop: 4 },
   attesaEditLabel: { fontSize: 13, color: C.textMuted },
   attesaBtns: { flexDirection: 'row', gap: S.sm, marginTop: 4 },

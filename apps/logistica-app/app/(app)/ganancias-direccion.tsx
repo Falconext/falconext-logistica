@@ -1,14 +1,15 @@
 // Ganancias (Dirección): cuánto va ganando cada chofer/supervisor en el mes.
 // Solo visible a roles con ve_finanzas (Supervisor General, Dir. Operaciones,
 // Dir. General). El backend ya bloquea el acceso si el rol no ve finanzas.
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, RefreshControl } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Screen, AppHeader, Card, LoadingState, EmptyState, Theme } from '../../components/ui';
 import api from '../../services/api';
+import { useTheme } from '../../context/ThemeContext';
 import { formatMoney } from '../../constants/currency';
 
-const C = Theme.colors;
+const C = Theme.colors; // objeto mutable: colores inline se releen en render
 const S = Theme.spacing;
 
 interface Fila {
@@ -33,6 +34,8 @@ function horasLabel(h: number): string {
 }
 
 export default function GananciasDireccionScreen() {
+  const { themeKey } = useTheme();
+  const styles = useMemo(() => makeStyles(), [themeKey]);
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -100,7 +103,7 @@ export default function GananciasDireccionScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   totalCard: { alignItems: 'center', paddingVertical: S.lg },
   totalLbl: { fontSize: 13, color: C.textMuted },
   totalVal: { fontSize: 28, fontWeight: '800', color: C.success, marginTop: 4 },

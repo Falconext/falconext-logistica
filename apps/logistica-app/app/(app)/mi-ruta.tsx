@@ -8,6 +8,7 @@ import api, { DEVICE_TOKEN_KEY } from '../../services/api';
 import { startTracking, stopTracking } from '../../services/LocationService';
 import { useTheme } from '../../context/ThemeContext';
 import ChoferWizard from '../../components/ChoferWizard';
+import MapboxWebView from '../../components/MapboxWebView';
 
 const C = Theme.colors;
 const S = Theme.spacing;
@@ -39,6 +40,8 @@ interface Operacion {
   fecha_entrega?: string | null;
   estado?: string | null;
   estado_consegna?: string | null;
+  retiros?: string[] | null;
+  destinos?: string[] | null;
 }
 
 const ESTADO_LABEL: Record<string, string> = {
@@ -249,6 +252,19 @@ function OperacionCard({ op, onAceptar }: {
         <MapPin size={15} color={C.text} />
         <Text style={styles.opAddr} numberOfLines={1}>{op.lugar_entrega || '—'}</Text>
       </View>
+      {/* Mapa de la ruta: origen → retiros → destino → destinos. */}
+      {(() => {
+        const stops = [...(op.retiros || []), op.lugar_entrega, ...(op.destinos || [])].map((s) => (s || '').trim()).filter(Boolean);
+        if (!op.lugar_retiro || stops.length === 0) return null;
+        return (
+          <MapboxWebView
+            style={styles.opMap}
+            mapStyle="streets"
+            route={{ originAddress: op.lugar_retiro, destinationAddress: stops[stops.length - 1], waypoints: stops.slice(0, -1) }}
+            fit
+          />
+        );
+      })()}
       <Button title="ACEPTAR CONSEGNA" icon={CheckCircle2} onPress={() => onAceptar(op)} style={{ marginTop: S.sm }} />
     </Card>
   );
@@ -277,6 +293,7 @@ const makeStyles = () =>
     opHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
     opCliente: { fontSize: 15, fontWeight: '700', color: C.text },
     opAddr: { flex: 1, fontSize: 13, color: C.textMuted },
+    opMap: { height: 160, borderRadius: 12, overflow: 'hidden', marginTop: S.sm },
     opActions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: S.sm },
     linkBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4 },
     linkText: { fontSize: 13, color: C.primary, fontWeight: '600' },

@@ -19,6 +19,13 @@ export const APP_OPTIONS: { value: string; label: string }[] = [
     { value: 'APP ROMA', label: 'App Roma' },
 ];
 
+// Áreas de trabajo a las que se destina un trabajador. Las 3 fijas del negocio.
+export const AREAS_TRABAJO: { value: string; label: string }[] = [
+    { value: 'Milano Farmacia', label: 'Milano Farmacia' },
+    { value: 'Milano Piazza', label: 'Milano Piazza' },
+    { value: 'Milano DHL', label: 'Milano DHL' },
+];
+
 // Opciones del campo SPEDIZIONE (cliente/expedición). Las 4 fijas del negocio.
 export const SPEDIZIONE_OPTIONS: { value: string; label: string }[] = [
     { value: 'AB', label: 'AB' },

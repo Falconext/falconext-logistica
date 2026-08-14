@@ -23,6 +23,7 @@ import DatePicker from '../../components/DatePicker';
 import DocumentosPanel from '../../components/DocumentosPanel';
 import { TRABAJADOR_DOCS } from '../../components/documentTypes';
 import Select from '../../components/Select';
+import { AREAS_TRABAJO } from '../../constants/operaciones';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -400,7 +401,15 @@ export default function TrabajadoresScreen() {
             { value: 'Inactivo', label: 'Inactivo' },
           ]}
         />
-        <FormField label="Área de trabajo" value={form.area_trabajo || ''} onChangeText={(t) => setForm({ ...form, area_trabajo: t })} placeholder="Operaciones" />
+        <Select
+          label="Área de trabajo"
+          value={form.area_trabajo || ''}
+          onChange={(v) => setForm({ ...form, area_trabajo: v })}
+          placeholder="Selecciona el área"
+          searchable={false}
+          clearable
+          options={AREAS_TRABAJO}
+        />
         <FormField label="Teléfono" value={form.telefono || ''} onChangeText={(t) => setForm({ ...form, telefono: t })} placeholder="+51 999 999 999" keyboardType="phone-pad" />
         <FormField label="Email personal" value={form.email_personal || ''} onChangeText={(t) => setForm({ ...form, email_personal: t })} placeholder="correo@ejemplo.com" keyboardType="email-address" autoCapitalize="none" />
         <FormField label="Licencia de conducir" value={form.licencia_conducir || ''} onChangeText={(t) => setForm({ ...form, licencia_conducir: t })} placeholder="N° de licencia" autoCapitalize="characters" />

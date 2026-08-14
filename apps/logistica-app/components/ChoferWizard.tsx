@@ -203,11 +203,23 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
     if (!operacion?.id) return;
     setBusy(true);
     try {
+      // 1) GPS OBLIGATORIO: no se puede iniciar la consegna sin el rastreo activo
+      //    (pedido del empresario). Se verifica ANTES de crear el recorrido.
+      const serviciosOn = await Location.hasServicesEnabledAsync();
+      if (!serviciosOn) {
+        Alert.alert('Activa la ubicación', 'Debes activar el GPS/ubicación del teléfono para iniciar la consegna.');
+        return;
+      }
+      const trackingOk = await startTracking(); // pide permiso y arranca el rastreo
+      if (!trackingOk) {
+        Alert.alert('Rastreo GPS requerido', 'No puedes iniciar la consegna sin el rastreo GPS activo. Concede el permiso de ubicación e inténtalo de nuevo.');
+        return;
+      }
+
+      // 2) GPS activo → recién ahora se inicia el recorrido.
       await guardarDatos();
-      const trackable = await ensureDeviceToken();
+      await ensureDeviceToken();
       await api.post('/recorridos/iniciar', { programacionId: operacion.id });
-      if (trackable) { try { await startTracking(); } catch { } }
-      else Alert.alert('Ruta iniciada · sin GPS', 'Tu cuenta no está habilitada para rastreo. Pide al administrador que active «Será rastreado» en tu ficha.');
       await loadRecorrido();
       setPhase('tracking');
       // Ya arrancó la ruta: se limpia el paso guardado (la prep terminó).
@@ -567,6 +579,45 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                       {!!op?.nota && (<View style={styles.notaBox}><Text style={styles.notaLabel}>Nota</Text><Text style={styles.notaText} selectable>{op.nota}</Text></View>)}
                     </View>
                   )}
+
+                  {/* Mapa de la ruta + navegación externa (bajo los datos, sobre las
+                      acciones). Origen → retiros → destino → destinos. */}
+                  {(() => {
+                    const origen = (recorrido.origen_label || op?.lugar_retiro || '').trim();
+                    const rutaStops = [...((op?.retiros || []) as string[]), recorrido.destino_label || op?.lugar_entrega, ...((op?.destinos || []) as string[])].map((s) => (s || '').trim()).filter(Boolean);
+                    if (!origen || rutaStops.length === 0) return null;
+                    const dest = rutaStops[rutaStops.length - 1];
+                    const wps = rutaStops.slice(0, -1);
+                    return (
+                      <View style={{ marginBottom: S.md }}>
+                        <MapboxWebView style={styles.map} mapStyle="streets" route={{ originAddress: origen, destinationAddress: dest, waypoints: wps }} fit />
+                        <View style={styles.navBtnsRow}>
+                          <TouchableOpacity
+                            style={[styles.navBtn, { backgroundColor: '#1A73E8' }]}
+                            activeOpacity={0.85}
+                            onPress={() => {
+                              const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origen)}&destination=${encodeURIComponent(dest)}${wps.length ? `&waypoints=${wps.map(encodeURIComponent).join('|')}` : ''}&travelmode=driving`;
+                              Linking.openURL(url).catch(() => Alert.alert('No se pudo abrir Google Maps'));
+                            }}
+                          >
+                            <MapPin size={15} color="#fff" />
+                            <Text style={styles.navBtnText}>Google Maps</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.navBtn, { backgroundColor: '#33CCFF' }]}
+                            activeOpacity={0.85}
+                            onPress={() => {
+                              const url = `https://waze.com/ul?q=${encodeURIComponent(dest)}&navigate=yes`;
+                              Linking.openURL(url).catch(() => Alert.alert('No se pudo abrir Waze'));
+                            }}
+                          >
+                            <Navigation size={15} color="#fff" />
+                            <Text style={styles.navBtnText}>Waze</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })()}
 
                   {recorrido.descanso_desde ? (
                     <>

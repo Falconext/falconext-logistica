@@ -135,7 +135,8 @@ export class RecorridosService {
             orderBy: { fecha_entrega: 'asc' },
             select: {
                 id: true, id_programacion: true, cliente: true,
-                lugar_retiro: true, lugar_entrega: true, fecha_entrega: true, estado: true,
+                lugar_retiro: true, retiros: true, lugar_entrega: true, destinos: true,
+                fecha_entrega: true, estado: true,
             },
             take: 50,
         });

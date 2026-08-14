@@ -172,10 +172,11 @@ export class RegistrosService {
             this.prisma.programacion.count({
                 where: { tenant_id: tenantId, trabajador_id: trabajadorId, reperibilita: true, fecha: { gte: desde, lte: hasta } },
             }),
-            // Solo la attesa AUTORIZADA por el supervisor se paga (€10/h).
+            // Solo la attesa AUTORIZADA y de 1 HORA A MÁS se paga (€10/h). Menos de
+            // 1 hora no cuenta ni suma (regla del empresario).
             this.prisma.programacion.aggregate({
                 _sum: { attesa_horas: true },
-                where: { tenant_id: tenantId, trabajador_id: trabajadorId, attesa_estado: 'AUTORIZADO', fecha: { gte: desde, lte: hasta } },
+                where: { tenant_id: tenantId, trabajador_id: trabajadorId, attesa_estado: 'AUTORIZADO', attesa_horas: { gte: 1 }, fecha: { gte: desde, lte: hasta } },
             }),
         ]);
 
@@ -281,12 +282,62 @@ export class RegistrosService {
                 km: m.km,
                 entregas,
                 oreTotal: m.oreTotal,
+                oreDia: m.oreDia,
+                oreNoche: m.oreNoche,
                 reperibilita: m.reperibilita,
+                attesaHoras: m.attesaHoras,
+                recorridos: m.recorridos,
                 // Montos: el controller los remueve si el rol NO ve finanzas.
+                pagoHoras: m.pagoHoras,
+                pagoReperibilita: m.pagoReperibilita,
+                pagoAttesa: m.pagoAttesa,
                 gananciaTotal: m.gananciaTotal,
             });
         }
         return { moneda: tar.moneda, meses: items };
+    }
+
+    // Detalle de un MES: la lista de recorridos que suman el km/horas, para que el
+    // chofer entienda de dónde sale el total del mes.
+    async mesDetalleChofer(tenantId: string, trabajadorId: string | null, anio: number, mes: number) {
+        if (!trabajadorId) throw new BadRequestException('Tu usuario no está vinculado a un trabajador.');
+        const desde = new Date(Date.UTC(anio, mes - 1, 1));
+        const hasta = new Date(Date.UTC(anio, mes, 0, 23, 59, 59));
+        const recorridos = await this.prisma.recorrido.findMany({
+            where: { tenant_id: tenantId, trabajador_id: trabajadorId, finalizado_en: { gte: desde, lte: hasta } },
+            select: {
+                id: true, origen_label: true, destino_label: true, ida_km: true, vuelta_km: true,
+                ida_min: true, vuelta_min: true, iniciado_en: true, llegada_en: true, retorno_en: true,
+                finalizado_en: true, descanso_min: true, programacion_id: true,
+            },
+            orderBy: { finalizado_en: 'desc' },
+        });
+        // Cliente de cada recorrido (por su programación).
+        const progIds = recorridos.map((r) => r.programacion_id).filter((x): x is string => !!x);
+        const progs = progIds.length
+            ? await this.prisma.programacion.findMany({ where: { id: { in: progIds } }, select: { id: true, cliente: true } })
+            : [];
+        const clienteById = new Map(progs.map((p) => [p.id, p.cliente]));
+        const capKm = (kmLeg: any, min: any) => {
+            const k = num(kmLeg); const maxP = (Math.max(0, num(min)) / 60) * 160;
+            return maxP > 0 ? Math.min(k, maxP) : 0;
+        };
+        const items = recorridos.map((r) => {
+            const km = Math.round((capKm(r.ida_km, r.ida_min) + capKm(r.vuelta_km, r.vuelta_min)) * 10) / 10;
+            const ida = minutosDiaNoche(r.iniciado_en, r.llegada_en);
+            const vuelta = minutosDiaNoche(r.retorno_en, r.finalizado_en);
+            const diaEl = ida.dia + vuelta.dia, nocheEl = ida.noche + vuelta.noche, elapsed = diaEl + nocheEl;
+            const factor = elapsed > 0 ? Math.max(0, elapsed - num(r.descanso_min)) / elapsed : 0;
+            return {
+                fecha: r.finalizado_en,
+                cliente: (r.programacion_id && clienteById.get(r.programacion_id)) || r.destino_label || 'Recorrido',
+                origen: r.origen_label, destino: r.destino_label,
+                km,
+                oreDia: Math.round((diaEl * factor / 60) * 100) / 100,
+                oreNoche: Math.round((nocheEl * factor / 60) * 100) / 100,
+            };
+        });
+        return { anio, mes, items };
     }
 
     // Resumen para DIRECCIÓN (solo roles con ve_finanzas): cuánto va ganando cada

@@ -72,6 +72,14 @@ export class RegistrosController {
         return r;
     }
 
+    // Detalle de un mes: los recorridos que suman el km/horas de ese mes.
+    @Get('mias/mes-detalle')
+    miMesDetalle(@Req() req, @Query('anio') anio: string, @Query('mes') mes: string) {
+        return this.registrosService.mesDetalleChofer(
+            req.user.tenantId, req.user.trabajadorId, parseInt(anio, 10), parseInt(mes, 10),
+        );
+    }
+
     // Resumen de DIRECCIÓN: cuánto va ganando cada chofer/supervisor. Solo roles
     // con ve_finanzas (Supervisor General, Dir. Operaciones, Dir. General).
     @Get('direccion/resumen')
