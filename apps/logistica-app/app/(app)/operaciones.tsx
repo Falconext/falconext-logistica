@@ -189,11 +189,10 @@ export default function OperacionesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
-  // Chofer: "Consegnas" abre como HISTORIAL (solo entregadas). Las pendientes se
-  // trabajan desde "Mi Ruta", no aquí (pedido del video). El supervisor ve Todos.
-  const [selectedEstado, setSelectedEstado] = useState<string | null>(
-    () => (user && isChofer(user) ? 'ENTREGADO' : null),
-  );
+  // Consegnas del chofer/supervisor: por defecto "Todos" (que ya excluye las
+  // pendientes vía ocultarPendientes → en ruta + entregadas). Las pendientes se
+  // trabajan desde "Mi Ruta".
+  const [selectedEstado, setSelectedEstado] = useState<string | null>(null);
   const [soloSupervisores, setSoloSupervisores] = useState(false); // filtro: consegnas de supervisores
   const [soloMias, setSoloMias] = useState(false); // filtro: mis consegnas (del usuario logueado)
   // Resumen personal (igual que el chofer): entregadas/canceladas + km del mes.
@@ -355,6 +354,11 @@ export default function OperacionesScreen() {
     [misKeys]
   );
 
+  // Vista personal del chofer/supervisor ("Consegnas" / "Mis consegnas"): las
+  // consegnas PENDIENTES (aún no aceptadas+iniciadas) NO se muestran aquí — solo
+  // aparecen en "Mi Ruta". Aquí se ven las que ya están EN RUTA (recorrido activo)
+  // o ENTREGADAS. Pedido del empresario.
+  const ocultarPendientes = isChofer(user) || soloMias;
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
     const data = items.filter(
@@ -365,14 +369,15 @@ export default function OperacionesScreen() {
           (r.lugar_retiro?.toLowerCase() || '').includes(q) ||
           (r.id_programacion?.toLowerCase() || '').includes(q)) &&
         (!soloSupervisores || esSupervisorId(r.trabajador_id)) &&
-        (!soloMias || esMiaId(r.trabajador_id))
+        (!soloMias || esMiaId(r.trabajador_id)) &&
+        (!ocultarPendientes || isConsegnaRealizada(r) || !!activosById[r.id])
     );
     return data.sort(
       (a, b) =>
         new Date(b.fecha_entrega || b.fecha).getTime() -
         new Date(a.fecha_entrega || a.fecha).getTime()
     );
-  }, [items, query, soloSupervisores, esSupervisorId, soloMias, esMiaId]);
+  }, [items, query, soloSupervisores, esSupervisorId, soloMias, esMiaId, ocultarPendientes, activosById]);
 
   const stats = useMemo(() => {
     // Los totales vienen del servidor (counts/total), no solo de la página cargada.
@@ -711,7 +716,9 @@ export default function OperacionesScreen() {
           style={{ marginBottom: S.sm, height: 44, flexGrow: 0, flexShrink: 0 }}
         >
           {(() => {
-            const totalAll = Object.values(counts).reduce((s, n) => s + n, 0);
+            const pendientesCount = (counts.PENDIENTE || 0) + (counts.PENDING || 0);
+            // En la vista personal, "Todos" no cuenta las pendientes (no se listan aquí).
+            const totalAll = Object.values(counts).reduce((s, n) => s + n, 0) - (ocultarPendientes ? pendientesCount : 0);
             const chip = (key: string | null, label: string, count: number) => {
               const active = selectedEstado === key;
               return (
@@ -731,7 +738,9 @@ export default function OperacionesScreen() {
             const miasCount = items.filter((r) => esMiaId(r.trabajador_id)).length;
             return [
               chip(null, 'Todos', totalAll),
-              ...ALL_ESTADOS.map((e) =>
+              // En la vista personal (chofer/supervisor) no se ofrece el filtro
+              // "Pendiente": esas consegnas se trabajan en "Mi Ruta", no aquí.
+              ...ALL_ESTADOS.filter((e) => !(ocultarPendientes && e === 'PENDIENTE')).map((e) =>
                 chip(e, estadoMeta(e).label, (ESTADO_VARIANTS[e] || [e]).reduce((s, v) => s + (counts[v] || 0), 0)),
               ),
               // "Mis consegnas": las entregas del propio usuario (supervisor por metas).
