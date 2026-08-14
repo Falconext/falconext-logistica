@@ -59,6 +59,19 @@ export class RegistrosController {
         return r;
     }
 
+    // Historial mensual del chofer logueado (km/entregas/horas por mes).
+    @Get('mias/historial-mensual')
+    async miHistorialMensual(@Req() req, @Query('meses') meses?: string) {
+        const r = await this.registrosService.historialMensualChofer(
+            req.user.tenantId, req.user.trabajadorId, meses ? parseInt(meses, 10) : 6,
+        );
+        // El chofer/supervisor no ve montos: se quita gananciaTotal de cada mes.
+        if (!req.user.veFinanzas) {
+            return { ...r, meses: r.meses.map(({ gananciaTotal, ...m }) => m) };
+        }
+        return r;
+    }
+
     // Resumen de DIRECCIÓN: cuánto va ganando cada chofer/supervisor. Solo roles
     // con ve_finanzas (Supervisor General, Dir. Operaciones, Dir. General).
     @Get('direccion/resumen')

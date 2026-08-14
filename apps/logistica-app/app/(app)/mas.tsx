@@ -41,6 +41,7 @@ interface Item {
   adminOnly?: boolean;
   supervisorView?: boolean; // visible a cualquier no-chofer (admin/supervisor)
   financeOnly?: boolean; // visible solo a roles con ve_finanzas (Sup. General, Directores)
+  choferView?: boolean; // visible al chofer (su vista personal)
 }
 
 const items: Item[] = [
@@ -52,6 +53,7 @@ const items: Item[] = [
   { key: 'calendario', label: 'Calendario', desc: 'Vista de programación', href: '/(app)/calendario', icon: CalendarDays, color: '#8B5CF6' },
   { key: 'reportes', label: 'Reportes', desc: 'Indicadores y KPIs', href: '/(app)/reportes', icon: BarChart3, color: '#F59E0B' },
   { key: 'mi-resumen', label: 'Mi Resumen', desc: 'Tus horas, km y ganancia estimada', href: '/(app)/mi-resumen', icon: BarChart3, color: '#16A34A' },
+  { key: 'historial-mensual', label: 'Historial por meses', desc: 'Tus km y entregas mes a mes', href: '/(app)/historial-mensual', icon: CalendarDays, color: '#8B5CF6', choferView: true },
   { key: 'mi-perfil', label: 'Mi Perfil', desc: 'Tus datos y documentos', href: '/(app)/mi-perfil', icon: UserCog, color: '#0EA5E9' },
   { key: 'mi-ruta', label: 'Mi Ruta', desc: 'Inicia y controla tu traslado', href: '/(app)/mi-ruta', icon: Navigation, color: '#4F46E5' },
   { key: 'rastreo', label: 'Rastreo', desc: 'Comparte tu ubicación GPS', href: '/(app)/rastreo', icon: Navigation, color: '#4F46E5' },
@@ -80,9 +82,10 @@ export default function MasScreen() {
   // Solo módulos permitidos por el rol; admin además ve la sección de empresas.
   const visible = items.filter((i) =>
     i.financeOnly ? !!(user as any)?.ve_finanzas
-      : i.adminOnly ? isAdmin
-        : i.supervisorView ? !isChofer(user)
-          : canAccessModule(user, i.key),
+      : i.choferView ? isChofer(user)
+        : i.adminOnly ? isAdmin
+          : i.supervisorView ? !isChofer(user)
+            : canAccessModule(user, i.key),
   );
 
   return (

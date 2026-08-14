@@ -254,6 +254,41 @@ export class RegistrosService {
         };
     }
 
+    // Historial MENSUAL del chofer: km, entregas y horas por cada mes (acumulado
+    // del mes), para los últimos `meses`. "Ellos siempre lo han visto así".
+    async historialMensualChofer(tenantId: string, trabajadorId: string | null, meses = 6) {
+        if (!trabajadorId) throw new BadRequestException('Tu usuario no está vinculado a un trabajador.');
+        const tar = await this.tarifas(tenantId);
+        const ahora = new Date();
+        const NOMBRES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        const items: any[] = [];
+        for (let i = 0; i < Math.min(Math.max(meses, 1), 24); i++) {
+            const anio = ahora.getUTCFullYear();
+            const mes0 = ahora.getUTCMonth() - i; // puede ser negativo → ajusta año
+            const d = new Date(Date.UTC(anio, mes0, 1));
+            const desde = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+            const hasta = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0, 23, 59, 59));
+            const [m, entregas] = await Promise.all([
+                this.calcularMetricas(tenantId, trabajadorId, desde, hasta, tar),
+                this.prisma.programacion.count({
+                    where: { tenant_id: tenantId, trabajador_id: trabajadorId, estado: { in: ['ENTREGADO', 'COMPLETED'] }, fecha: { gte: desde, lte: hasta } },
+                }),
+            ]);
+            items.push({
+                anio: d.getUTCFullYear(),
+                mes: d.getUTCMonth() + 1,
+                label: `${NOMBRES[d.getUTCMonth()]} ${d.getUTCFullYear()}`,
+                km: m.km,
+                entregas,
+                oreTotal: m.oreTotal,
+                reperibilita: m.reperibilita,
+                // Montos: el controller los remueve si el rol NO ve finanzas.
+                gananciaTotal: m.gananciaTotal,
+            });
+        }
+        return { moneda: tar.moneda, meses: items };
+    }
+
     // Resumen para DIRECCIÓN (solo roles con ve_finanzas): cuánto va ganando cada
     // chofer/supervisor en el rango, con montos.
     async resumenDireccion(tenantId: string, from?: string, to?: string) {
