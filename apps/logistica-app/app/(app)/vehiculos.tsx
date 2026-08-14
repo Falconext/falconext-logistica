@@ -20,6 +20,7 @@ import {
 import ImageUpload from '../../components/ImageUpload';
 import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
+import { AREAS_TRABAJO } from '../../constants/operaciones';
 import DocumentosPanel from '../../components/DocumentosPanel';
 import { VEHICULO_DOCS } from '../../components/documentTypes';
 import api from '../../services/api';
@@ -33,6 +34,7 @@ const empty: Partial<Vehiculo> = {
   placa: '',
   marca_modelo: '',
   tipo_unidad: '',
+  area: '',
   anio_fabricacion: undefined,
   estado_vehiculo: 'DISPONIBLE',
   poliza_seguro: '',
@@ -237,6 +239,7 @@ export default function VehiculosScreen() {
             <InfoRow label="Placa" value={detail.placa} />
             <InfoRow label="Marca / Modelo" value={detail.marca_modelo} />
             <InfoRow label="Tipo de unidad" value={detail.tipo_unidad} />
+            {detail.area ? <InfoRow label="Área" value={detail.area} /> : null}
             <InfoRow label="Año" value={detail.anio_fabricacion} />
             <InfoRow label="Estado" value={detail.estado_vehiculo} />
             <InfoRow label="Póliza de seguro" value={detail.poliza_seguro} />
@@ -277,6 +280,15 @@ export default function VehiculosScreen() {
         </View>
         <FormField label="Placa *" value={form.placa || ''} onChangeText={(t) => setForm({ ...form, placa: t })} placeholder="ABC-123" autoCapitalize="characters" />
         <FormField label="Marca / Modelo" value={form.marca_modelo || ''} onChangeText={(t) => setForm({ ...form, marca_modelo: t })} placeholder="Volvo FH 460" />
+        <Select
+          label="Área"
+          value={form.area || ''}
+          onChange={(v) => setForm({ ...form, area: v })}
+          placeholder="Selecciona el área"
+          searchable={false}
+          clearable
+          options={AREAS_TRABAJO}
+        />
         <FormField label="Tipo de unidad" value={form.tipo_unidad || ''} onChangeText={(t) => setForm({ ...form, tipo_unidad: t })} placeholder="Furgón / Tracto" />
         <FormField label="Año de fabricación" value={form.anio_fabricacion ? String(form.anio_fabricacion) : ''} onChangeText={(t) => setForm({ ...form, anio_fabricacion: t as any })} placeholder="2022" keyboardType="numeric" />
         <Select

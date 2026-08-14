@@ -48,6 +48,7 @@ export interface Vehiculo {
   marca_modelo?: string;
   anio_fabricacion?: number;
   tipo_unidad?: string;
+  area?: string; // Área operativa del vehículo (Milano Farmacia/Piazza/DHL/Management)
   estado_vehiculo?: string;
   aislamiento_termico?: string;
   tarjeta_circulacion?: string;

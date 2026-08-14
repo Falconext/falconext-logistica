@@ -24,6 +24,7 @@ export const AREAS_TRABAJO: { value: string; label: string }[] = [
     { value: 'Milano Farmacia', label: 'Milano Farmacia' },
     { value: 'Milano Piazza', label: 'Milano Piazza' },
     { value: 'Milano DHL', label: 'Milano DHL' },
+    { value: 'Milano Management', label: 'Milano Management' },
 ];
 
 // Opciones del campo SPEDIZIONE (cliente/expedición). Las 4 fijas del negocio.
