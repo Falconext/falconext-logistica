@@ -44,8 +44,8 @@ const fmtFechaHora = (iso?: string | null): string | undefined => {
 };
 
 type GastoRow = { tipo: string; monto: string; descripcion: string; numero_mancato: string; link_peaje: string; comprobantes: string[] };
-interface FormState { estado_consegna: string; foto_bolla: string; anticipo: string; attesa: string; gastos: GastoRow[]; lugar_retiro: string; lugar_entrega: string; destinos: string[]; }
-const emptyForm = (): FormState => ({ estado_consegna: '', foto_bolla: '', anticipo: '', attesa: '', gastos: [], lugar_retiro: '', lugar_entrega: '', destinos: [] });
+interface FormState { estado_consegna: string; foto_bolla: string; anticipo: string; attesa: string; gastos: GastoRow[]; lugar_retiro: string; retiros: string[]; lugar_entrega: string; destinos: string[]; }
+const emptyForm = (): FormState => ({ estado_consegna: '', foto_bolla: '', anticipo: '', attesa: '', gastos: [], lugar_retiro: '', retiros: [], lugar_entrega: '', destinos: [] });
 
 const PREP_STEPS = [
   { title: 'Consegna', Icon: Package },
@@ -119,6 +119,7 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
         comprobantes: Array.isArray(g.comprobantes) ? g.comprobantes : [],
       })) : [],
       lugar_retiro: src.lugar_retiro || '', lugar_entrega: src.lugar_entrega || '',
+      retiros: Array.isArray(src.retiros) ? src.retiros : [],
       destinos: Array.isArray(src.destinos) ? src.destinos : [],
     });
     populate(operacion);
@@ -165,6 +166,11 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
   const updateDestino = (i: number, val: string) => setForm((f) => ({ ...f, destinos: f.destinos.map((d, idx) => (idx === i ? val : d)) }));
   const removeDestino = (i: number) => setForm((f) => ({ ...f, destinos: f.destinos.filter((_, idx) => idx !== i) }));
 
+  // Retiros/orígenes adicionales (otro almacén antes de la entrega).
+  const addRetiro = () => setForm((f) => ({ ...f, retiros: [...f.retiros, ''] }));
+  const updateRetiro = (i: number, val: string) => setForm((f) => ({ ...f, retiros: f.retiros.map((d, idx) => (idx === i ? val : d)) }));
+  const removeRetiro = (i: number) => setForm((f) => ({ ...f, retiros: f.retiros.filter((_, idx) => idx !== i) }));
+
   const usarPosicionActual = async () => {
     try {
       const perm = await Location.requestForegroundPermissionsAsync();
@@ -178,6 +184,7 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
     estado_consegna: form.estado_consegna || null,
     foto_bolla: form.foto_bolla || null,
     lugar_retiro: form.lugar_retiro || null,
+    retiros: form.retiros.map((s) => s.trim()).filter(Boolean),
     lugar_entrega: form.lugar_entrega || null,
     destinos: form.destinos.map((s) => s.trim()).filter(Boolean),
   });
@@ -454,6 +461,13 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                   </View>
                   <TextField value={form.lugar_retiro} onChangeText={() => { }} placeholder="Elige el origen arriba" editable={false} styles={styles} />
                   {isCoords(form.lugar_retiro) && <Text style={styles.gpsHint}>📍 Posición actual (GPS)</Text>}
+                  {form.retiros.map((r, i) => (
+                    <View key={i} style={styles.destinoRow}>
+                      <View style={{ flex: 1 }}><TextField value={r} onChangeText={(t) => updateRetiro(i, t)} placeholder={`Retiro adicional ${i + 1}`} styles={styles} /></View>
+                      <TouchableOpacity onPress={() => removeRetiro(i)} style={styles.destinoRemove}><Trash2 size={16} color={C.danger} /></TouchableOpacity>
+                    </View>
+                  ))}
+                  <TouchableOpacity style={styles.addBtn} onPress={addRetiro} activeOpacity={0.7}><Plus size={16} color={C.textMuted} /><Text style={styles.addText}>Agregar retiro</Text></TouchableOpacity>
 
                   <Text style={styles.stepHeading}>Destino(s)</Text>
                   <TextField value={form.lugar_entrega} onChangeText={(t) => setForm({ ...form, lugar_entrega: t })} placeholder="Dirección de entrega" styles={styles} />
