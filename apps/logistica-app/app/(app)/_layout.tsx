@@ -44,6 +44,7 @@ export default function AppTabsLayout() {
       <Tabs.Screen name="mi-ruta" options={{ title: 'Mi Ruta', href: chofer ? undefined : null, tabBarIcon: ({ color, size }) => <Navigation color={color} size={size} /> }} />
       <Tabs.Screen name="mi-perfil" options={{ title: 'Mi Perfil', href: chofer ? undefined : null, tabBarIcon: ({ color, size }) => <CircleUser color={color} size={size} /> }} />
       <Tabs.Screen name="parte-diario" options={{ href: null }} />
+      <Tabs.Screen name="ganancias-direccion" options={{ href: null }} />
       <Tabs.Screen name="vehiculos" options={{ title: 'Vehículos', href: gate('vehiculos'), tabBarIcon: ({ color, size }) => <Truck color={color} size={size} /> }} />
       <Tabs.Screen name="trabajadores" options={{ title: 'Trabajadores', href: gate('trabajadores'), tabBarIcon: ({ color, size }) => <Users color={color} size={size} /> }} />
       <Tabs.Screen name="mas" options={{ title: 'Más', tabBarIcon: ({ color, size }) => <LayoutGrid color={color} size={size} /> }} />

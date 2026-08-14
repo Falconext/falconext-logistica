@@ -839,7 +839,7 @@ export default function OperacionesScreen() {
         {detail && (
           <View>
             {!!(detail.lugar_retiro && detail.lugar_entrega) && (() => {
-              const stops = [detail.lugar_entrega, ...(detail.destinos || [])].filter(Boolean) as string[];
+              const stops = [...(detail.retiros || []), detail.lugar_entrega, ...(detail.destinos || [])].filter(Boolean) as string[];
               return (
                 <MapboxWebView
                   style={styles.mapBox}

@@ -283,7 +283,9 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
     void finalizarConsegna();
   };
 
-  const stops = [form.lugar_entrega, ...form.destinos].map((s) => (s || '').trim()).filter(Boolean);
+  // Ruta completa en orden: retiros intermedios (almacenes) → entrega → destinos.
+  // El origen (form.lugar_retiro) es el punto de partida del mapa.
+  const stops = [...form.retiros, form.lugar_entrega, ...form.destinos].map((s) => (s || '').trim()).filter(Boolean);
 
   // Consegna ya realizada (entregado / consegnato) y sin recorrido en curso:
   // queda en solo lectura. La dirección pidió bloquear la edición de estas.

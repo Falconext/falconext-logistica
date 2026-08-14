@@ -69,6 +69,7 @@ export interface Programacion {
   cliente?: string;
   lugar_retiro?: string;
   fecha_retiro?: string;
+  retiros?: string[]; // Retiros/orígenes adicionales (almacenes) tras lugar_retiro
   lugar_entrega?: string;
   fecha_entrega?: string;
   destinos?: string[]; // Destinos adicionales (paradas) tras lugar_entrega

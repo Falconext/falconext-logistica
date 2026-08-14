@@ -19,6 +19,16 @@ interface Recorrido {
   destino_label?: string | null;
   iniciado_en: string;
   descanso_desde?: string | null;
+  programacion_id?: string | null;
+}
+interface ConsegnaData {
+  cliente?: string | null;
+  spedizione?: string | null;
+  vehiculo_id?: string | null;
+  app?: string | null;
+  ciudad?: string | null;
+  otros_datos?: string | null;
+  nota?: string | null;
 }
 interface Operacion {
   id: string;
@@ -44,6 +54,8 @@ export default function MiRutaScreen() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [activo, setActivo] = useState<Recorrido | null>(null);
+  const [trackingOp, setTrackingOp] = useState<Operacion | null>(null); // consegna del recorrido activo (para el wizard)
+  const [dismissed, setDismissed] = useState(false); // el chofer cerró el wizard de traslado en curso
   const [operaciones, setOperaciones] = useState<Operacion[]>([]);
   const [wizardOp, setWizardOp] = useState<Operacion | null>(null); // consegna aceptada → wizard
 
@@ -61,13 +73,23 @@ export default function MiRutaScreen() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setDismissed(false); // al recargar/entrar, el traslado en curso se muestra
     try {
       const { data } = await api.get('/recorridos/mio/activo');
       if (data && data.id) {
         setActivo(data);
         setOperaciones([]);
+        // Reutilizamos el ChoferWizard (fase "en ruta") para el traslado en curso:
+        // cargamos la consegna asociada y se la pasamos al wizard.
+        if (data.programacion_id) {
+          try {
+            const res = await api.get(`/programacion/${data.programacion_id}`);
+            if (res.data) setTrackingOp(res.data);
+          } catch { }
+        }
       } else {
         setActivo(null);
+        setTrackingOp(null);
         const ops = await api.get('/recorridos/mias/operaciones');
         setOperaciones(Array.isArray(ops.data) ? ops.data : []);
       }
@@ -150,81 +172,31 @@ export default function MiRutaScreen() {
     );
   }
 
-  // ---- Recorrido en curso ----
+  // ---- Recorrido en curso: se REUTILIZA el ChoferWizard (fase "en ruta"), que
+  //      ya muestra el estado del traslado + "Datos de la consegna" + acciones
+  //      (Llegué al destino / Tomar descanso / etc.). No duplicamos esa UI aquí.
   if (activo) {
     return (
-      <Screen scroll padded>
-        <AppHeader title="Mi Ruta" subtitle="Traslado en curso" />
-
-        <Card style={[styles.activeCard, activo.descanso_desde && styles.restingCard]}>
-          <View style={styles.stateRow}>
-            {activo.descanso_desde
-              ? <Coffee size={22} color={C.warning} />
-              : <Navigation size={22} color={C.primary} />}
-            <Text style={styles.stateTitle}>
-              {activo.descanso_desde ? 'En descanso' : (ESTADO_LABEL[activo.estado] || activo.estado)}
-            </Text>
-          </View>
-
-          <View style={styles.legRow}>
-            <MapPin size={16} color={C.success} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.legLabel}>ORIGEN</Text>
-              <Text style={styles.legValue}>{activo.origen_label || '—'}</Text>
-            </View>
-          </View>
-          <View style={styles.legRow}>
-            <MapPin size={16} color={C.text} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.legLabel}>DESTINO</Text>
-              <Text style={styles.legValue}>{activo.destino_label || '—'}</Text>
-            </View>
-          </View>
-
-          <View style={styles.sinceRow}>
-            <Clock size={14} color={C.textMuted} />
-            <Text style={styles.sinceText}>Iniciado {new Date(activo.iniciado_en).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</Text>
-          </View>
-        </Card>
-
-        <View style={{ gap: S.sm, marginTop: S.md }}>
-          {activo.descanso_desde ? (
-            // Descansando: solo reanudar (o cancelar).
-            <>
-              <Button title="REANUDAR RUTA" icon={Play} onPress={() => accion('reanudar')} loading={busy} />
-              <Button title="Cancelar traslado" variant="ghost" onPress={confirmCancelar} disabled={busy} />
-            </>
-          ) : (
-            <>
-              {activo.estado === 'EN_RUTA_IDA' && (
-                <Button title="LLEGUÉ AL DESTINO" icon={Flag} onPress={() => accion('llegada')} loading={busy} />
-              )}
-              {activo.estado === 'EN_DESTINO' && (
-                <>
-                  <Button title="REGRESAR AL ORIGEN" icon={CornerUpLeft} onPress={() => accion('regreso')} loading={busy} />
-                  <Button title="Finalizar (sin retorno)" variant="secondary" onPress={() => accion('finalizar', { stop: true })} disabled={busy} />
-                </>
-              )}
-              {activo.estado === 'EN_RUTA_VUELTA' && (
-                <Button title="FINALIZAR RUTA" icon={Flag} onPress={() => accion('finalizar', { stop: true })} loading={busy} />
-              )}
-              {/* Descanso disponible mientras se está en ruta (tramos largos). */}
-              {(activo.estado === 'EN_RUTA_IDA' || activo.estado === 'EN_RUTA_VUELTA') && (
-                <Button title="Tomar descanso" icon={Coffee} variant="secondary" onPress={() => accion('descanso')} disabled={busy} />
-              )}
-              {activo.estado === 'EN_RUTA_IDA' && (
-                <Button title="Cancelar traslado" variant="ghost" onPress={confirmCancelar} disabled={busy} />
-              )}
-            </>
+      <>
+        <Screen scroll padded>
+          <AppHeader title="Mi Ruta" subtitle="Traslado en curso" />
+          {dismissed && (
+            <Card style={{ marginTop: S.md, gap: S.sm }}>
+              <View style={styles.stateRow}>
+                <Navigation size={22} color={C.primary} />
+                <Text style={styles.stateTitle}>Tienes un traslado en curso</Text>
+              </View>
+              <Button title="VER TRASLADO" icon={Navigation} onPress={() => setDismissed(false)} />
+            </Card>
           )}
-        </View>
-
-        <Text style={styles.hint}>
-          {activo.descanso_desde
-            ? 'Estás en descanso. El supervisor ve que estás pausado; reanuda cuando retomes la ruta.'
-            : 'Tu ubicación se comparte con la central mientras la ruta está activa.'}
-        </Text>
-      </Screen>
+        </Screen>
+        <ChoferWizard
+          visible={!!trackingOp && !dismissed}
+          operacion={trackingOp as any}
+          onClose={() => setDismissed(true)}
+          onSaved={() => { setDismissed(true); load(); }}
+        />
+      </>
     );
   }
 
@@ -293,6 +265,13 @@ const makeStyles = () =>
     legValue: { fontSize: 15, color: C.text, fontWeight: '600' },
     sinceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
     sinceText: { fontSize: 12, color: C.textMuted },
+    dataTitle: { fontSize: 15, fontWeight: '700', color: C.text, marginBottom: S.sm },
+    dataRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: S.sm, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
+    dataKey: { fontSize: 13, color: C.textMuted },
+    dataVal: { fontSize: 14, color: C.text, fontWeight: '600', flex: 1, textAlign: 'right' },
+    dataBox: { marginTop: S.sm, backgroundColor: C.surfaceAlt, borderRadius: 10, padding: S.sm },
+    dataBoxLabel: { fontSize: 11, color: C.textMuted, textTransform: 'uppercase', marginBottom: 2 },
+    dataBoxText: { fontSize: 14, color: C.text },
     hint: { fontSize: 12, color: C.textFaint, textAlign: 'center', marginTop: S.md, lineHeight: 18 },
     opCard: { gap: 6 },
     opHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
