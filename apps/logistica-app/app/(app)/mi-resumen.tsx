@@ -233,15 +233,21 @@ export default function MiResumenScreen() {
         <Text style={styles.parteBtnText}>Registrar parte del día</Text>
       </TouchableOpacity>
 
-      {/* Métricas personales */}
-      <View style={styles.statsRow}>
-        <StatCard label="Horas día" value={horasLabel(resumen?.oreMattina ?? 0)} icon={Clock} color={C.primary} style={{ flex: 1 }} />
-        <StatCard label="Km del mes" value={`${resumen?.km ?? 0} km`} icon={Route} color={C.info} style={{ flex: 1 }} />
-      </View>
-      <View style={styles.statsRow}>
-        <StatCard label="Horas noche" value={horasLabel(resumen?.oreSera ?? 0)} icon={Moon} color={C.accent} style={{ flex: 1 }} />
-        <StatCard label="Reperibilità" value={resumen?.reperibilita ?? 0} icon={ClipboardList} color={C.success} style={{ flex: 1 }} />
-      </View>
+      {/* Métricas personales — OCULTAS al chofer/supervisor por ahora: los km/horas
+          salen de los recorridos GPS y todavía no cuadran (hay que verificar el
+          cálculo). Solo visibles a roles con ve_finanzas para poder revisarlas. */}
+      {(user as any)?.ve_finanzas && (
+        <>
+          <View style={styles.statsRow}>
+            <StatCard label="Horas día" value={horasLabel(resumen?.oreMattina ?? 0)} icon={Clock} color={C.primary} style={{ flex: 1 }} />
+            <StatCard label="Km del mes" value={`${resumen?.km ?? 0} km`} icon={Route} color={C.info} style={{ flex: 1 }} />
+          </View>
+          <View style={styles.statsRow}>
+            <StatCard label="Horas noche" value={horasLabel(resumen?.oreSera ?? 0)} icon={Moon} color={C.accent} style={{ flex: 1 }} />
+            <StatCard label="Reperibilità" value={resumen?.reperibilita ?? 0} icon={ClipboardList} color={C.success} style={{ flex: 1 }} />
+          </View>
+        </>
+      )}
 
       {/* Accesos rápidos */}
       <View style={styles.quickRow}>
