@@ -167,16 +167,25 @@ export class RegistrosService {
         const [recorridos, reperibilita] = await Promise.all([
             this.prisma.recorrido.findMany({
                 where: { tenant_id: tenantId, trabajador_id: trabajadorId, finalizado_en: { gte: desde, lte: hasta } },
-                select: { ida_km: true, vuelta_km: true, iniciado_en: true, llegada_en: true, retorno_en: true, finalizado_en: true, descanso_min: true },
+                select: { ida_km: true, vuelta_km: true, ida_min: true, vuelta_min: true, iniciado_en: true, llegada_en: true, retorno_en: true, finalizado_en: true, descanso_min: true },
             }),
             this.prisma.programacion.count({
                 where: { tenant_id: tenantId, trabajador_id: trabajadorId, reperibilita: true, fecha: { gte: desde, lte: hasta } },
             }),
         ]);
 
+        // Tope defensivo: km de un tramo no puede implicar > 160 km/h respecto a
+        // sus minutos. Protege el total de valores GPS basura ya guardados
+        // (p. ej. 19194 km en 2 min) sin necesidad de una migración.
+        const capKm = (kmLeg: number, min: number) => {
+            const k = num(kmLeg);
+            const maxPlausible = (Math.max(0, num(min)) / 60) * 160;
+            return maxPlausible > 0 ? Math.min(k, maxPlausible) : 0;
+        };
+
         let km = 0, diaMin = 0, nocheMin = 0;
         for (const r of recorridos) {
-            km += num(r.ida_km) + num(r.vuelta_km);
+            km += capKm(r.ida_km as any, r.ida_min as any) + capKm(r.vuelta_km as any, r.vuelta_min as any);
             const ida = minutosDiaNoche(r.iniciado_en, r.llegada_en);
             const vuelta = minutosDiaNoche(r.retorno_en, r.finalizado_en);
             const diaEl = ida.dia + vuelta.dia;

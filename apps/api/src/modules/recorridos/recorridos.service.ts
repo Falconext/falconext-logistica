@@ -63,20 +63,34 @@ export class RecorridosService {
     }
 
     // Distancia recorrida (km) por un device entre dos instantes, sumando posiciones.
+    // Velocidad máxima plausible (km/h): por encima es un salto de GPS (teleport)
+    // y NO se cuenta. Un furgón de reparto no supera esto ni en autopista.
+    private static readonly MAX_SPEED_KMH = 160;
+    // Movimiento mínimo (km) entre dos fixes para contar: por debajo es jitter de
+    // GPS con el vehículo parado (los fixes bailan unos metros). ~40 m.
+    private static readonly MIN_SEGMENT_KM = 0.04;
+
     private async distanciaKm(deviceId: string | null, from: Date, to: Date): Promise<number | null> {
         if (!deviceId) return null;
         const pts = await this.prisma.position.findMany({
             where: { device_id: deviceId, timestamp: { gte: from, lte: to } },
             orderBy: { timestamp: 'asc' },
-            select: { latitude: true, longitude: true },
+            select: { latitude: true, longitude: true, timestamp: true },
         });
         if (pts.length < 2) return 0;
         let km = 0;
         for (let i = 1; i < pts.length; i++) {
-            km += this.haversineKm(
+            const d = this.haversineKm(
                 { lat: Number(pts[i - 1].latitude), lng: Number(pts[i - 1].longitude) },
                 { lat: Number(pts[i].latitude), lng: Number(pts[i].longitude) },
             );
+            // Descartar jitter de GPS parado (movimientos ínfimos entre fixes).
+            if (d < RecorridosService.MIN_SEGMENT_KM) continue;
+            // Descartar teleports: si la velocidad implícita es imposible, es un
+            // salto de GPS (coord basura), no distancia real.
+            const dtH = (pts[i].timestamp.getTime() - pts[i - 1].timestamp.getTime()) / 3600000;
+            if (dtH > 0 && d / dtH > RecorridosService.MAX_SPEED_KMH) continue;
+            km += d;
         }
         return Math.round(km * 10) / 10;
     }
