@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Modal, View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Image } from 'react-native';
+import { Modal, View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Image, Linking } from 'react-native';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -490,6 +490,34 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                     <>
                       <Text style={styles.stepHeading}>Ruta</Text>
                       <MapboxWebView style={styles.map} mapStyle="streets" route={{ originAddress: form.lugar_retiro, destinationAddress: stops[stops.length - 1], waypoints: stops.slice(0, -1) }} fit />
+                      {/* Abrir la ruta en una app de navegación externa. */}
+                      <View style={styles.navBtnsRow}>
+                        <TouchableOpacity
+                          style={[styles.navBtn, { backgroundColor: '#1A73E8' }]}
+                          activeOpacity={0.85}
+                          onPress={() => {
+                            const dest = stops[stops.length - 1];
+                            const wps = stops.slice(0, -1);
+                            const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(form.lugar_retiro)}&destination=${encodeURIComponent(dest)}${wps.length ? `&waypoints=${wps.map(encodeURIComponent).join('|')}` : ''}&travelmode=driving`;
+                            Linking.openURL(url).catch(() => Alert.alert('No se pudo abrir Google Maps'));
+                          }}
+                        >
+                          <MapPin size={15} color="#fff" />
+                          <Text style={styles.navBtnText}>Google Maps</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.navBtn, { backgroundColor: '#33CCFF' }]}
+                          activeOpacity={0.85}
+                          onPress={() => {
+                            const dest = stops[stops.length - 1];
+                            const url = `https://waze.com/ul?q=${encodeURIComponent(dest)}&navigate=yes`;
+                            Linking.openURL(url).catch(() => Alert.alert('No se pudo abrir Waze'));
+                          }}
+                        >
+                          <Navigation size={15} color="#fff" />
+                          <Text style={styles.navBtnText}>Waze</Text>
+                        </TouchableOpacity>
+                      </View>
                     </>
                   )}
                 </View>
@@ -743,6 +771,9 @@ const makeStyles = () => StyleSheet.create({
   attesaLabel: { fontSize: 13, fontWeight: '600', color: C.textMuted, marginBottom: 6 },
   attesaValue: { fontSize: 20, fontWeight: '800', color: C.warning, marginTop: 1 },
   attesaHint: { fontSize: 12, color: C.textMuted, marginTop: 4 },
+  navBtnsRow: { flexDirection: 'row', gap: S.sm, marginTop: S.sm },
+  navBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10 },
+  navBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
   doneBanner: { flexDirection: 'row', alignItems: 'center', gap: S.sm, backgroundColor: C.success + '14', borderRadius: Theme.radius.lg, borderWidth: 1, borderColor: C.success + '55', paddingHorizontal: S.md, paddingVertical: S.md, marginBottom: S.sm },
   doneBannerText: { flex: 1, fontSize: 14, fontWeight: '700', color: C.success },
   trackHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: S.sm },
