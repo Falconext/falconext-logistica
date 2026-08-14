@@ -926,7 +926,7 @@ export default function OperacionesScreen() {
                       {est === 'AUTORIZADO' ? 'Autorizada' : est === 'DENEGADO' ? 'Denegada' : 'Pendiente'}
                     </Text>
                   </View>
-                  <Text style={styles.attesaHoras}>{horas} h · {formatMoney(horas * 10, moneda)}</Text>
+                  <Text style={styles.attesaHoras}>{horas} h ({Math.round(horas * 60)} min) · {formatMoney(horas * 10, moneda)}</Text>
                   {canEditAll && (
                     <>
                       <View style={styles.attesaEditRow}>
