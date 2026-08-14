@@ -18,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatMoney } from '../constants/currency';
 import { etaInfo } from '../constants/eta';
 import { CONSEGNA_ACTIONS, RETIRO_PRESETS, GASTO_TIPOS, isCoords, isConsegnaRealizada } from '../constants/operaciones';
+import { isChofer } from '../constants/modules';
 import type { Programacion } from '../types';
 
 const C = Theme.colors;
@@ -131,10 +132,25 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
       const rec = await loadRecorrido();
       if (cancelled) return;
       setPhase(rec ? 'tracking' : 'prep');
+      // Reanudar en el paso donde quedó el chofer (si guardó y salió). Solo en la
+      // fase de preparación; la fase de tracking la maneja el recorrido activo.
+      if (!rec) {
+        try {
+          const saved = await AsyncStorage.getItem(`wizardStep:${operacion.id}`);
+          const n = saved != null ? parseInt(saved, 10) : 0;
+          if (!cancelled && Number.isFinite(n) && n > 0) setStep(Math.min(n, PREP_STEPS.length - 1));
+        } catch { }
+      }
       setLoaded(true);
     })();
     return () => { cancelled = true; };
   }, [visible, operacion?.id]);
+
+  // Persiste el paso actual de preparación para reanudar si el chofer sale.
+  useEffect(() => {
+    if (!loaded || phase !== 'prep' || !operacion?.id) return;
+    AsyncStorage.setItem(`wizardStep:${operacion.id}`, String(step)).catch(() => { });
+  }, [step, loaded, phase, operacion?.id]);
 
   // --- Gastos ---
   const addGasto = () => setForm((f) => ({ ...f, gastos: [...f.gastos, { tipo: 'PEAJE', monto: '', descripcion: '', numero_mancato: '', link_peaje: '', comprobantes: [] }] }));
@@ -185,6 +201,8 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
       else Alert.alert('Ruta iniciada · sin GPS', 'Tu cuenta no está habilitada para rastreo. Pide al administrador que active «Será rastreado» en tu ficha.');
       await loadRecorrido();
       setPhase('tracking');
+      // Ya arrancó la ruta: se limpia el paso guardado (la prep terminó).
+      AsyncStorage.removeItem(`wizardStep:${operacion.id}`).catch(() => { });
     } catch (e: any) {
       Alert.alert('No se pudo iniciar', e?.response?.data?.message || 'Inténtalo de nuevo.');
     } finally { setBusy(false); }
@@ -392,17 +410,24 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                     {!!op?.otros_datos && (<View style={styles.notaBox}><Text style={styles.notaLabel}>Otros datos (WhatsApp)</Text><Text style={styles.notaText}>{op.otros_datos}</Text></View>)}
                     {!!op?.nota && (<View style={styles.notaBox}><Text style={styles.notaLabel}>Nota</Text><Text style={styles.notaText}>{op.nota}</Text></View>)}
                   </View>
-                  <View style={styles.sectionRow}><Flag size={18} color={C.info} /><Text style={styles.sectionTitle}>Estado de la consegna</Text></View>
-                  <View style={styles.chipsWrap}>
-                    {CONSEGNA_ACTIONS.map(({ value, label, Icon }) => {
-                      const active = form.estado_consegna === value;
-                      return (
-                        <TouchableOpacity key={value} style={[styles.estadoChip, active && styles.estadoChipActive]} onPress={() => setForm({ ...form, estado_consegna: active ? '' : value })} activeOpacity={0.7}>
-                          <Icon size={16} color={active ? '#fff' : C.textMuted} /><Text style={[styles.estadoChipText, active && { color: '#fff' }]}>{label}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
+                  {/* "Estado de la consegna" (marcar Consegnato/Ritirato/etc. a mano)
+                      NO se le muestra al chofer: él avanza con el flujo guiado
+                      (Siguiente → iniciar → finalizar). Solo lo ven admin/supervisor. */}
+                  {!isChofer(user) && (
+                    <>
+                      <View style={styles.sectionRow}><Flag size={18} color={C.info} /><Text style={styles.sectionTitle}>Estado de la consegna</Text></View>
+                      <View style={styles.chipsWrap}>
+                        {CONSEGNA_ACTIONS.map(({ value, label, Icon }) => {
+                          const active = form.estado_consegna === value;
+                          return (
+                            <TouchableOpacity key={value} style={[styles.estadoChip, active && styles.estadoChipActive]} onPress={() => setForm({ ...form, estado_consegna: active ? '' : value })} activeOpacity={0.7}>
+                              <Icon size={16} color={active ? '#fff' : C.textMuted} /><Text style={[styles.estadoChipText, active && { color: '#fff' }]}>{label}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </>
+                  )}
                 </View>
               )}
 
