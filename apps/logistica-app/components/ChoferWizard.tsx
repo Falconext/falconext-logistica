@@ -347,6 +347,7 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
               {/* Consegna ya realizada: solo lectura, sin poder reeditar/reiniciar. */}
               {phase === 'prep' && bloqueada && (() => {
                 const paradas = (op?.destinos || []).map((s) => (s || '').trim()).filter(Boolean);
+                const retiros = (op?.retiros || []).map((s) => (s || '').trim()).filter(Boolean);
                 const totalGastosOp = (op?.gastos || []).reduce((s, g) => s + (Number(g?.monto) || 0), 0);
                 const anticipoOp = Number(op?.anticipo) || 0;
                 const saldoOp = anticipoOp - totalGastosOp;
@@ -371,9 +372,10 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                     <Row icon={User} label="Cliente" value={op?.cliente} />
                     <Row icon={Truck} label="Vehículo" value={op?.vehiculo_id} />
                     <Row icon={User} label="Conductor" value={op?.trabajador_nombre} />
-                    <Row icon={MapPin} label="Origen" value={op?.lugar_retiro} />
-                    <Row icon={Flag} label="Destino" value={op?.lugar_entrega} />
-                    {paradas.map((p, i) => (<Row key={i} icon={MapPin} label={`Parada ${i + 1}`} value={p} />))}
+                    <Row icon={MapPin} label={retiros.length > 0 ? 'Origen 1' : 'Origen'} value={op?.lugar_retiro} />
+                    {retiros.map((r, i) => (<Row key={`r${i}`} icon={MapPin} label={`Origen ${i + 2}`} value={r} />))}
+                    <Row icon={Flag} label={paradas.length > 0 ? 'Destino 1' : 'Destino'} value={op?.lugar_entrega} />
+                    {paradas.map((p, i) => (<Row key={i} icon={Flag} label={`Destino ${i + 2}`} value={p} />))}
                     <Row icon={AlarmClock} label="Entrega (máx)" value={fmtFechaHora(op?.fecha_entrega)} />
                     <Row icon={Package} label="App" value={op?.app} />
                     <Row icon={MapPin} label="Ciudad" value={op?.ciudad} />
@@ -501,8 +503,22 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                       <Navigation size={18} color={C.primary} />
                       <Text style={styles.trackTitle}>{recorrido.descanso_desde ? 'En descanso' : (ESTADO_LABEL[recorrido.estado] || recorrido.estado)}</Text>
                     </View>
-                    <Row icon={MapPin} label="Origen" value={recorrido.origen_label || op?.lugar_retiro} />
-                    <Row icon={Flag} label="Destino" value={recorrido.destino_label || op?.lugar_entrega} />
+                    {/* Todos los orígenes (retiro + retiros adicionales) y destinos
+                        (entrega + destinos adicionales) de la consegna. */}
+                    {(() => {
+                      const origenes = [recorrido.origen_label || op?.lugar_retiro, ...((op?.retiros || []) as string[])].map((s) => (s || '').trim()).filter(Boolean);
+                      const destinos = [recorrido.destino_label || op?.lugar_entrega, ...((op?.destinos || []) as string[])].map((s) => (s || '').trim()).filter(Boolean);
+                      return (
+                        <>
+                          {origenes.map((o, i) => (
+                            <Row key={`o${i}`} icon={MapPin} label={origenes.length > 1 ? `Origen ${i + 1}` : 'Origen'} value={o} />
+                          ))}
+                          {destinos.map((d, i) => (
+                            <Row key={`d${i}`} icon={Flag} label={destinos.length > 1 ? `Destino ${i + 1}` : 'Destino'} value={d} />
+                          ))}
+                        </>
+                      );
+                    })()}
                     <Text style={styles.shareNote}>Tu ubicación se comparte con la central mientras la ruta está activa.</Text>
                   </View>
 
