@@ -58,7 +58,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatMoney } from '../../constants/currency';
 import { isChofer } from '../../constants/modules';
-import { APP_OPTIONS, GASTO_TIPOS, CONSEGNA_ACTIONS, estadoConsegnaMeta, RETIRO_PRESETS, isCoords, isConsegnaRealizada } from '../../constants/operaciones';
+import { APP_OPTIONS, SPEDIZIONE_OPTIONS, GASTO_TIPOS, CONSEGNA_ACTIONS, estadoConsegnaMeta, RETIRO_PRESETS, isCoords, isConsegnaRealizada } from '../../constants/operaciones';
 import type { Programacion, Vehiculo, Trabajador } from '../../types';
 
 const C = Theme.colors;
@@ -115,9 +115,11 @@ interface FormState {
   vehiculo_id: string;
   trabajador_id: string;
   cliente: string;
+  spedizione: string;
   retiro_lugar: string;
   retiro_fecha: string;
   retiro_hora: string;
+  retiros: string[];
   entrega_lugar: string;
   entrega_fecha: string;
   entrega_hora: string;
@@ -128,6 +130,7 @@ interface FormState {
   km: string;
   ciudad: string;
   app: string;
+  reperibilita: boolean;
   compactado: boolean;
   estado_consegna: string;
   attesa: string;
@@ -142,9 +145,11 @@ const emptyForm = (): FormState => ({
   vehiculo_id: '',
   trabajador_id: '',
   cliente: '',
+  spedizione: '',
   retiro_lugar: '',
   retiro_fecha: todayISO(),
   retiro_hora: '',
+  retiros: [],
   entrega_lugar: '',
   entrega_fecha: todayISO(),
   entrega_hora: '',
@@ -154,6 +159,7 @@ const emptyForm = (): FormState => ({
   km: '',
   ciudad: '',
   app: '',
+  reperibilita: false,
   compactado: false,
   estado_consegna: '',
   attesa: '',
@@ -183,7 +189,11 @@ export default function OperacionesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
-  const [selectedEstado, setSelectedEstado] = useState<string | null>(null);
+  // Chofer: "Consegnas" abre como HISTORIAL (solo entregadas). Las pendientes se
+  // trabajan desde "Mi Ruta", no aquí (pedido del video). El supervisor ve Todos.
+  const [selectedEstado, setSelectedEstado] = useState<string | null>(
+    () => (user && isChofer(user) ? 'ENTREGADO' : null),
+  );
   const [soloSupervisores, setSoloSupervisores] = useState(false); // filtro: consegnas de supervisores
   const [soloMias, setSoloMias] = useState(false); // filtro: mis consegnas (del usuario logueado)
   // Resumen personal (igual que el chofer): entregadas/canceladas + km del mes.
@@ -395,9 +405,11 @@ export default function OperacionesScreen() {
     vehiculo_id: src.vehiculo_id || '',
     trabajador_id: src.trabajador_id || '',
     cliente: src.cliente || '',
+    spedizione: src.spedizione || '',
     retiro_lugar: src.lugar_retiro || '',
     retiro_fecha: src.fecha_retiro ? src.fecha_retiro.split('T')[0] : todayISO(),
     retiro_hora: src.hora_retiro || '',
+    retiros: Array.isArray(src.retiros) ? src.retiros : [],
     entrega_lugar: src.lugar_entrega || '',
     entrega_fecha: src.fecha_entrega ? src.fecha_entrega.split('T')[0] : todayISO(),
     entrega_hora: '',
@@ -407,6 +419,7 @@ export default function OperacionesScreen() {
     km: src.km != null ? String(src.km) : '',
     ciudad: src.ciudad || '',
     app: src.app || '',
+    reperibilita: !!src.reperibilita,
     compactado: !!src.compactado,
     estado_consegna: src.estado_consegna || '',
     attesa: src.attesa || '',
@@ -478,6 +491,12 @@ export default function OperacionesScreen() {
   const updateDestino = (i: number, val: string) => setForm((f) => ({ ...f, destinos: f.destinos.map((d, idx) => (idx === i ? val : d)) }));
   const removeDestino = (i: number) => setForm((f) => ({ ...f, destinos: f.destinos.filter((_, idx) => idx !== i) }));
 
+  // Orígenes/retiros adicionales: mismo patrón que destinos. El primero es
+  // `retiro_lugar`; estos son los almacenes intermedios (ej. B-service).
+  const addRetiro = () => setForm((f) => ({ ...f, retiros: [...f.retiros, ''] }));
+  const updateRetiro = (i: number, val: string) => setForm((f) => ({ ...f, retiros: f.retiros.map((d, idx) => (idx === i ? val : d)) }));
+  const removeRetiro = (i: number) => setForm((f) => ({ ...f, retiros: f.retiros.filter((_, idx) => idx !== i) }));
+
   // --- Gastos (rendición) ---
   const addGasto = () => setForm((f) => ({ ...f, gastos: [...f.gastos, { tipo: 'PEAJE', monto: '', descripcion: '', numero_mancato: '', comprobantes: [] }] }));
   const updateGasto = (i: number, patch: Partial<GastoRow>) => setForm((f) => ({ ...f, gastos: f.gastos.map((g, idx) => (idx === i ? { ...g, ...patch } : g)) }));
@@ -508,9 +527,11 @@ export default function OperacionesScreen() {
         vehiculo_id: form.vehiculo_id,
         trabajador_id: form.trabajador_id,
         cliente: form.cliente,
+        spedizione: form.spedizione || null,
         lugar_retiro: form.retiro_lugar,
         fecha_retiro: toIso(form.retiro_fecha, form.retiro_hora, '00:00'),
         hora_retiro: form.retiro_hora,
+        retiros: form.retiros.map((s) => s.trim()).filter(Boolean),
         lugar_entrega: form.entrega_lugar,
         fecha_entrega: toIso(form.entrega_fecha, form.entrega_hora, '23:59'),
         destinos: form.destinos.map((s) => s.trim()).filter(Boolean),
@@ -518,6 +539,7 @@ export default function OperacionesScreen() {
         km: form.km !== '' ? Number(form.km) : null,
         ciudad: form.ciudad || null,
         app: form.app || null,
+        reperibilita: form.reperibilita,
         compactado: form.compactado,
         estado_consegna: form.estado_consegna || null,
         attesa: form.attesa || null,
@@ -973,6 +995,16 @@ export default function OperacionesScreen() {
           editable={!lockOthers}
         />
 
+        <Select
+          label="Spedizione"
+          value={form.spedizione}
+          onChange={(v) => setForm({ ...form, spedizione: v })}
+          options={SPEDIZIONE_OPTIONS}
+          placeholder="Selecciona spedizione"
+          clearable
+          disabled={lockOthers}
+        />
+
         <Text style={styles.formSection}>Origen (retiro)</Text>
         <View style={styles.chipsWrap}>
           {RETIRO_PRESETS.map((preset) => {
@@ -1023,6 +1055,26 @@ export default function OperacionesScreen() {
             style={{ flex: 1 }}
           />
         </View>
+
+        <Text style={styles.formSection}>Orígenes adicionales</Text>
+        {form.retiros.map((r, i) => (
+          <View key={i} style={styles.destinoRow}>
+            <FormField
+              label={`Retiro ${i + 2}`}
+              value={r}
+              onChangeText={(t) => updateRetiro(i, t)}
+              placeholder="Ej: B-Service, Via ... (otro almacén)"
+              style={{ flex: 1 }}
+            />
+            <TouchableOpacity style={styles.destinoRemove} onPress={() => removeRetiro(i)} activeOpacity={0.7}>
+              <Trash2 size={16} color={C.danger} />
+            </TouchableOpacity>
+          </View>
+        ))}
+        <TouchableOpacity style={styles.addGasto} onPress={addRetiro} activeOpacity={0.7}>
+          <Plus size={16} color={C.textMuted} />
+          <Text style={styles.addGastoText}>Agregar retiro</Text>
+        </TouchableOpacity>
 
         <Text style={styles.formSection}>Destino (entrega)</Text>
         <FormField
@@ -1110,6 +1162,24 @@ export default function OperacionesScreen() {
             editable={!lockOthers}
           />
         )}
+        <Text style={styles.fieldLabelSm}>¿Reperibilità (disponible on-call)?</Text>
+        <View style={styles.dateRow}>
+          <TouchableOpacity
+            style={[styles.toggleBtn, !form.reperibilita && styles.toggleBtnActiveDark, lockOthers && { opacity: 0.55 }]}
+            onPress={() => !lockOthers && setForm({ ...form, reperibilita: false })}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.toggleBtnText, !form.reperibilita && { color: '#fff' }]}>N</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toggleBtn, form.reperibilita && styles.toggleBtnActiveBlue, lockOthers && { opacity: 0.55 }]}
+            onPress={() => !lockOthers && setForm({ ...form, reperibilita: true })}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.toggleBtnText, form.reperibilita && { color: '#fff' }]}>Y</Text>
+          </TouchableOpacity>
+        </View>
+
         <Text style={styles.fieldLabelSm}>¿Compactado?</Text>
         <View style={styles.dateRow}>
           <TouchableOpacity

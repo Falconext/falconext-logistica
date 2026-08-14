@@ -211,7 +211,8 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
     try {
       await api.patch(`/programacion/${operacion.id}`, {
         estado_consegna: 'CONSEGNATO',
-        anticipo: form.anticipo !== '' ? parseNum(form.anticipo) : null,
+        // El anticipo/bonifico lo fija el supervisor y NO lo escribe el chofer
+        // (evita que lo sobrescriba/borre al finalizar). Solo rinde sus gastos.
         attesa: form.attesa.trim() || null,
         gastos: form.gastos
           .filter((g) => g.tipo && (g.monto !== '' || g.comprobantes.length || g.descripcion || g.numero_mancato || g.link_peaje))
@@ -524,7 +525,8 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                   <TextField value={form.attesa} onChangeText={(t) => setForm({ ...form, attesa: t })} placeholder="Ej: 15 min" styles={styles} />
                   <Text style={styles.stepHeading}>Peajes y gastos del trayecto</Text>
                   <Text style={styles.fieldLabel}>Bonifico recibido ({moneda || 'EUR'})</Text>
-                  <TextField value={form.anticipo} onChangeText={(t) => setForm({ ...form, anticipo: t })} placeholder="0.00" keyboardType="numeric" styles={styles} />
+                  <TextField value={form.anticipo} onChangeText={() => { }} placeholder="0.00" keyboardType="numeric" editable={false} styles={styles} />
+                  <Text style={styles.hint}>Lo asigna el supervisor · no editable por el chofer.</Text>
                   {form.gastos.map((g, i) => (
                     <View key={i} style={styles.gastoCard}>
                       <Select label="Tipo" value={g.tipo} onChange={(v) => updateGasto(i, { tipo: v })} options={GASTO_TIPOS} searchable={false} />

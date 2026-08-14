@@ -36,11 +36,13 @@ export class AuthService {
 
     // Permisos efectivos: el rol asignado es la fuente principal.
     // SUPERADMIN (plataforma) siempre ve todo. Fallback legacy por role string.
-    private efectivo(user: any): { esAdmin: boolean; modulos: string[]; soloPropios: boolean } {
-        if (user.role === 'SUPERADMIN') return { esAdmin: true, modulos: [], soloPropios: false };
-        if (user.rol) return { esAdmin: !!user.rol.es_admin, modulos: user.rol.modulos ?? [], soloPropios: !!user.rol.solo_propios };
-        if (user.role === 'ADMIN') return { esAdmin: true, modulos: [], soloPropios: false };
-        return { esAdmin: false, modulos: user.modulos ?? [], soloPropios: user.solo_propios ?? false };
+    private efectivo(user: any): { esAdmin: boolean; modulos: string[]; soloPropios: boolean; veFinanzas: boolean } {
+        // veFinanzas: los admin (Directores) siempre ven finanzas; además el rol
+        // puede marcar ve_finanzas (ej. Supervisor General). Chofer/Supervisor: no.
+        if (user.role === 'SUPERADMIN') return { esAdmin: true, modulos: [], soloPropios: false, veFinanzas: true };
+        if (user.rol) return { esAdmin: !!user.rol.es_admin, modulos: user.rol.modulos ?? [], soloPropios: !!user.rol.solo_propios, veFinanzas: !!user.rol.es_admin || !!user.rol.ve_finanzas };
+        if (user.role === 'ADMIN') return { esAdmin: true, modulos: [], soloPropios: false, veFinanzas: true };
+        return { esAdmin: false, modulos: user.modulos ?? [], soloPropios: user.solo_propios ?? false, veFinanzas: false };
     }
 
     async login(loginDto: LoginDto) {
@@ -60,7 +62,8 @@ export class AuthService {
             modulos: ef.modulos,
             trabajadorId: user.trabajador_id ?? null,
             trabajadorCodigo: user.trabajador_codigo ?? null,
-            soloPropios: ef.soloPropios
+            soloPropios: ef.soloPropios,
+            veFinanzas: ef.veFinanzas
         };
 
         return {
@@ -74,6 +77,7 @@ export class AuthService {
                 tenant_id: user.tenant.id,
                 moneda: user.tenant.moneda, // PEN | USD | EUR
                 es_admin: ef.esAdmin, // ve todos los módulos y administra
+                ve_finanzas: ef.veFinanzas, // ve montos/pagos/ganancias
                 modulos: ef.modulos, // módulos permitidos (efectivos del rol)
                 rol_id: user.rol_id ?? null,
                 rol_nombre: user.rol?.nombre ?? null,

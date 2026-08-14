@@ -17,6 +17,8 @@ import {
 } from '../../components/ui';
 import DatePicker from '../../components/DatePicker';
 import ImageUpload from '../../components/ImageUpload';
+import Select from '../../components/Select';
+import { SPEDIZIONE_OPTIONS } from '../../constants/operaciones';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -188,9 +190,10 @@ export default function ParteDiarioScreen() {
 
         <DatePicker label="Fecha" value={form.fecha} onChange={(v) => set('fecha', v || hoyISO())} />
 
-        <FormField label="Targa del furgón" value={form.targa} onChangeText={(t) => set('targa', t)} placeholder="Ej: GB502TP" autoCapitalize="characters" />
-
-        <FormField label="Ciudad / destino" value={form.citta_destino} onChangeText={(t) => set('citta_destino', t)} placeholder="Ej: Roma, Gidonia..." />
+        {/* Targa del furgón y Ciudad/destino se ocultan al chofer: la app ya los
+            tiene/deriva (van a la consegna en "Nueva operación"). Se mantienen en
+            el estado del form (opcionales, se guardan como null) para no romper el
+            guardado ni la edición. Pedido del video (B6). */}
 
         <FormField label="KM total" value={form.km} onChangeText={(t) => set('km', t)} placeholder="0" keyboardType="numeric" />
 
@@ -220,14 +223,8 @@ export default function ParteDiarioScreen() {
           <Text style={styles.previewValue}>{formatMoney(gananciaPreview, moneda)}</Text>
         </Card>
 
-        {/* Reperibilità */}
-        <View style={styles.switchRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.switchLabel}>Reperibilità</Text>
-            <Text style={styles.switchHint}>Estuviste disponible on-call</Text>
-          </View>
-          <Switch value={form.repibilita} onValueChange={(v) => set('repibilita', v)} trackColor={{ true: C.primary }} />
-        </View>
+        {/* Reperibilità: la marca SOLO el supervisor al crear la operación
+            (Nueva operación). El chofer no la activa — por eso se quitó de aquí. */}
 
         {/* ¿Se realizó la consegna? */}
         <View style={styles.switchRow}>
@@ -239,7 +236,14 @@ export default function ParteDiarioScreen() {
         </View>
 
         <FormField label="Cliente" value={form.cliente} onChangeText={(t) => set('cliente', t)} placeholder="Ej: DHL, OTRO..." />
-        <FormField label="Spedizione" value={form.spedizione} onChangeText={(t) => set('spedizione', t)} placeholder="Opcional" />
+        <Select
+          label="Spedizione"
+          value={form.spedizione}
+          onChange={(v) => set('spedizione', v)}
+          options={SPEDIZIONE_OPTIONS}
+          placeholder="Selecciona spedizione"
+          clearable
+        />
         <FormField label="Comentario final" value={form.comentario} onChangeText={(t) => set('comentario', t)} placeholder="Notas de la jornada" multiline />
 
         <Text style={styles.label}>Foto de la bolla</Text>
