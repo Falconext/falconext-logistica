@@ -23,6 +23,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             trabajadorId: payload.trabajadorId ?? null,
             trabajadorCodigo: payload.trabajadorCodigo ?? null,
             soloPropios: payload.soloPropios ?? false,
+            veFinanzas: payload.veFinanzas ?? (payload.esAdmin ?? false),
         };
     }
 }

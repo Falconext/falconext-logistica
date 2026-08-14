@@ -285,6 +285,7 @@ model Rol {
   modulos      String[] @default([]) // claves de módulos permitidos
   es_admin     Boolean @default(false) // ve todo y puede administrar usuarios/roles
   solo_propios Boolean @default(false) // los usuarios de este rol solo ven sus registros
+  ve_finanzas  Boolean @default(false) // ve montos/pagos/ganancias (choferes y supervisores NO)
 
   tenant_id String
   tenant    Tenant @relation(fields: [tenant_id], references: [id])
