@@ -223,14 +223,8 @@ export default function ParteDiarioScreen() {
           <Text style={styles.previewValue}>{formatMoney(gananciaPreview, moneda)}</Text>
         </Card>
 
-        {/* Reperibilità */}
-        <View style={styles.switchRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.switchLabel}>Reperibilità</Text>
-            <Text style={styles.switchHint}>Estuviste disponible on-call</Text>
-          </View>
-          <Switch value={form.repibilita} onValueChange={(v) => set('repibilita', v)} trackColor={{ true: C.primary }} />
-        </View>
+        {/* Reperibilità: la marca SOLO el supervisor al crear la operación
+            (Nueva operación). El chofer no la activa — por eso se quitó de aquí. */}
 
         {/* ¿Se realizó la consegna? */}
         <View style={styles.switchRow}>
