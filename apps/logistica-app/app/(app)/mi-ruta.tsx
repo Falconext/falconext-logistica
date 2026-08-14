@@ -7,6 +7,7 @@ import { Screen, AppHeader, Card, Button, Badge, FormField, LoadingState, EmptyS
 import api, { DEVICE_TOKEN_KEY } from '../../services/api';
 import { startTracking, stopTracking } from '../../services/LocationService';
 import { useTheme } from '../../context/ThemeContext';
+import ChoferWizard from '../../components/ChoferWizard';
 
 const C = Theme.colors;
 const S = Theme.spacing;
@@ -44,6 +45,19 @@ export default function MiRutaScreen() {
   const [busy, setBusy] = useState(false);
   const [activo, setActivo] = useState<Recorrido | null>(null);
   const [operaciones, setOperaciones] = useState<Operacion[]>([]);
+  const [wizardOp, setWizardOp] = useState<Operacion | null>(null); // consegna aceptada → wizard
+
+  // Flujo pedido: el chofer ACEPTA la consegna (se marca ACCETTATA para que el
+  // supervisor sepa que la recibió) y recién ahí se abre la pantalla de la
+  // consegna (ChoferWizard: datos, estado, direcciones, bolla).
+  const aceptarYAbrir = useCallback(async (op: Operacion) => {
+    try {
+      await api.patch(`/programacion/${op.id}`, { estado_consegna: 'ACCETTATA' });
+    } catch {
+      // Si falla el guardado, igual abrimos el wizard (no bloquear al chofer).
+    }
+    setWizardOp(op);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -216,77 +230,38 @@ export default function MiRutaScreen() {
 
   // ---- Sin recorrido: elegir operación ----
   return (
-    <Screen scroll padded>
-      <AppHeader title="Mi Ruta" subtitle="Elige una operación para iniciar" />
-      {operaciones.length === 0 ? (
-        <EmptyState icon={Package} title="Sin operaciones asignadas" subtitle="No tienes traslados pendientes por iniciar. Cuando te asignen uno, aparecerá aquí." />
-      ) : (
-        <View style={{ gap: S.sm, marginTop: S.sm }}>
-          {operaciones.map((op) => (
-            <OperacionCard key={op.id} op={op} busy={busy} onIniciar={iniciar} onReload={load} />
-          ))}
-        </View>
-      )}
-    </Screen>
+    <>
+      <Screen scroll padded>
+        <AppHeader title="Mi Ruta" subtitle="Elige una consegna para aceptar" />
+        {operaciones.length === 0 ? (
+          <EmptyState icon={Package} title="Sin consegnas asignadas" subtitle="No tienes consegnas pendientes por aceptar. Cuando te asignen una, aparecerá aquí." />
+        ) : (
+          <View style={{ gap: S.sm, marginTop: S.sm }}>
+            {operaciones.map((op) => (
+              <OperacionCard key={op.id} op={op} onAceptar={aceptarYAbrir} />
+            ))}
+          </View>
+        )}
+      </Screen>
+      <ChoferWizard
+        visible={!!wizardOp}
+        operacion={wizardOp as any}
+        onClose={() => setWizardOp(null)}
+        onSaved={() => { setWizardOp(null); load(); }}
+      />
+    </>
   );
 }
 
-// Tarjeta de una consegna asignada: el chofer completa el lugar de retiro (origen)
-// y el de entrega (destino) antes de poder iniciar la ruta, y tiene acceso directo
-// a subir la foto de la bolla (parte diario, propio del chofer).
-function OperacionCard({ op, busy, onIniciar, onReload }: {
+// Tarjeta de una consegna asignada: muestra los datos y un único botón
+// "ACEPTAR CONSEGNA". Al aceptar se abre el ChoferWizard (datos, estado,
+// direcciones, bolla) — ahí el chofer ve/edita todo e inicia la consegna.
+function OperacionCard({ op, onAceptar }: {
   op: Operacion;
-  busy: boolean;
-  onIniciar: (op: Operacion) => void;
-  onReload: () => void | Promise<void>;
+  onAceptar: (op: Operacion) => void;
 }) {
   const { themeKey } = useTheme();
   const styles = useMemo(() => makeStyles(), [themeKey]);
-  const router = useRouter();
-
-  const faltanLugares = !(op.lugar_retiro?.trim() && op.lugar_entrega?.trim());
-  const [editing, setEditing] = useState(faltanLugares);
-  const [retiro, setRetiro] = useState(op.lugar_retiro || '');
-  const [entrega, setEntrega] = useState(op.lugar_entrega || '');
-  const [saving, setSaving] = useState(false);
-
-  // Flujo "Aceptar consegna": el chofer primero ACEPTA (ve los datos del
-  // supervisor) y recién ahí puede "Iniciar ruta". Al aceptar se marca la
-  // consegna como ACCETTATA para que el supervisor sepa que la recibió.
-  const [accepted, setAccepted] = useState((op.estado_consegna || '').toUpperCase() === 'ACCETTATA');
-  const [accepting, setAccepting] = useState(false);
-
-  const aceptar = async () => {
-    setAccepting(true);
-    try {
-      await api.patch(`/programacion/${op.id}`, { estado_consegna: 'ACCETTATA' });
-    } catch {
-      // Si falla el guardado, igual dejamos continuar (no bloquear al chofer).
-    } finally {
-      setAccepted(true);
-      setAccepting(false);
-    }
-  };
-
-  const guardar = async () => {
-    if (!retiro.trim() || !entrega.trim()) {
-      Alert.alert('Faltan lugares', 'Completa el lugar de retiro y el de entrega para continuar.');
-      return;
-    }
-    setSaving(true);
-    try {
-      await api.patch(`/programacion/${op.id}`, {
-        lugar_retiro: retiro.trim(),
-        lugar_entrega: entrega.trim(),
-      });
-      setEditing(false);
-      await onReload();
-    } catch (e: any) {
-      Alert.alert('No se pudo guardar', e?.response?.data?.message || 'Inténtalo de nuevo.');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <Card style={styles.opCard}>
@@ -294,44 +269,15 @@ function OperacionCard({ op, busy, onIniciar, onReload }: {
         <Text style={styles.opCliente}>{op.cliente || 'Operación'}</Text>
         {!!op.estado && <Badge label={op.estado === 'REPROGRAMADO' ? 'Reprog.' : 'Pendiente'} variant="warning" />}
       </View>
-
-      {editing ? (
-        <>
-          <FormField label="Lugar de retiro (origen)" value={retiro} onChangeText={setRetiro} placeholder="¿Dónde recoges la mercadería?" style={{ marginBottom: S.sm }} />
-          <FormField label="Lugar de entrega (destino)" value={entrega} onChangeText={setEntrega} placeholder="¿Dónde la entregas?" style={{ marginBottom: S.sm }} />
-          <Button title="GUARDAR LUGARES" icon={Save} onPress={guardar} loading={saving} />
-          {!faltanLugares && (
-            <Button
-              title="Cancelar"
-              variant="ghost"
-              onPress={() => { setRetiro(op.lugar_retiro || ''); setEntrega(op.lugar_entrega || ''); setEditing(false); }}
-              disabled={saving}
-            />
-          )}
-        </>
-      ) : (
-        <>
-          <View style={styles.legRow}>
-            <MapPin size={15} color={C.success} />
-            <Text style={styles.opAddr} numberOfLines={1}>{op.lugar_retiro || '—'}</Text>
-          </View>
-          <View style={styles.legRow}>
-            <MapPin size={15} color={C.text} />
-            <Text style={styles.opAddr} numberOfLines={1}>{op.lugar_entrega || '—'}</Text>
-          </View>
-          {accepted ? (
-            <Button title="INICIAR RUTA" icon={Play} onPress={() => onIniciar(op)} loading={busy} style={{ marginTop: S.sm }} />
-          ) : (
-            <Button title="ACEPTAR CONSEGNA" icon={CheckCircle2} onPress={aceptar} loading={accepting} style={{ marginTop: S.sm }} />
-          )}
-          <View style={styles.opActions}>
-            <TouchableOpacity onPress={() => setEditing(true)} style={styles.linkBtn} activeOpacity={0.7}>
-              <Pencil size={14} color={C.primary} />
-              <Text style={styles.linkText}>Editar lugares</Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      )}
+      <View style={styles.legRow}>
+        <MapPin size={15} color={C.success} />
+        <Text style={styles.opAddr} numberOfLines={1}>{op.lugar_retiro || '—'}</Text>
+      </View>
+      <View style={styles.legRow}>
+        <MapPin size={15} color={C.text} />
+        <Text style={styles.opAddr} numberOfLines={1}>{op.lugar_entrega || '—'}</Text>
+      </View>
+      <Button title="ACEPTAR CONSEGNA" icon={CheckCircle2} onPress={() => onAceptar(op)} style={{ marginTop: S.sm }} />
     </Card>
   );
 }
