@@ -88,7 +88,8 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
   const [routeLegs, setRouteLegs] = useState<{ label: string; etaMin: number; km: number }[]>([]); // ETA acumulada por destino
   // Rendición al llegar a una parada: parada objetivo + gastos/anticipo locales.
   const [paradaRend, setParadaRend] = useState<{ id: string; label: string } | null>(null);
-  const [rendAnticipo, setRendAnticipo] = useState('');
+  const [rendAnticipo, setRendAnticipo] = useState(''); // abono recibido en la parada
+  const [rendAbonoDe, setRendAbonoDe] = useState('');   // quién le entregó el dinero
   const [rendGastos, setRendGastos] = useState<GastoRow[]>([]);
   const [fullOp, setFullOp] = useState<Programacion | null>(null);
   const [showRendicion, setShowRendicion] = useState(false);
@@ -276,9 +277,10 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
     finally { setBusy(false); }
   };
 
-  // Abre el modal de rendición de la parada (gastos/anticipo por punto).
+  // Abre el modal de rendición de la parada (abono/gastos por punto).
   const llegarParada = (parada: { id: string; label: string }) => {
     setRendAnticipo('');
+    setRendAbonoDe('');
     setRendGastos([]);
     setParadaRend(parada);
   };
@@ -304,10 +306,12 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
     try {
       await api.post(`/recorridos/${recorrido.id}/paradas/${paradaRend.id}/llegada`, {
         anticipo: rendAnticipo ? Number(rendAnticipo) : undefined,
+        abono_de: rendAbonoDe.trim() || undefined,
         gastos: gastos.length ? gastos : undefined,
       });
       setParadaRend(null);
       setRendAnticipo('');
+      setRendAbonoDe('');
       setRendGastos([]);
       await loadRecorrido();
     } catch (e: any) { Alert.alert('Error', e?.response?.data?.message || 'No se pudo registrar la llegada.'); }
@@ -727,7 +731,7 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                               <Text style={styles.paradaLabel} numberOfLines={1}>{p.label}</Text>
                               {p.llegada_en && (g > 0 || !!p.anticipo) && (
                                 <Text style={styles.paradaRend}>
-                                  {g > 0 ? `Gastos ${formatMoney(g, moneda)}` : ''}{g > 0 && p.anticipo ? ' · ' : ''}{p.anticipo ? `Anticipo ${formatMoney(p.anticipo, moneda)}` : ''}
+                                  {g > 0 ? `Gastos ${formatMoney(g, moneda)}` : ''}{g > 0 && p.anticipo ? ' · ' : ''}{p.anticipo ? `Abono ${formatMoney(p.anticipo, moneda)}` : ''}
                                 </Text>
                               )}
                             </View>
@@ -739,17 +743,22 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                           </View>
                         );
                       })}
-                      {/* Resumen: al visitar todas las paradas */}
+                      {/* Resumen de control del dinero: al visitar todas las paradas */}
                       {todasLlegadas && (() => {
-                        const tg = paradas.reduce((s, p) => s + gastosDeParada(p), 0);
-                        const ta = paradas.reduce((s, p) => s + Number(p.anticipo || 0), 0);
+                        const anticipoInicial = Number(fullOp?.anticipo || form.anticipo || 0);
+                        const abonos = paradas.reduce((s, p) => s + Number(p.anticipo || 0), 0);
+                        const recibido = anticipoInicial + abonos;
+                        const gastado = paradas.reduce((s, p) => s + gastosDeParada(p), 0);
+                        const saldo = recibido - gastado;
                         return (
                           <View style={styles.paradaResumen}>
-                            <Text style={styles.paradaResumenTitle}>✓ Todas las paradas · Resumen</Text>
-                            <View style={styles.paradaResumenRow}>
-                              <Text style={styles.paradaResumenItem}>{paradas.length} paradas</Text>
-                              <Text style={styles.paradaResumenItem}>Gastos {formatMoney(tg, moneda)}</Text>
-                              <Text style={styles.paradaResumenItem}>Anticipos {formatMoney(ta, moneda)}</Text>
+                            <Text style={styles.paradaResumenTitle}>✓ Todas las paradas · Control del dinero</Text>
+                            <View style={styles.saldoRow}><Text style={styles.saldoLabel}>Anticipo inicial</Text><Text style={styles.saldoVal}>{formatMoney(anticipoInicial, moneda)}</Text></View>
+                            <View style={styles.saldoRow}><Text style={styles.saldoLabel}>+ Abonos en ruta</Text><Text style={styles.saldoVal}>{formatMoney(abonos, moneda)}</Text></View>
+                            <View style={styles.saldoRow}><Text style={styles.saldoLabel}>− Gastos</Text><Text style={styles.saldoVal}>{formatMoney(gastado, moneda)}</Text></View>
+                            <View style={[styles.saldoRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border, paddingTop: 4, marginTop: 2 }]}>
+                              <Text style={[styles.saldoLabel, { fontWeight: '800', color: saldo < 0 ? C.danger : C.success }]}>{saldo < 0 ? 'Falta rendir' : 'Saldo a devolver'}</Text>
+                              <Text style={[styles.saldoVal, { fontWeight: '800', color: saldo < 0 ? C.danger : C.success }]}>{formatMoney(Math.abs(saldo), moneda)}</Text>
                             </View>
                           </View>
                         );
@@ -883,9 +892,9 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
         )}
       </View>
 
-      {/* Rendición al llegar a una parada: gastos/anticipo (opcionales) por punto */}
+      {/* Rendición al llegar a una parada: gastos/abono (opcionales) por punto */}
       <Modal visible={!!paradaRend} animationType="slide" transparent onRequestClose={() => setParadaRend(null)}>
-        <View style={styles.rendOverlay}>
+        <KeyboardAvoidingView style={styles.rendOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.rendSheet}>
             <View style={styles.rendHead}>
               <View style={{ flex: 1 }}>
@@ -895,11 +904,14 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
               <TouchableOpacity onPress={() => setParadaRend(null)}><X size={22} color={C.textMuted} /></TouchableOpacity>
             </View>
             <ScrollView contentContainerStyle={{ padding: S.lg, gap: S.md }} keyboardShouldPersistTaps="handled">
-              <Text style={styles.rendHint}>Registra la rendición / gastos de esta parada. Es opcional, pero se recomienda hacerlo en cada punto.</Text>
+              <Text style={styles.rendHint}>Si te ENTREGARON dinero en esta parada, regístralo. También los gastos. Es opcional, pero importante para el control del dinero.</Text>
 
               <View>
-                <Text style={styles.rendLabel}>Anticipo recibido (opcional)</Text>
+                <Text style={styles.rendLabel}>Abono recibido aquí (dinero que te dieron)</Text>
                 <TextInput style={styles.input} value={rendAnticipo} onChangeText={setRendAnticipo} placeholder="0.00" placeholderTextColor={C.textFaint} keyboardType="decimal-pad" />
+                {!!rendAnticipo && (
+                  <TextInput style={[styles.input, { marginTop: 6 }]} value={rendAbonoDe} onChangeText={setRendAbonoDe} placeholder="¿Quién te lo entregó? (opcional)" placeholderTextColor={C.textFaint} />
+                )}
               </View>
 
               <View style={{ gap: S.sm }}>
@@ -933,14 +945,14 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                 ))}
               </View>
             </ScrollView>
-            <View style={styles.rendFooter}>
+            <View style={[styles.rendFooter, { paddingBottom: S.lg + insets.bottom }]}>
               <TouchableOpacity style={[styles.rendConfirmBtn, busy && { opacity: 0.6 }]} disabled={busy} onPress={confirmarLlegadaParada} activeOpacity={0.85}>
                 {busy ? <ActivityIndicator color="#fff" size="small" /> : <Flag size={19} color="#fff" />}
                 <Text style={styles.rendConfirmTxt}>Confirmar llegada</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </Modal>
   );

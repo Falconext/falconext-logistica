@@ -221,7 +221,7 @@ export default function MiRutaPage() {
                                                 ? <div className="text-xs text-emerald-600 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                                                     <span className="flex items-center gap-1"><Clock size={11} /> Llegada {new Date(p.llegada_en!).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>
                                                     {gastosTotal(p) > 0 && <span className="text-slate-500">Gastos {format(gastosTotal(p))}</span>}
-                                                    {!!p.anticipo && <span className="text-slate-500">Anticipo {format(p.anticipo)}</span>}
+                                                    {!!p.anticipo && <span className="text-slate-500">Abono {format(p.anticipo)}</span>}
                                                   </div>
                                                 : esProxima
                                                     ? <div className="text-xs text-blue-600">Próxima parada</div>
@@ -239,17 +239,22 @@ export default function MiRutaPage() {
                         </div>
                     )}
 
-                    {/* Resumen de la rendición: al visitar todas las paradas (fin del recorrido) */}
+                    {/* Control del dinero: al visitar todas las paradas (fin del recorrido) */}
                     {paradas.length > 0 && todasLlegadas && (() => {
-                        const totalGastos = paradas.reduce((s, p) => s + gastosTotal(p), 0);
-                        const totalAnticipo = paradas.reduce((s, p) => s + Number(p.anticipo || 0), 0);
+                        const anticipoInicial = Number((trackingOp as any)?.anticipo || 0);
+                        const abonos = paradas.reduce((s, p) => s + Number(p.anticipo || 0), 0);
+                        const recibido = anticipoInicial + abonos;
+                        const gastado = paradas.reduce((s, p) => s + gastosTotal(p), 0);
+                        const saldo = recibido - gastado;
                         return (
-                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                                <div className="flex items-center gap-2 mb-2 text-emerald-700 font-bold text-sm"><CheckCircle2 size={16} /> Todas las paradas visitadas · Resumen</div>
-                                <div className="grid grid-cols-3 gap-2 text-center">
-                                    <div><div className="text-lg font-extrabold text-slate-800">{paradas.length}</div><div className="text-xs text-slate-500">Paradas</div></div>
-                                    <div><div className="text-lg font-extrabold text-slate-800">{format(totalGastos)}</div><div className="text-xs text-slate-500">Gastos</div></div>
-                                    <div><div className="text-lg font-extrabold text-slate-800">{format(totalAnticipo)}</div><div className="text-xs text-slate-500">Anticipos</div></div>
+                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 space-y-1.5">
+                                <div className="flex items-center gap-2 mb-1 text-emerald-700 font-bold text-sm"><CheckCircle2 size={16} /> Todas las paradas · Control del dinero</div>
+                                <div className="flex justify-between text-sm"><span className="text-slate-500">Anticipo inicial</span><span className="font-semibold text-slate-700">{format(anticipoInicial)}</span></div>
+                                <div className="flex justify-between text-sm"><span className="text-slate-500">+ Abonos en ruta</span><span className="font-semibold text-slate-700">{format(abonos)}</span></div>
+                                <div className="flex justify-between text-sm"><span className="text-slate-500">− Gastos</span><span className="font-semibold text-slate-700">{format(gastado)}</span></div>
+                                <div className="flex justify-between border-t border-emerald-200 pt-1.5">
+                                    <span className={`font-extrabold ${saldo < 0 ? 'text-red-500' : 'text-emerald-700'}`}>{saldo < 0 ? 'Falta rendir' : 'Saldo a devolver'}</span>
+                                    <span className={`font-extrabold ${saldo < 0 ? 'text-red-500' : 'text-emerald-700'}`}>{format(Math.abs(saldo))}</span>
                                 </div>
                             </div>
                         );
@@ -414,9 +419,10 @@ const GASTO_TIPOS = [
 ];
 function RendicionParadaModal({ parada, busy, onClose, onConfirm }: {
     parada: Parada; busy: boolean; onClose: () => void;
-    onConfirm: (rendicion: { anticipo?: number; gastos?: any; nota?: string }) => void;
+    onConfirm: (rendicion: { anticipo?: number; abono_de?: string; gastos?: any; nota?: string }) => void;
 }) {
-    const [anticipo, setAnticipo] = useState('');
+    const [anticipo, setAnticipo] = useState(''); // abono recibido aquí
+    const [abonoDe, setAbonoDe] = useState('');
     const [nota, setNota] = useState('');
     const [gastos, setGastos] = useState<{ tipo: string; monto: string; descripcion: string }[]>([]);
 
@@ -430,6 +436,7 @@ function RendicionParadaModal({ parada, busy, onClose, onConfirm }: {
             .map((g) => ({ tipo: g.tipo, monto: Number(g.monto), descripcion: g.descripcion.trim() || null }));
         onConfirm({
             anticipo: anticipo ? Number(anticipo) : undefined,
+            abono_de: abonoDe.trim() || undefined,
             gastos: gastosLimpios.length ? gastosLimpios : undefined,
             nota: nota.trim() || undefined,
         });
@@ -448,12 +455,16 @@ function RendicionParadaModal({ parada, busy, onClose, onConfirm }: {
                     <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><X size={20} /></button>
                 </div>
                 <div className="p-5 space-y-4">
-                    <p className="text-sm text-slate-600">Registra la <b>rendición / gastos</b> de esta parada. Es opcional, pero se recomienda hacerlo en cada punto.</p>
+                    <p className="text-sm text-slate-600">Si te <b>ENTREGARON dinero</b> en esta parada, regístralo. También los gastos. Es opcional, pero importante para el control del dinero.</p>
 
                     <div className="space-y-1">
-                        <label className="text-xs font-bold text-slate-500 uppercase">Anticipo recibido (opcional)</label>
+                        <label className="text-xs font-bold text-slate-500 uppercase">Abono recibido aquí (dinero que te dieron)</label>
                         <input value={anticipo} onChange={(e) => setAnticipo(e.target.value)} inputMode="decimal" placeholder="0.00"
                             className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+                        {!!anticipo && (
+                            <input value={abonoDe} onChange={(e) => setAbonoDe(e.target.value)} placeholder="¿Quién te lo entregó? (opcional)"
+                                className="w-full mt-1.5 px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+                        )}
                     </div>
 
                     <div className="space-y-2">

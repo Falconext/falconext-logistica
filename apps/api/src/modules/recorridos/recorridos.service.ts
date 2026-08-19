@@ -166,7 +166,7 @@ export class RecorridosService {
         recorridoId: string,
         paradaId: string,
         trabajadorId: string,
-        body: { anticipo?: number; gastos?: any; nota?: string },
+        body: { anticipo?: number; abono_de?: string; gastos?: any; nota?: string },
     ) {
         const r = await this.getOwned(tenantId, recorridoId, trabajadorId);
         const parada = await this.prisma.recorridoParada.findFirst({
@@ -180,6 +180,7 @@ export class RecorridosService {
             data: {
                 llegada_en: parada.llegada_en ?? now,
                 anticipo: body?.anticipo != null ? Number(body.anticipo) : parada.anticipo,
+                abono_de: body?.abono_de ?? parada.abono_de,
                 gastos: body?.gastos ?? parada.gastos ?? undefined,
                 nota: body?.nota ?? parada.nota,
             },

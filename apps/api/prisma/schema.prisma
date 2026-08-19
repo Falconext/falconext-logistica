@@ -562,7 +562,10 @@ model RecorridoParada {
   orden          Int       // 1, 2, 3… (orden de visita)
   label          String    // dirección del destino
   llegada_en     DateTime? // cuándo el chofer marcó la llegada a esta parada
-  anticipo       Float?    // rendición: adelanto recibido en esta parada (opcional)
+  // "Abono recibido aquí": dinero EXTRA que le entregaron al chofer en esta parada
+  // (además del anticipo inicial de la operación). Sirve para el control del saldo.
+  anticipo       Float?    // monto del abono recibido en esta parada (opcional)
+  abono_de       String?   // quién le entregó el dinero (supervisor/persona)
   gastos         Json?     // lista de gastos [{ tipo, monto, descripcion }] (opcional)
   nota           String?
   creado_en      DateTime  @default(now())
