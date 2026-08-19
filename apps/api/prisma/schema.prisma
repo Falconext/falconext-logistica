@@ -561,6 +561,9 @@ model RecorridoParada {
   tenant_id      String
   orden          Int       // 1, 2, 3… (orden de visita)
   label          String    // dirección del destino
+  // Parada final de RETORNO al origen (punto verde). El vehículo siempre vuelve a
+  // la base: es la última parada del recorrido y cierra la trazabilidad (ida+vuelta).
+  es_retorno     Boolean   @default(false)
   llegada_en     DateTime? // cuándo el chofer marcó la llegada a esta parada
   // "Abono recibido aquí": dinero EXTRA que le entregaron al chofer en esta parada
   // (además del anticipo inicial de la operación). Sirve para el control del saldo.

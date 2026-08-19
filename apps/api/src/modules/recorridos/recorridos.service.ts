@@ -174,6 +174,11 @@ export class RecorridosService {
         });
         if (!parada) throw new NotFoundException('Parada no encontrada.');
 
+        // La parada de RETORNO solo se marca en el tramo de vuelta (tras "Regresar").
+        if (parada.es_retorno && r.estado !== 'EN_RUTA_VUELTA') {
+            throw new BadRequestException('Primero pulsa "Regresar al origen" para volver a la base.');
+        }
+
         const now = new Date();
         await this.prisma.recorridoParada.update({
             where: { id: parada.id },
@@ -186,9 +191,16 @@ export class RecorridosService {
             },
         });
 
-        // ¿Quedan paradas pendientes? Si esta era la última, cerramos el tramo de ida.
+        // Llegada a la parada de RETORNO = llegó al origen → cierra el recorrido
+        // (calcula la vuelta, marca COMPLETADO y libera al chofer/vehículo).
+        if (parada.es_retorno) {
+            return this.finalizar(tenantId, r.id, trabajadorId);
+        }
+
+        // ¿Quedan paradas de ENTREGA pendientes? (la de retorno no cuenta para la ida).
+        // Si esta era la última entrega, cerramos el tramo de ida.
         const pendientes = await this.prisma.recorridoParada.count({
-            where: { recorrido_id: r.id, llegada_en: null },
+            where: { recorrido_id: r.id, llegada_en: null, es_retorno: false },
         });
         if (pendientes === 0 && r.estado === 'EN_RUTA_IDA') {
             const km = await this.distanciaKm(r.device_id, r.iniciado_en, now);
@@ -253,14 +265,26 @@ export class RecorridosService {
             .map((s: any) => (s || '').trim())
             .filter(Boolean);
         if (stops.length > 0) {
-            await this.prisma.recorridoParada.createMany({
-                data: stops.map((label, i) => ({
+            const data: any[] = stops.map((label, i) => ({
+                recorrido_id: recorrido.id,
+                tenant_id: tenantId,
+                orden: i + 1,
+                label,
+            }));
+            // Retorno automático: el chofer siempre vuelve al origen (punto verde).
+            // Se añade como parada final para cerrar la trazabilidad (ida + vuelta) y
+            // poder registrar el peaje/gasto de regreso. Requiere un origen conocido.
+            const origen = (prog.lugar_retiro || '').trim();
+            if (origen) {
+                data.push({
                     recorrido_id: recorrido.id,
                     tenant_id: tenantId,
-                    orden: i + 1,
-                    label,
-                })),
-            });
+                    orden: stops.length + 1,
+                    label: origen,
+                    es_retorno: true,
+                });
+            }
+            await this.prisma.recorridoParada.createMany({ data });
         }
 
         // Integraciones: operación "en ruta" (aparece En Consegna) + chofer/vehículo ocupados.

@@ -25,6 +25,7 @@ interface Parada {
     id: string;
     orden: number;
     label: string;
+    es_retorno?: boolean;
     llegada_en?: string | null;
     anticipo?: number | null;
     gastos?: any;
@@ -156,10 +157,13 @@ export default function MiRutaPage() {
         }
     };
 
-    // Paradas del recorrido activo y la próxima pendiente (la que toca marcar).
+    // Paradas del recorrido activo. Las de ENTREGA (destinos) vs la de RETORNO al
+    // origen (parada final: el vehículo siempre vuelve a la base).
     const paradas = (activo?.paradas || []).slice().sort((a, b) => a.orden - b.orden);
-    const proximaParada = paradas.find((p) => !p.llegada_en) || null;
-    const todasLlegadas = paradas.length > 0 && paradas.every((p) => p.llegada_en);
+    const paradasEntrega = paradas.filter((p) => !p.es_retorno);
+    const paradaRetorno = paradas.find((p) => p.es_retorno) || null;
+    const proximaParada = paradasEntrega.find((p) => !p.llegada_en) || null;
+    const todasLlegadas = paradasEntrega.length > 0 && paradasEntrega.every((p) => p.llegada_en);
 
     const routeStops = (op: Operacion) =>
         [...(op.retiros || []), op.lugar_entrega, ...(op.destinos || [])]
@@ -195,10 +199,12 @@ export default function MiRutaPage() {
 
                     {trackingOp?.lugar_retiro && routeStops(trackingOp).length > 0 && (
                         <div className="h-64 rounded-xl overflow-hidden border border-slate-200">
+                            {/* Retorno automático: el mapa cierra el bucle volviendo al origen,
+                                así el tiempo/km totales y la ETA por tramo cubren ida + vuelta. */}
                             <MapboxRouteMap
                                 originAddress={trackingOp.lugar_retiro}
-                                destinationAddress={routeStops(trackingOp).slice(-1)[0]}
-                                waypoints={routeStops(trackingOp).slice(0, -1)}
+                                destinationAddress={trackingOp.lugar_retiro}
+                                waypoints={routeStops(trackingOp)}
                                 showLegs
                             />
                         </div>
@@ -209,14 +215,17 @@ export default function MiRutaPage() {
                         <div className="rounded-xl border border-slate-200 divide-y divide-slate-100">
                             {paradas.map((p) => {
                                 const llegó = !!p.llegada_en;
-                                const esProxima = proximaParada?.id === p.id;
+                                // La parada de retorno es "próxima" recién en el tramo de vuelta.
+                                const esProxima = p.es_retorno
+                                    ? (!llegó && activo.estado === 'EN_RUTA_VUELTA' && !paradaRetorno?.llegada_en)
+                                    : proximaParada?.id === p.id;
                                 return (
                                     <div key={p.id} className="flex items-center gap-3 p-3">
                                         <div className={`h-6 w-6 shrink-0 rounded-full grid place-items-center text-[11px] font-bold ${llegó ? 'bg-emerald-500 text-white' : esProxima ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
-                                            {llegó ? '✓' : p.orden}
+                                            {llegó ? '✓' : p.es_retorno ? '⟲' : p.orden}
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <div className="text-sm font-semibold text-slate-800 truncate">{p.label}</div>
+                                            <div className="text-sm font-semibold text-slate-800 truncate">{p.es_retorno ? `Regreso al origen · ${p.label}` : p.label}</div>
                                             {llegó
                                                 ? <div className="text-xs text-emerald-600 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                                                     <span className="flex items-center gap-1"><Clock size={11} /> Llegada {new Date(p.llegada_en!).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>
@@ -224,13 +233,13 @@ export default function MiRutaPage() {
                                                     {!!p.anticipo && <span className="text-slate-500">Abono {format(p.anticipo)}</span>}
                                                   </div>
                                                 : esProxima
-                                                    ? <div className="text-xs text-blue-600">Próxima parada</div>
+                                                    ? <div className="text-xs text-blue-600">{p.es_retorno ? 'Regresando' : 'Próxima parada'}</div>
                                                     : <div className="text-xs text-slate-400">Pendiente</div>}
                                         </div>
                                         {!llegó && esProxima && (
                                             <button onClick={() => setRendicionParada(p)} disabled={busy}
-                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold disabled:opacity-60">
-                                                <Flag size={13} /> Llegar a {p.label.split(',')[0].slice(0, 18)}
+                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-semibold disabled:opacity-60 ${p.es_retorno ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                                                {p.es_retorno ? <><CheckCircle2 size={13} /> Llegué al origen</> : <><Flag size={13} /> Llegar a {p.label.split(',')[0].slice(0, 18)}</>}
                                             </button>
                                         )}
                                     </div>
@@ -269,7 +278,9 @@ export default function MiRutaPage() {
                         {(activo.estado === 'EN_DESTINO' || (paradas.length > 0 && todasLlegadas && activo.estado === 'EN_RUTA_IDA')) && (
                             <ActionBtn onClick={() => accion('regreso', 'Regresando al origen')} disabled={busy} icon={CornerUpLeft} label="Regresar al origen" />
                         )}
-                        {activo.estado === 'EN_RUTA_VUELTA' && (
+                        {/* Con parada de retorno, el cierre lo hace el botón "Llegué al origen"
+                            de la lista (registra peaje de vuelta). Sin ella (legacy): cierre directo. */}
+                        {activo.estado === 'EN_RUTA_VUELTA' && !paradaRetorno && (
                             <ActionBtn onClick={() => accion('finalizar', 'Recorrido finalizado')} disabled={busy} icon={CheckCircle2} label="Finalizar recorrido" variant="success" />
                         )}
                         {enDescanso
@@ -449,7 +460,7 @@ function RendicionParadaModal({ parada, busy, onClose, onConfirm }: {
             <div className="bg-white w-full md:max-w-md md:rounded-2xl rounded-t-2xl max-h-[92vh] overflow-y-auto">
                 <div className="sticky top-0 bg-white border-b border-slate-100 px-5 py-3 flex items-center justify-between">
                     <div>
-                        <h2 className="font-bold text-slate-800">Llegada a destino</h2>
+                        <h2 className="font-bold text-slate-800">{parada.es_retorno ? 'Llegada al origen · Cierre' : 'Llegada a destino'}</h2>
                         <p className="text-xs text-slate-500 truncate max-w-[240px]">{parada.label}</p>
                     </div>
                     <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><X size={20} /></button>

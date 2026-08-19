@@ -87,7 +87,7 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
   const [recorrido, setRecorrido] = useState<any | null>(null);
   const [routeLegs, setRouteLegs] = useState<{ label: string; etaMin: number; km: number }[]>([]); // ETA acumulada por destino
   // Rendición al llegar a una parada: parada objetivo + gastos/anticipo locales.
-  const [paradaRend, setParadaRend] = useState<{ id: string; label: string } | null>(null);
+  const [paradaRend, setParadaRend] = useState<{ id: string; label: string; es_retorno?: boolean } | null>(null);
   const [rendAnticipo, setRendAnticipo] = useState(''); // abono recibido en la parada
   const [rendAbonoDe, setRendAbonoDe] = useState('');   // quién le entregó el dinero
   const [rendGastos, setRendGastos] = useState<GastoRow[]>([]);
@@ -278,7 +278,7 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
   };
 
   // Abre el modal de rendición de la parada (abono/gastos por punto).
-  const llegarParada = (parada: { id: string; label: string }) => {
+  const llegarParada = (parada: { id: string; label: string; es_retorno?: boolean }) => {
     setRendAnticipo('');
     setRendAbonoDe('');
     setRendGastos([]);
@@ -302,6 +302,7 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
         link_peaje: g.link_peaje || null,
         comprobantes: g.comprobantes || [],
       }));
+    const esRetorno = !!paradaRend.es_retorno;
     setBusy(true);
     try {
       await api.post(`/recorridos/${recorrido.id}/paradas/${paradaRend.id}/llegada`, {
@@ -313,16 +314,26 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
       setRendAnticipo('');
       setRendAbonoDe('');
       setRendGastos([]);
+      // La parada de retorno (llegar al origen) cierra el recorrido en el backend:
+      // detenemos el rastreo y cerramos el wizard, igual que "Finalizar recorrido".
+      if (esRetorno) {
+        await stopTracking();
+        onSaved();
+        return;
+      }
       await loadRecorrido();
     } catch (e: any) { Alert.alert('Error', e?.response?.data?.message || 'No se pudo registrar la llegada.'); }
     finally { setBusy(false); }
   };
 
   // Paradas del recorrido (destino + destinos adicionales) y la próxima pendiente.
-  const paradas: Array<{ id: string; orden: number; label: string; llegada_en?: string | null; anticipo?: number | null; gastos?: any }> =
+  const paradas: Array<{ id: string; orden: number; label: string; es_retorno?: boolean; llegada_en?: string | null; anticipo?: number | null; gastos?: any }> =
     Array.isArray(recorrido?.paradas) ? [...recorrido.paradas].sort((a: any, b: any) => a.orden - b.orden) : [];
-  const proximaParada = paradas.find((p) => !p.llegada_en) || null;
-  const todasLlegadas = paradas.length > 0 && paradas.every((p) => p.llegada_en);
+  // Paradas de ENTREGA (destinos) vs la parada final de RETORNO al origen.
+  const paradasEntrega = paradas.filter((p) => !p.es_retorno);
+  const paradaRetorno = paradas.find((p) => p.es_retorno) || null;
+  const proximaParada = paradasEntrega.find((p) => !p.llegada_en) || null;
+  const todasLlegadas = paradasEntrega.length > 0 && paradasEntrega.every((p) => p.llegada_en);
   const gastosDeParada = (p: { gastos?: any }): number =>
     Array.isArray(p?.gastos) ? p.gastos.reduce((s: number, g: any) => s + Number(g?.monto || 0), 0) : 0;
 
@@ -689,9 +700,14 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                     if (!origen || rutaStops.length === 0) return null;
                     const dest = rutaStops[rutaStops.length - 1];
                     const wps = rutaStops.slice(0, -1);
+                    // Retorno automático: el mapa cierra el bucle volviendo al origen,
+                    // así el tiempo/km totales y la ETA por tramo cubren ida + vuelta.
+                    const cerrarBucle = !!paradaRetorno || rutaStops.length > 0;
+                    const mapDest = cerrarBucle ? origen : dest;
+                    const mapWps = cerrarBucle ? rutaStops : wps;
                     return (
                       <View style={{ marginBottom: S.md }}>
-                        <MapboxWebView style={styles.map} mapStyle="streets" route={{ originAddress: origen, destinationAddress: dest, waypoints: wps }} fit onRouteInfo={(info) => setRouteLegs(info.legs || [])} />
+                        <MapboxWebView style={styles.map} mapStyle="streets" route={{ originAddress: origen, destinationAddress: mapDest, waypoints: mapWps }} fit onRouteInfo={(info) => setRouteLegs(info.legs || [])} />
                         {routeLegs.length > 1 && (
                           <View style={styles.etaBox}>
                             {routeLegs.map((l, i) => (
@@ -737,13 +753,17 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                     <View style={styles.paradasBox}>
                       {paradas.map((p) => {
                         const g = gastosDeParada(p);
+                        // La parada de retorno es "próxima" recién en el tramo de vuelta.
+                        const esProxima = p.es_retorno
+                          ? (!p.llegada_en && recorrido.estado === 'EN_RUTA_VUELTA' && !paradaRetorno?.llegada_en)
+                          : proximaParada?.id === p.id;
                         return (
                           <View key={p.id} style={styles.paradaRow}>
-                            <View style={[styles.paradaDot, p.llegada_en ? styles.paradaDotOk : proximaParada?.id === p.id ? styles.paradaDotNext : styles.paradaDotPend]}>
-                              <Text style={styles.paradaDotTxt}>{p.llegada_en ? '✓' : String(p.orden)}</Text>
+                            <View style={[styles.paradaDot, p.llegada_en ? styles.paradaDotOk : esProxima ? styles.paradaDotNext : styles.paradaDotPend]}>
+                              <Text style={styles.paradaDotTxt}>{p.llegada_en ? '✓' : p.es_retorno ? '⟲' : String(p.orden)}</Text>
                             </View>
                             <View style={{ flex: 1 }}>
-                              <Text style={styles.paradaLabel} numberOfLines={1}>{p.label}</Text>
+                              <Text style={styles.paradaLabel} numberOfLines={1}>{p.es_retorno ? `Regreso al origen · ${p.label}` : p.label}</Text>
                               {p.llegada_en && (g > 0 || !!p.anticipo) && (
                                 <Text style={styles.paradaRend}>
                                   {g > 0 ? `Gastos ${formatMoney(g, moneda)}` : ''}{g > 0 && p.anticipo ? ' · ' : ''}{p.anticipo ? `Abono ${formatMoney(p.anticipo, moneda)}` : ''}
@@ -752,7 +772,7 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                             </View>
                             {p.llegada_en
                               ? <Text style={styles.paradaOk}>{new Date(p.llegada_en).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</Text>
-                              : proximaParada?.id === p.id
+                              : esProxima
                                 ? <Text style={styles.paradaNext}>Próxima</Text>
                                 : <Text style={styles.paradaPend}>Pendiente</Text>}
                           </View>
@@ -828,7 +848,13 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                         </View>
                         <BigBtn label="Regresar al origen" Icon={CornerUpLeft} onPress={() => accion('regreso')} disabled={busy} />
                       </>)}
-                      {recorrido.estado === 'EN_RUTA_VUELTA' && <BigBtn label="Llegué al origen · Finalizar" Icon={Check} onPress={finalizarRecorrido} disabled={busy} />}
+                      {recorrido.estado === 'EN_RUTA_VUELTA' && (
+                        paradaRetorno && !paradaRetorno.llegada_en
+                          // Con parada de retorno: abre la rendición (peaje/gasto de vuelta) y al confirmar cierra el recorrido.
+                          ? <BigBtn label="Llegué al origen · Finalizar" Icon={Check} onPress={() => llegarParada(paradaRetorno)} disabled={busy} />
+                          // Recorrido legacy sin parada de retorno: cierre directo.
+                          : <BigBtn label="Llegué al origen · Finalizar" Icon={Check} onPress={finalizarRecorrido} disabled={busy} />
+                      )}
                       {(recorrido.estado === 'EN_RUTA_IDA' || recorrido.estado === 'EN_RUTA_VUELTA') && <BigBtn label="Tomar descanso" Icon={Coffee} onPress={() => accion('descanso')} disabled={busy} variant="secondary" styles={styles} />}
                       {recorrido.estado === 'EN_RUTA_IDA' && <BigBtn label="Cancelar traslado" Icon={X} variant="ghost" onPress={confirmCancelar} disabled={busy} styles={styles} />}
                     </>
