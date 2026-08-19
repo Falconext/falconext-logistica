@@ -322,6 +322,58 @@ export class GpsService {
         return null;
     }
 
+    // Token de Mapbox para el Map Matching (pega los puntos GPS a las calles reales).
+    private mapboxToken(): string {
+        return process.env.MAPBOX_TOKEN || '';
+    }
+
+    /**
+     * Map Matching (Mapbox): ajusta la traza GPS cruda a la red de calles, para que
+     * el historial siga las carreteras en vez de unir puntos con líneas rectas.
+     * La API acepta máx. 100 coords por petición → se trocea. Devuelve la geometría
+     * concatenada [lng,lat][] o null si no hay token / falla (fallback a puntos crudos).
+     */
+    private async mapMatch(points: { lng: number; lat: number }[]): Promise<[number, number][] | null> {
+        const token = this.mapboxToken();
+        if (!token || points.length < 2) return null;
+
+        // Submuestreo suave: Mapbox limita a 100 coords/petición. Reducimos si hay
+        // demasiados puntos para no cortar el recorrido en muchos trozos.
+        const MAX = 100;
+        const chunks: { lng: number; lat: number }[][] = [];
+        for (let i = 0; i < points.length; i += MAX - 1) {
+            // -1 de solape: el último punto de un chunk = primero del siguiente, para
+            // que la geometría quede continua al concatenar.
+            chunks.push(points.slice(i, i + MAX));
+        }
+
+        const out: [number, number][] = [];
+        try {
+            for (const chunk of chunks) {
+                if (chunk.length < 2) continue;
+                const coords = chunk.map((p) => `${p.lng},${p.lat}`).join(';');
+                // radiuses: tolerancia de ajuste (m) por punto — 25 m absorbe el ruido GPS.
+                const radiuses = chunk.map(() => 25).join(';');
+                const url = `https://api.mapbox.com/matching/v5/mapbox/driving/${coords}` +
+                    `?geometries=geojson&overview=full&tidy=true&radiuses=${radiuses}&access_token=${token}`;
+                const res = await fetch(url);
+                const j: any = await res.json();
+                const g = j?.matchings?.[0]?.geometry?.coordinates as [number, number][] | undefined;
+                if (Array.isArray(g) && g.length) {
+                    // Evita duplicar el punto de solape entre chunks.
+                    for (const c of g) {
+                        const last = out[out.length - 1];
+                        if (!last || last[0] !== c[0] || last[1] !== c[1]) out.push(c);
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('[Mapbox matching] falló:', (e as any)?.message);
+            return null;
+        }
+        return out.length ? out : null;
+    }
+
     async createGeofence(data: { name: string, description?: string, latitude: number, longitude: number, radius: number, tenantId: string }) {
         return this.prisma.geofence.create({
             data: {
@@ -593,6 +645,11 @@ export class GpsService {
         // Quitar campos internos de las paradas.
         const cleanStops = stops.map(({ _tStart, _tEnd, ...rest }) => rest);
 
+        // Map Matching (Mapbox): ajusta la traza a las calles reales para que el
+        // historial siga las carreteras. Best-effort: si falla, el front cae a los
+        // puntos GPS crudos (líneas rectas).
+        const matched = await this.mapMatch(pts.map(p => ({ lng: p.lng, lat: p.lat })));
+
         return {
             points: pts.length,
             distanceKm: Math.round(distanceKm * 100) / 100,
@@ -606,7 +663,7 @@ export class GpsService {
             maxSpeedKmh: Math.round(maxSpeedKmh * 10) / 10,
             startTime: new Date(startTime).toISOString(),
             endTime: new Date(endTime).toISOString(),
-            matchedGeometry: null,
+            matchedGeometry: matched ? { type: 'LineString', coordinates: matched } : null,
             stops: cleanStops,
             legs,
         };
