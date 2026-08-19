@@ -52,8 +52,11 @@ function buildHtml(config: any): string {
   const CFG = JSON.stringify(config);
   return `<!DOCTYPE html><html><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<style>html,body,#map{margin:0;padding:0;height:100%;width:100%;background:${config.preset === 'night' ? '#0f1522' : '#e8eef5'}}</style>
-</head><body><div id="map"></div><script>
+<style>html,body,#map{margin:0;padding:0;height:100%;width:100%;background:${config.preset === 'night' ? '#0f1522' : '#e8eef5'}}
+#routeInfo{position:absolute;top:10px;left:10px;z-index:5;display:none;align-items:center;gap:10px;padding:7px 12px;border-radius:12px;background:${config.preset === 'night' ? 'rgba(15,21,34,.95)' : 'rgba(255,255,255,.95)'};box-shadow:0 2px 10px rgba(0,0,0,.15);font:600 13px -apple-system,system-ui,sans-serif;color:${config.preset === 'night' ? '#fff' : '#0f172a'}}
+#routeInfo .sep{color:#94a3b8;font-weight:400}
+</style>
+</head><body><div id="map"></div><div id="routeInfo"></div><script>
 var CFG=${CFG};
 function post(o){try{if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify(o));}catch(e){}}
 // Reenviar errores de Google Maps (RefererNotAllowed, ApiNotActivated, InvalidKey, billing)
@@ -127,7 +130,7 @@ function drawRoute(map,route){
     new google.maps.Marker({position:d,map:map,icon:dot('#DC2626')});
     var ds=new google.maps.DirectionsService();
     ds.route({origin:o,destination:d,waypoints:wl.map(function(loc){return {location:loc,stopover:true};}),travelMode:google.maps.TravelMode.DRIVING},function(res,st){
-      if(st==='OK'&&res.routes&&res.routes[0]){var rt=res.routes[0];var legs=rt.legs||[];var tmin=0,tm=0;var stopLbls=wps.concat([route.destinationAddress]);var cum=[];var am=0,akm=0;legs.forEach(function(l,i){tmin+=l.duration?l.duration.value:0;tm+=l.distance?l.distance.value:0;am+=l.duration?l.duration.value:0;akm+=l.distance?l.distance.value:0;cum.push({label:stopLbls[i]||('Parada '+(i+1)),etaMin:Math.round(am/60),km:Math.round(akm/100)/10});});post({type:'route',eta:Math.round(tmin/60),dist:(tm/1000).toFixed(1),legs:cum});done(rt.overview_path);}
+      if(st==='OK'&&res.routes&&res.routes[0]){var rt=res.routes[0];var legs=rt.legs||[];var tmin=0,tm=0;var stopLbls=wps.concat([route.destinationAddress]);var cum=[];var am=0,akm=0;legs.forEach(function(l,i){tmin+=l.duration?l.duration.value:0;tm+=l.distance?l.distance.value:0;am+=l.duration?l.duration.value:0;akm+=l.distance?l.distance.value:0;cum.push({label:stopLbls[i]||('Parada '+(i+1)),etaMin:Math.round(am/60),km:Math.round(akm/100)/10});});var totMin=Math.round(tmin/60);var hh=Math.floor(totMin/60);var mm=totMin%60;var etaTxt=hh>0?(mm>0?hh+'h '+mm+'min':hh+'h'):mm+' min';var kmTxt=(tm/1000).toFixed(1)+' km';var ri=document.getElementById('routeInfo');if(ri){ri.innerHTML='<span>\\u23F1 '+etaTxt+'</span><span class="sep">\\u00B7</span><span>\\u27A4 '+kmTxt+'</span>';ri.style.display='flex';}post({type:'route',eta:totMin,dist:(tm/1000).toFixed(1),legs:cum});done(rt.overview_path);}
       else{done([o].concat(wl).concat([d]));}
     });
   });
