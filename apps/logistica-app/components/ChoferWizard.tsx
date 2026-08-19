@@ -86,6 +86,10 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
   const [busy, setBusy] = useState(false);
   const [recorrido, setRecorrido] = useState<any | null>(null);
   const [routeLegs, setRouteLegs] = useState<{ label: string; etaMin: number; km: number }[]>([]); // ETA acumulada por destino
+  // Rendición al llegar a una parada: parada objetivo + gastos/anticipo locales.
+  const [paradaRend, setParadaRend] = useState<{ id: string; label: string } | null>(null);
+  const [rendAnticipo, setRendAnticipo] = useState('');
+  const [rendGastos, setRendGastos] = useState<{ tipo: string; monto: string; descripcion: string }[]>([]);
   const [fullOp, setFullOp] = useState<Programacion | null>(null);
   const [showRendicion, setShowRendicion] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm());
@@ -272,34 +276,36 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
     finally { setBusy(false); }
   };
 
-  // Marca la llegada a una PARADA (destino) y registra su rendición usando los
-  // gastos/anticipo que el chofer ya cargó en el wizard. Luego los limpia para la
-  // siguiente parada. Los gastos son opcionales, pero se recuerda registrarlos.
-  const llegarParada = async (parada: { id: string; label: string }) => {
-    if (!recorrido) return;
-    const gastos = form.gastos
+  // Abre el modal de rendición de la parada (gastos/anticipo por punto).
+  const llegarParada = (parada: { id: string; label: string }) => {
+    setRendAnticipo('');
+    setRendGastos([]);
+    setParadaRend(parada);
+  };
+
+  const rendAddGasto = () => setRendGastos((g) => [...g, { tipo: 'PEAJE', monto: '', descripcion: '' }]);
+  const rendSetGasto = (i: number, patch: Partial<{ tipo: string; monto: string; descripcion: string }>) =>
+    setRendGastos((g) => g.map((x, idx) => (idx === i ? { ...x, ...patch } : x)));
+  const rendRmGasto = (i: number) => setRendGastos((g) => g.filter((_, idx) => idx !== i));
+
+  // Confirma la llegada a la parada + su rendición. Gastos/anticipo opcionales.
+  const confirmarLlegadaParada = async () => {
+    if (!recorrido || !paradaRend) return;
+    const gastos = rendGastos
       .filter((g) => Number(g.monto) > 0)
       .map((g) => ({ tipo: g.tipo, monto: Number(g.monto), descripcion: g.descripcion || null }));
-    const doPost = async () => {
-      setBusy(true);
-      try {
-        await api.post(`/recorridos/${recorrido.id}/paradas/${parada.id}/llegada`, {
-          anticipo: form.anticipo ? Number(form.anticipo) : undefined,
-          gastos: gastos.length ? gastos : undefined,
-        });
-        setForm((f) => ({ ...f, gastos: [], anticipo: '' }));
-        await loadRecorrido();
-      } catch (e: any) { Alert.alert('Error', e?.response?.data?.message || 'No se pudo registrar la llegada.'); }
-      finally { setBusy(false); }
-    };
-    if (gastos.length === 0 && !form.anticipo) {
-      Alert.alert('Rendición de la parada', 'No registraste gastos ni anticipo de esta parada. Se recomienda hacerlo. ¿Marcar la llegada igual?', [
-        { text: 'Volver', style: 'cancel' },
-        { text: 'Marcar llegada', onPress: () => { void doPost(); } },
-      ]);
-      return;
-    }
-    void doPost();
+    setBusy(true);
+    try {
+      await api.post(`/recorridos/${recorrido.id}/paradas/${paradaRend.id}/llegada`, {
+        anticipo: rendAnticipo ? Number(rendAnticipo) : undefined,
+        gastos: gastos.length ? gastos : undefined,
+      });
+      setParadaRend(null);
+      setRendAnticipo('');
+      setRendGastos([]);
+      await loadRecorrido();
+    } catch (e: any) { Alert.alert('Error', e?.response?.data?.message || 'No se pudo registrar la llegada.'); }
+    finally { setBusy(false); }
   };
 
   // Paradas del recorrido (destino + destinos adicionales) y la próxima pendiente.
@@ -842,6 +848,51 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
           </View>
         )}
       </View>
+
+      {/* Rendición al llegar a una parada: gastos/anticipo (opcionales) por punto */}
+      <Modal visible={!!paradaRend} animationType="slide" transparent onRequestClose={() => setParadaRend(null)}>
+        <View style={styles.rendOverlay}>
+          <View style={styles.rendSheet}>
+            <View style={styles.rendHead}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rendTitle}>Llegada a destino</Text>
+                <Text style={styles.rendSub} numberOfLines={1}>{paradaRend?.label}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setParadaRend(null)}><X size={22} color={C.textMuted} /></TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={{ padding: S.lg, gap: S.md }} keyboardShouldPersistTaps="handled">
+              <Text style={styles.rendHint}>Registra la rendición / gastos de esta parada. Es opcional, pero se recomienda hacerlo en cada punto.</Text>
+
+              <View>
+                <Text style={styles.rendLabel}>Anticipo recibido (opcional)</Text>
+                <TextInput style={styles.input} value={rendAnticipo} onChangeText={setRendAnticipo} placeholder="0.00" placeholderTextColor={C.textFaint} keyboardType="decimal-pad" />
+              </View>
+
+              <View style={{ gap: S.sm }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={styles.rendLabel}>Gastos (opcional)</Text>
+                  <TouchableOpacity onPress={rendAddGasto}><Text style={styles.rendAdd}>+ Agregar</Text></TouchableOpacity>
+                </View>
+                {rendGastos.map((g, i) => (
+                  <View key={i} style={{ gap: 6, borderWidth: 1, borderColor: C.border, borderRadius: Theme.radius.md, padding: S.sm }}>
+                    <Select label="Tipo" value={g.tipo} onChange={(v) => rendSetGasto(i, { tipo: v })} options={GASTO_TIPOS} searchable={false} />
+                    <View style={{ flexDirection: 'row', gap: S.sm }}>
+                      <TextInput style={[styles.input, { flex: 1 }]} value={g.monto} onChangeText={(v) => rendSetGasto(i, { monto: v })} placeholder="Monto" placeholderTextColor={C.textFaint} keyboardType="decimal-pad" />
+                      <TouchableOpacity onPress={() => rendRmGasto(i)} style={{ justifyContent: 'center', paddingHorizontal: 4 }}><Trash2 size={18} color={C.danger} /></TouchableOpacity>
+                    </View>
+                    <TextInput style={styles.input} value={g.descripcion} onChangeText={(v) => rendSetGasto(i, { descripcion: v })} placeholder="Descripción" placeholderTextColor={C.textFaint} />
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+            <View style={styles.rendFooter}>
+              <TouchableOpacity style={[styles.nextBtn, { backgroundColor: C.success }, busy && { opacity: 0.6 }]} disabled={busy} onPress={confirmarLlegadaParada} activeOpacity={0.85}>
+                {busy ? <ActivityIndicator color="#fff" size="small" /> : <Flag size={18} color="#fff" />}<Text style={styles.nextText}>Confirmar llegada</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 }
@@ -947,6 +998,15 @@ const makeStyles = () => StyleSheet.create({
   etaTime: { fontSize: 13, fontWeight: '800', color: C.text },
   etaKm: { fontSize: 12, color: C.textMuted },
   etaLabel: { flex: 1, fontSize: 12, color: C.textMuted },
+  rendOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  rendSheet: { backgroundColor: C.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '85%' },
+  rendHead: { flexDirection: 'row', alignItems: 'center', gap: S.sm, paddingHorizontal: S.lg, paddingVertical: S.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
+  rendTitle: { fontSize: 17, fontWeight: '800', color: C.text },
+  rendSub: { fontSize: 12, color: C.textMuted, marginTop: 1 },
+  rendHint: { fontSize: 13, color: C.textMuted, lineHeight: 18 },
+  rendLabel: { fontSize: 12, fontWeight: '700', color: C.textMuted, textTransform: 'uppercase', marginBottom: 4 },
+  rendAdd: { fontSize: 13, color: C.primary, fontWeight: '700' },
+  rendFooter: { padding: S.lg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border },
   attesaLabel: { fontSize: 13, fontWeight: '600', color: C.textMuted, marginBottom: 6 },
   attesaValue: { fontSize: 20, fontWeight: '800', color: C.warning, marginTop: 1 },
   attesaHint: { fontSize: 12, color: C.textMuted, marginTop: 4 },
