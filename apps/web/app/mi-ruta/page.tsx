@@ -15,6 +15,11 @@ import { toast } from 'sonner';
 import api from '../../lib/api';
 import { MapboxRouteMap } from '../../components/tracking/MapboxRouteMap';
 import { estadoConsegnaMeta } from '../operaciones/constants';
+import { useCurrency } from '../../lib/useCurrency';
+
+// Total de gastos de una parada (suma de montos de la lista de gastos JSON).
+const gastosTotal = (p: { gastos?: any }): number =>
+    Array.isArray(p?.gastos) ? p.gastos.reduce((s: number, g: any) => s + Number(g?.monto || 0), 0) : 0;
 
 interface Parada {
     id: string;
@@ -59,6 +64,7 @@ const ESTADO_LABEL: Record<string, string> = {
 };
 
 export default function MiRutaPage() {
+    const { format } = useCurrency();
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
     const [activo, setActivo] = useState<Recorrido | null>(null);
@@ -212,7 +218,11 @@ export default function MiRutaPage() {
                                         <div className="flex-1 min-w-0">
                                             <div className="text-sm font-semibold text-slate-800 truncate">{p.label}</div>
                                             {llegó
-                                                ? <div className="text-xs text-emerald-600 flex items-center gap-1"><Clock size={11} /> Llegada {new Date(p.llegada_en!).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}{(p.gastos?.length || p.anticipo) ? ' · rendición ✓' : ''}</div>
+                                                ? <div className="text-xs text-emerald-600 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                                    <span className="flex items-center gap-1"><Clock size={11} /> Llegada {new Date(p.llegada_en!).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                    {gastosTotal(p) > 0 && <span className="text-slate-500">Gastos {format(gastosTotal(p))}</span>}
+                                                    {!!p.anticipo && <span className="text-slate-500">Anticipo {format(p.anticipo)}</span>}
+                                                  </div>
                                                 : esProxima
                                                     ? <div className="text-xs text-blue-600">Próxima parada</div>
                                                     : <div className="text-xs text-slate-400">Pendiente</div>}
@@ -228,6 +238,22 @@ export default function MiRutaPage() {
                             })}
                         </div>
                     )}
+
+                    {/* Resumen de la rendición: al visitar todas las paradas (fin del recorrido) */}
+                    {paradas.length > 0 && todasLlegadas && (() => {
+                        const totalGastos = paradas.reduce((s, p) => s + gastosTotal(p), 0);
+                        const totalAnticipo = paradas.reduce((s, p) => s + Number(p.anticipo || 0), 0);
+                        return (
+                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                                <div className="flex items-center gap-2 mb-2 text-emerald-700 font-bold text-sm"><CheckCircle2 size={16} /> Todas las paradas visitadas · Resumen</div>
+                                <div className="grid grid-cols-3 gap-2 text-center">
+                                    <div><div className="text-lg font-extrabold text-slate-800">{paradas.length}</div><div className="text-xs text-slate-500">Paradas</div></div>
+                                    <div><div className="text-lg font-extrabold text-slate-800">{format(totalGastos)}</div><div className="text-xs text-slate-500">Gastos</div></div>
+                                    <div><div className="text-lg font-extrabold text-slate-800">{format(totalAnticipo)}</div><div className="text-xs text-slate-500">Anticipos</div></div>
+                                </div>
+                            </div>
+                        );
+                    })()}
 
                     <div className="flex flex-wrap gap-2 pt-1">
                         {/* Sin paradas (recorridos legacy): botón único de llegada */}

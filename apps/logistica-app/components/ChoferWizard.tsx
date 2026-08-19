@@ -309,9 +309,12 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
   };
 
   // Paradas del recorrido (destino + destinos adicionales) y la próxima pendiente.
-  const paradas: Array<{ id: string; orden: number; label: string; llegada_en?: string | null }> =
+  const paradas: Array<{ id: string; orden: number; label: string; llegada_en?: string | null; anticipo?: number | null; gastos?: any }> =
     Array.isArray(recorrido?.paradas) ? [...recorrido.paradas].sort((a: any, b: any) => a.orden - b.orden) : [];
   const proximaParada = paradas.find((p) => !p.llegada_en) || null;
+  const todasLlegadas = paradas.length > 0 && paradas.every((p) => p.llegada_en);
+  const gastosDeParada = (p: { gastos?: any }): number =>
+    Array.isArray(p?.gastos) ? p.gastos.reduce((s: number, g: any) => s + Number(g?.monto || 0), 0) : 0;
 
   const confirmCancelar = () => Alert.alert('Cancelar recorrido', '¿Seguro que quieres cancelar este traslado?', [
     { text: 'No', style: 'cancel' }, { text: 'Sí, cancelar', style: 'destructive', onPress: () => accion('cancelar', { stop: true }).then(() => onSaved()) },
@@ -704,22 +707,47 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                     );
                   })()}
 
-                  {/* Checklist de paradas: llegada de cada destino */}
+                  {/* Checklist de paradas: llegada + rendición de cada destino */}
                   {paradas.length > 0 && (
                     <View style={styles.paradasBox}>
-                      {paradas.map((p) => (
-                        <View key={p.id} style={styles.paradaRow}>
-                          <View style={[styles.paradaDot, p.llegada_en ? styles.paradaDotOk : proximaParada?.id === p.id ? styles.paradaDotNext : styles.paradaDotPend]}>
-                            <Text style={styles.paradaDotTxt}>{p.llegada_en ? '✓' : String(p.orden)}</Text>
+                      {paradas.map((p) => {
+                        const g = gastosDeParada(p);
+                        return (
+                          <View key={p.id} style={styles.paradaRow}>
+                            <View style={[styles.paradaDot, p.llegada_en ? styles.paradaDotOk : proximaParada?.id === p.id ? styles.paradaDotNext : styles.paradaDotPend]}>
+                              <Text style={styles.paradaDotTxt}>{p.llegada_en ? '✓' : String(p.orden)}</Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.paradaLabel} numberOfLines={1}>{p.label}</Text>
+                              {p.llegada_en && (g > 0 || !!p.anticipo) && (
+                                <Text style={styles.paradaRend}>
+                                  {g > 0 ? `Gastos ${formatMoney(g, moneda)}` : ''}{g > 0 && p.anticipo ? ' · ' : ''}{p.anticipo ? `Anticipo ${formatMoney(p.anticipo, moneda)}` : ''}
+                                </Text>
+                              )}
+                            </View>
+                            {p.llegada_en
+                              ? <Text style={styles.paradaOk}>{new Date(p.llegada_en).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</Text>
+                              : proximaParada?.id === p.id
+                                ? <Text style={styles.paradaNext}>Próxima</Text>
+                                : <Text style={styles.paradaPend}>Pendiente</Text>}
                           </View>
-                          <Text style={styles.paradaLabel} numberOfLines={1}>{p.label}</Text>
-                          {p.llegada_en
-                            ? <Text style={styles.paradaOk}>{new Date(p.llegada_en).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</Text>
-                            : proximaParada?.id === p.id
-                              ? <Text style={styles.paradaNext}>Próxima</Text>
-                              : <Text style={styles.paradaPend}>Pendiente</Text>}
-                        </View>
-                      ))}
+                        );
+                      })}
+                      {/* Resumen: al visitar todas las paradas */}
+                      {todasLlegadas && (() => {
+                        const tg = paradas.reduce((s, p) => s + gastosDeParada(p), 0);
+                        const ta = paradas.reduce((s, p) => s + Number(p.anticipo || 0), 0);
+                        return (
+                          <View style={styles.paradaResumen}>
+                            <Text style={styles.paradaResumenTitle}>✓ Todas las paradas · Resumen</Text>
+                            <View style={styles.paradaResumenRow}>
+                              <Text style={styles.paradaResumenItem}>{paradas.length} paradas</Text>
+                              <Text style={styles.paradaResumenItem}>Gastos {formatMoney(tg, moneda)}</Text>
+                              <Text style={styles.paradaResumenItem}>Anticipos {formatMoney(ta, moneda)}</Text>
+                            </View>
+                          </View>
+                        );
+                      })()}
                     </View>
                   )}
 
@@ -991,6 +1019,11 @@ const makeStyles = () => StyleSheet.create({
   paradaOk: { fontSize: 12, color: C.success, fontWeight: '700' },
   paradaNext: { fontSize: 12, color: C.primary, fontWeight: '700' },
   paradaPend: { fontSize: 12, color: C.textMuted },
+  paradaRend: { fontSize: 11, color: C.textMuted, marginTop: 1 },
+  paradaResumen: { backgroundColor: C.success + '14', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border, padding: S.sm, gap: 4 },
+  paradaResumenTitle: { fontSize: 12, fontWeight: '800', color: C.success },
+  paradaResumenRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  paradaResumenItem: { fontSize: 12, color: C.text, fontWeight: '600' },
   etaBox: { marginTop: S.sm, backgroundColor: C.surfaceAlt, borderRadius: Theme.radius.lg, padding: S.sm, gap: 4 },
   etaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   etaDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' },
