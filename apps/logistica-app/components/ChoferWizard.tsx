@@ -35,6 +35,14 @@ const fmtEspera = (min: number): string => {
   return `${h}h ${String(mm).padStart(2, '0')}m`;
 };
 
+// ETA a un destino: "2h 15min" si pasa de la hora; si no, "45 min".
+const fmtEta = (min: number): string => {
+  const m = Math.max(0, Math.round(min));
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return h > 0 ? (mm > 0 ? `${h}h ${mm}min` : `${h}h`) : `${mm} min`;
+};
+
 // Fecha + hora legible (para mostrar la entrega en la vista de solo lectura).
 const fmtFechaHora = (iso?: string | null): string | undefined => {
   if (!iso) return undefined;
@@ -77,6 +85,7 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [recorrido, setRecorrido] = useState<any | null>(null);
+  const [routeLegs, setRouteLegs] = useState<{ label: string; etaMin: number; km: number }[]>([]); // ETA acumulada por destino
   const [fullOp, setFullOp] = useState<Programacion | null>(null);
   const [showRendicion, setShowRendicion] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm());
@@ -648,7 +657,19 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                     const wps = rutaStops.slice(0, -1);
                     return (
                       <View style={{ marginBottom: S.md }}>
-                        <MapboxWebView style={styles.map} mapStyle="streets" route={{ originAddress: origen, destinationAddress: dest, waypoints: wps }} fit />
+                        <MapboxWebView style={styles.map} mapStyle="streets" route={{ originAddress: origen, destinationAddress: dest, waypoints: wps }} fit onRouteInfo={(info) => setRouteLegs(info.legs || [])} />
+                        {routeLegs.length > 1 && (
+                          <View style={styles.etaBox}>
+                            {routeLegs.map((l, i) => (
+                              <View key={i} style={styles.etaRow}>
+                                <View style={styles.etaDot}><Text style={styles.etaDotTxt}>{i + 1}</Text></View>
+                                <Text style={styles.etaTime}>{fmtEta(l.etaMin)}</Text>
+                                <Text style={styles.etaKm}>· {l.km} km</Text>
+                                <Text style={styles.etaLabel} numberOfLines={1}>{(l.label || '').split(',')[0]}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        )}
                         <View style={styles.navBtnsRow}>
                           <TouchableOpacity
                             style={[styles.navBtn, { backgroundColor: '#1A73E8' }]}
@@ -919,6 +940,13 @@ const makeStyles = () => StyleSheet.create({
   paradaOk: { fontSize: 12, color: C.success, fontWeight: '700' },
   paradaNext: { fontSize: 12, color: C.primary, fontWeight: '700' },
   paradaPend: { fontSize: 12, color: C.textMuted },
+  etaBox: { marginTop: S.sm, backgroundColor: C.surfaceAlt, borderRadius: Theme.radius.lg, padding: S.sm, gap: 4 },
+  etaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  etaDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' },
+  etaDotTxt: { color: '#fff', fontSize: 10, fontWeight: '800' },
+  etaTime: { fontSize: 13, fontWeight: '800', color: C.text },
+  etaKm: { fontSize: 12, color: C.textMuted },
+  etaLabel: { flex: 1, fontSize: 12, color: C.textMuted },
   attesaLabel: { fontSize: 13, fontWeight: '600', color: C.textMuted, marginBottom: 6 },
   attesaValue: { fontSize: 20, fontWeight: '800', color: C.warning, marginTop: 1 },
   attesaHint: { fontSize: 12, color: C.textMuted, marginTop: 4 },

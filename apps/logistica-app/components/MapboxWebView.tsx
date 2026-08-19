@@ -40,7 +40,7 @@ export interface MapboxWebViewProps {
   fit?: boolean;
   draggableCenter?: { lng: number; lat: number }; // editor de geocercas
   onCenterChange?: (lng: number, lat: number) => void;
-  onRouteInfo?: (info: { eta: number; dist: string }) => void;
+  onRouteInfo?: (info: { eta: number; dist: string; legs?: { label: string; etaMin: number; km: number }[] }) => void;
   themeToggle?: boolean; // muestra el toggle Día/Noche (default true)
   // Centra el mapa en estas coords (vuela sin recargar). nonce fuerza re-disparo
   // aunque se toque el mismo punto otra vez.
@@ -127,7 +127,7 @@ function drawRoute(map,route){
     new google.maps.Marker({position:d,map:map,icon:dot('#DC2626')});
     var ds=new google.maps.DirectionsService();
     ds.route({origin:o,destination:d,waypoints:wl.map(function(loc){return {location:loc,stopover:true};}),travelMode:google.maps.TravelMode.DRIVING},function(res,st){
-      if(st==='OK'&&res.routes&&res.routes[0]){var rt=res.routes[0];var legs=rt.legs||[];var tmin=0,tm=0;legs.forEach(function(l){tmin+=l.duration?l.duration.value:0;tm+=l.distance?l.distance.value:0;});post({type:'route',eta:Math.round(tmin/60),dist:(tm/1000).toFixed(1)});done(rt.overview_path);}
+      if(st==='OK'&&res.routes&&res.routes[0]){var rt=res.routes[0];var legs=rt.legs||[];var tmin=0,tm=0;var stopLbls=wps.concat([route.destinationAddress]);var cum=[];var am=0,akm=0;legs.forEach(function(l,i){tmin+=l.duration?l.duration.value:0;tm+=l.distance?l.distance.value:0;am+=l.duration?l.duration.value:0;akm+=l.distance?l.distance.value:0;cum.push({label:stopLbls[i]||('Parada '+(i+1)),etaMin:Math.round(am/60),km:Math.round(akm/100)/10});});post({type:'route',eta:Math.round(tmin/60),dist:(tm/1000).toFixed(1),legs:cum});done(rt.overview_path);}
       else{done([o].concat(wl).concat([d]));}
     });
   });
@@ -200,7 +200,7 @@ export default function MapboxWebView(props: MapboxWebViewProps) {
     try {
       const msg = JSON.parse(e.nativeEvent.data);
       if (msg.type === 'center' && onCenterChange) onCenterChange(msg.lng, msg.lat);
-      if (msg.type === 'route' && onRouteInfo) onRouteInfo({ eta: msg.eta, dist: msg.dist });
+      if (msg.type === 'route' && onRouteInfo) onRouteInfo({ eta: msg.eta, dist: msg.dist, legs: msg.legs });
       if (msg.type === 'gmerror') console.warn('[MapWebView] GMAPS:', msg.message);
       if (msg.type === 'error') console.warn('[MapWebView] JS error en el mapa:', msg.message);
       if (msg.type === 'routeError') console.warn('[MapWebView] no se pudo geocodificar la ruta');
