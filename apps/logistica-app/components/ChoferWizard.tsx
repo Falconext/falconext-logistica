@@ -334,15 +334,27 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
     if (!operacion?.id || !recorrido) return;
     setBusy(true);
     try {
+      // Si el recorrido tiene paradas, el chofer ya registró los gastos en cada
+      // una: los consolidamos para que el supervisor los vea a nivel de operación.
+      // Si no hay paradas (recorrido legacy), usamos la rendición editable del cierre.
+      const gastosConsolidados = paradas.length > 0
+        ? paradas.flatMap((p) => (Array.isArray(p.gastos) ? p.gastos : []).map((g: any) => ({
+          tipo: g.tipo, monto: Number(g.monto || 0), descripcion: g.descripcion || null,
+          numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null,
+          link_peaje: g.tipo === 'PEAJE' ? (g.link_peaje || null) : null,
+          comprobantes: Array.isArray(g.comprobantes) ? g.comprobantes : [],
+          parada: p.label || null,
+        })))
+        : form.gastos
+          .filter((g) => g.tipo && (g.monto !== '' || g.comprobantes.length || g.descripcion || g.numero_mancato || g.link_peaje))
+          .map((g) => ({ tipo: g.tipo, monto: g.monto !== '' ? parseNum(g.monto) : 0, descripcion: g.descripcion || null, numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null, link_peaje: g.tipo === 'PEAJE' ? (g.link_peaje || null) : null, comprobantes: g.comprobantes }));
       await api.patch(`/programacion/${operacion.id}`, {
         estado_consegna: 'CONSEGNATO',
         // El anticipo/bonifico lo fija el supervisor y NO lo escribe el chofer
         // (evita que lo sobrescriba/borre al finalizar). Solo rinde sus gastos.
         attesa: form.attesa.trim() || null,
         attesa_horas: form.attesa_horas !== '' ? parseNum(form.attesa_horas) : 0,
-        gastos: form.gastos
-          .filter((g) => g.tipo && (g.monto !== '' || g.comprobantes.length || g.descripcion || g.numero_mancato || g.link_peaje))
-          .map((g) => ({ tipo: g.tipo, monto: g.monto !== '' ? parseNum(g.monto) : 0, descripcion: g.descripcion || null, numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null, link_peaje: g.tipo === 'PEAJE' ? (g.link_peaje || null) : null, comprobantes: g.comprobantes })),
+        gastos: gastosConsolidados,
       });
       // El retorno va DESPUÉS de finalizar la consegna (pedido del cliente):
       // aquí solo marcamos entregado + rendición. El recorrido sigue en el
@@ -834,32 +846,58 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                       : form.attesa_estado === 'DENEGADO' ? '❌ Denegada por el supervisor'
                         : '⏳ Pendiente de autorización del supervisor'}
                   </Text>
-                  <Text style={styles.stepHeading}>Peajes y gastos del trayecto</Text>
-                  <Text style={styles.fieldLabel}>Bonifico recibido ({moneda || 'EUR'})</Text>
-                  <TextField value={form.anticipo} onChangeText={() => { }} placeholder="0.00" keyboardType="numeric" editable={false} styles={styles} />
-                  <Text style={styles.hint}>Lo asigna el supervisor · no editable por el chofer.</Text>
-                  {form.gastos.map((g, i) => (
-                    <View key={i} style={styles.gastoCard}>
-                      <Select label="Tipo" value={g.tipo} onChange={(v) => updateGasto(i, { tipo: v })} options={GASTO_TIPOS} searchable={false} />
-                      <Text style={styles.fieldLabel}>Monto ({moneda || 'EUR'})</Text>
-                      <TextField value={g.monto} onChangeText={(t) => updateGasto(i, { monto: t })} placeholder="0.00" keyboardType="numeric" styles={styles} />
-                      {g.tipo === 'OTRO' && (<><Text style={styles.fieldLabel}>Descripción</Text><TextField value={g.descripcion} onChangeText={(t) => updateGasto(i, { descripcion: t })} placeholder="¿En qué se gastó?" styles={styles} /></>)}
-                      {g.tipo === 'PEAJE' && (<><Text style={styles.fieldLabel}>Nº de mancato</Text><TextField value={g.numero_mancato} onChangeText={(t) => updateGasto(i, { numero_mancato: t })} placeholder="Número de mancato" styles={styles} /></>)}
-                      {g.tipo === 'PEAJE' && (<><Text style={styles.fieldLabel}>Link de peaje</Text><TextField value={g.link_peaje} onChangeText={(t) => updateGasto(i, { link_peaje: t })} placeholder="https://…" keyboardType="url" styles={styles} /></>)}
-                      <Text style={styles.fieldLabel}>Comprobante(s)</Text>
-                      <MultiFileUpload value={g.comprobantes} onChange={(urls) => updateGasto(i, { comprobantes: urls })} />
-                      <TouchableOpacity style={styles.removeRow} onPress={() => removeGasto(i)}><Trash2 size={14} color={C.danger} /><Text style={styles.removeText}>Quitar gasto</Text></TouchableOpacity>
-                    </View>
-                  ))}
-                  <TouchableOpacity style={styles.addBtn} onPress={addGasto} activeOpacity={0.7}><Plus size={16} color={C.textMuted} /><Text style={styles.addText}>Agregar gasto</Text></TouchableOpacity>
-                  <View style={styles.saldoBox}>
-                    <View style={styles.saldoRow}><Text style={styles.saldoLabel}>Bonifico</Text><Text style={styles.saldoVal}>{formatMoney(anticipoNum, moneda)}</Text></View>
-                    <View style={styles.saldoRow}><Text style={styles.saldoLabel}>Total gastado</Text><Text style={styles.saldoVal}>− {formatMoney(totalGastos, moneda)}</Text></View>
-                    <View style={[styles.saldoRow, styles.saldoTotal]}>
-                      <Text style={[styles.saldoLabel, { fontWeight: '700', color: saldo < 0 ? C.danger : C.success }]}>{saldo < 0 ? 'Excedido (falta)' : 'A devolver'}</Text>
-                      <Text style={[styles.saldoVal, { fontWeight: '700', color: saldo < 0 ? C.danger : C.success }]}>{formatMoney(Math.abs(saldo), moneda)}</Text>
-                    </View>
-                  </View>
+                  <Text style={styles.stepHeading}>Control del dinero</Text>
+                  {paradas.length > 0 ? (() => {
+                    // Ya registró gastos/abonos en cada parada → aquí SOLO el resumen (read-only).
+                    const anticipoInicial = Number(fullOp?.anticipo || form.anticipo || 0);
+                    const abonos = paradas.reduce((s, p) => s + Number(p.anticipo || 0), 0);
+                    const recibido = anticipoInicial + abonos;
+                    const gastado = paradas.reduce((s, p) => s + gastosDeParada(p), 0);
+                    const saldoFinal = recibido - gastado;
+                    return (
+                      <>
+                        <Text style={styles.hint}>Ya registraste los gastos y abonos en cada parada. Este es el resumen final.</Text>
+                        <View style={styles.saldoBox}>
+                          <View style={styles.saldoRow}><Text style={styles.saldoLabel}>Anticipo inicial</Text><Text style={styles.saldoVal}>{formatMoney(anticipoInicial, moneda)}</Text></View>
+                          <View style={styles.saldoRow}><Text style={styles.saldoLabel}>+ Abonos en ruta</Text><Text style={styles.saldoVal}>{formatMoney(abonos, moneda)}</Text></View>
+                          <View style={styles.saldoRow}><Text style={styles.saldoLabel}>− Gastos</Text><Text style={styles.saldoVal}>{formatMoney(gastado, moneda)}</Text></View>
+                          <View style={[styles.saldoRow, styles.saldoTotal]}>
+                            <Text style={[styles.saldoLabel, { fontWeight: '700', color: saldoFinal < 0 ? C.danger : C.success }]}>{saldoFinal < 0 ? 'Falta rendir' : 'Saldo a devolver'}</Text>
+                            <Text style={[styles.saldoVal, { fontWeight: '700', color: saldoFinal < 0 ? C.danger : C.success }]}>{formatMoney(Math.abs(saldoFinal), moneda)}</Text>
+                          </View>
+                        </View>
+                      </>
+                    );
+                  })() : (
+                    <>
+                      {/* Recorrido sin paradas (legacy): rendición editable a nivel de viaje */}
+                      <Text style={styles.fieldLabel}>Bonifico recibido ({moneda || 'EUR'})</Text>
+                      <TextField value={form.anticipo} onChangeText={() => { }} placeholder="0.00" keyboardType="numeric" editable={false} styles={styles} />
+                      <Text style={styles.hint}>Lo asigna el supervisor · no editable por el chofer.</Text>
+                      {form.gastos.map((g, i) => (
+                        <View key={i} style={styles.gastoCard}>
+                          <Select label="Tipo" value={g.tipo} onChange={(v) => updateGasto(i, { tipo: v })} options={GASTO_TIPOS} searchable={false} />
+                          <Text style={styles.fieldLabel}>Monto ({moneda || 'EUR'})</Text>
+                          <TextField value={g.monto} onChangeText={(t) => updateGasto(i, { monto: t })} placeholder="0.00" keyboardType="numeric" styles={styles} />
+                          {g.tipo === 'OTRO' && (<><Text style={styles.fieldLabel}>Descripción</Text><TextField value={g.descripcion} onChangeText={(t) => updateGasto(i, { descripcion: t })} placeholder="¿En qué se gastó?" styles={styles} /></>)}
+                          {g.tipo === 'PEAJE' && (<><Text style={styles.fieldLabel}>Nº de mancato</Text><TextField value={g.numero_mancato} onChangeText={(t) => updateGasto(i, { numero_mancato: t })} placeholder="Número de mancato" styles={styles} /></>)}
+                          {g.tipo === 'PEAJE' && (<><Text style={styles.fieldLabel}>Link de peaje</Text><TextField value={g.link_peaje} onChangeText={(t) => updateGasto(i, { link_peaje: t })} placeholder="https://…" keyboardType="url" styles={styles} /></>)}
+                          <Text style={styles.fieldLabel}>Comprobante(s)</Text>
+                          <MultiFileUpload value={g.comprobantes} onChange={(urls) => updateGasto(i, { comprobantes: urls })} />
+                          <TouchableOpacity style={styles.removeRow} onPress={() => removeGasto(i)}><Trash2 size={14} color={C.danger} /><Text style={styles.removeText}>Quitar gasto</Text></TouchableOpacity>
+                        </View>
+                      ))}
+                      <TouchableOpacity style={styles.addBtn} onPress={addGasto} activeOpacity={0.7}><Plus size={16} color={C.textMuted} /><Text style={styles.addText}>Agregar gasto</Text></TouchableOpacity>
+                      <View style={styles.saldoBox}>
+                        <View style={styles.saldoRow}><Text style={styles.saldoLabel}>Bonifico</Text><Text style={styles.saldoVal}>{formatMoney(anticipoNum, moneda)}</Text></View>
+                        <View style={styles.saldoRow}><Text style={styles.saldoLabel}>Total gastado</Text><Text style={styles.saldoVal}>− {formatMoney(totalGastos, moneda)}</Text></View>
+                        <View style={[styles.saldoRow, styles.saldoTotal]}>
+                          <Text style={[styles.saldoLabel, { fontWeight: '700', color: saldo < 0 ? C.danger : C.success }]}>{saldo < 0 ? 'Excedido (falta)' : 'A devolver'}</Text>
+                          <Text style={[styles.saldoVal, { fontWeight: '700', color: saldo < 0 ? C.danger : C.success }]}>{formatMoney(Math.abs(saldo), moneda)}</Text>
+                        </View>
+                      </View>
+                    </>
+                  )}
                 </View>
               )}
             </ScrollView>
