@@ -337,20 +337,46 @@ export class GpsService {
         const token = this.mapboxToken();
         if (!token || points.length < 2) return null;
 
-        // Submuestreo suave: Mapbox limita a 100 coords/petición. Reducimos si hay
-        // demasiados puntos para no cortar el recorrido en muchos trozos.
+        // 1) Submuestreo por distancia: descarta el jitter (puntos casi encima del
+        //    anterior) y limita el total, para que sean pocas peticiones y el match
+        //    sea más fiable. Se conservan siempre el primer y el último punto.
+        const MIN_GAP_M = 20;      // distancia mínima entre puntos que enviamos
+        const MAX_POINTS = 600;    // tope global → ~6 peticiones de 100
+        let sampled: { lng: number; lat: number }[] = [points[0]];
+        for (let i = 1; i < points.length; i++) {
+            const last = sampled[sampled.length - 1];
+            const gapM = this.getDistanceFromLatLonInKm(last.lat, last.lng, points[i].lat, points[i].lng) * 1000;
+            if (gapM >= MIN_GAP_M) sampled.push(points[i]);
+        }
+        const tail = points[points.length - 1];
+        const tailIn = sampled[sampled.length - 1];
+        if (tailIn.lng !== tail.lng || tailIn.lat !== tail.lat) sampled.push(tail);
+        if (sampled.length > MAX_POINTS) {
+            const stride = Math.ceil(sampled.length / MAX_POINTS);
+            const reduced = sampled.filter((_, i) => i % stride === 0);
+            if (reduced[reduced.length - 1] !== sampled[sampled.length - 1]) reduced.push(sampled[sampled.length - 1]);
+            sampled = reduced;
+        }
+        if (sampled.length < 2) return null;
+
+        // 2) Mapbox limita a 100 coords/petición → troceamos con 1 de solape para que
+        //    la geometría quede continua al concatenar.
         const MAX = 100;
         const chunks: { lng: number; lat: number }[][] = [];
-        for (let i = 0; i < points.length; i += MAX - 1) {
-            // -1 de solape: el último punto de un chunk = primero del siguiente, para
-            // que la geometría quede continua al concatenar.
-            chunks.push(points.slice(i, i + MAX));
-        }
+        for (let i = 0; i < sampled.length; i += MAX - 1) chunks.push(sampled.slice(i, i + MAX));
 
         const out: [number, number][] = [];
-        try {
-            for (const chunk of chunks) {
-                if (chunk.length < 2) continue;
+        const pushCoords = (arr: [number, number][]) => {
+            for (const c of arr) {
+                const last = out[out.length - 1];
+                if (!last || last[0] !== c[0] || last[1] !== c[1]) out.push(c);
+            }
+        };
+        for (const chunk of chunks) {
+            if (chunk.length < 2) continue;
+            // Resiliencia por chunk: si UNO falla, no perdemos toda la traza. Ese tramo
+            // cae a sus puntos crudos (recto) y el resto sigue ajustado a la calle.
+            try {
                 const coords = chunk.map((p) => `${p.lng},${p.lat}`).join(';');
                 // radiuses: tolerancia de ajuste (m) por punto — 25 m absorbe el ruido GPS.
                 const radiuses = chunk.map(() => 25).join(';');
@@ -359,17 +385,12 @@ export class GpsService {
                 const res = await fetch(url);
                 const j: any = await res.json();
                 const g = j?.matchings?.[0]?.geometry?.coordinates as [number, number][] | undefined;
-                if (Array.isArray(g) && g.length) {
-                    // Evita duplicar el punto de solape entre chunks.
-                    for (const c of g) {
-                        const last = out[out.length - 1];
-                        if (!last || last[0] !== c[0] || last[1] !== c[1]) out.push(c);
-                    }
-                }
+                if (Array.isArray(g) && g.length) pushCoords(g);
+                else pushCoords(chunk.map((p) => [p.lng, p.lat] as [number, number])); // sin match → crudo
+            } catch (e) {
+                console.warn('[Mapbox matching] chunk falló:', (e as any)?.message);
+                pushCoords(chunk.map((p) => [p.lng, p.lat] as [number, number]));      // error → crudo
             }
-        } catch (e) {
-            console.warn('[Mapbox matching] falló:', (e as any)?.message);
-            return null;
         }
         return out.length ? out : null;
     }
