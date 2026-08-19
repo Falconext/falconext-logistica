@@ -381,7 +381,10 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
   // Finalizar no exige rendición, pero si el chofer no registró ningún gasto le
   // pedimos confirmación explícita (evita cerrar la consegna sin querer).
   const handleFinalizar = () => {
-    const hayGastos = form.gastos.some((g) => g.monto !== '' || g.comprobantes.length > 0 || g.descripcion || g.numero_mancato || g.link_peaje);
+    // Con paradas, la rendición ya se hizo por parada; si no hay paradas, se revisa form.gastos.
+    const hayGastos = paradas.length > 0
+      ? paradas.some((p) => Array.isArray(p.gastos) && p.gastos.length > 0)
+      : form.gastos.some((g) => g.monto !== '' || g.comprobantes.length > 0 || g.descripcion || g.numero_mancato || g.link_peaje);
     if (!hayGastos) {
       Alert.alert(
         'Finalizar sin rendición',
