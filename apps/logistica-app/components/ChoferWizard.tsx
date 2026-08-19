@@ -85,7 +85,8 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [recorrido, setRecorrido] = useState<any | null>(null);
-  const [routeLegs, setRouteLegs] = useState<{ label: string; etaMin: number; km: number }[]>([]); // ETA acumulada por destino
+  const [routeLegs, setRouteLegs] = useState<{ label: string; etaMin: number; km: number }[]>([]); // ETA acumulada por destino (tracking)
+  const [prepLegs, setPrepLegs] = useState<{ label: string; etaMin: number; km: number }[]>([]);   // ETA auto al armar la ruta (prep)
   // Rendición al llegar a una parada: parada objetivo + gastos/anticipo locales.
   const [paradaRend, setParadaRend] = useState<{ id: string; label: string; es_retorno?: boolean } | null>(null);
   const [rendAnticipo, setRendAnticipo] = useState(''); // abono recibido en la parada
@@ -414,6 +415,15 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
   // El origen (form.lugar_retiro) es el punto de partida del mapa.
   const stops = [...form.retiros, form.lugar_entrega, ...form.destinos].map((s) => (s || '').trim()).filter(Boolean);
 
+  // ETA acumulada (origen→esa parada) para el chip inline junto a cada destino,
+  // igual que la web. Se resuelve por la dirección exacta contra los legs del mapa.
+  const etaForStop = (value?: string): number | null => {
+    const v = (value || '').trim();
+    if (!v) return null;
+    const leg = prepLegs.find((l) => (l.label || '').trim() === v);
+    return leg ? leg.etaMin : null;
+  };
+
   // Consegna ya realizada (entregado / consegnato) y sin recorrido en curso:
   // queda en solo lectura. La dirección pidió bloquear la edición de estas.
   const bloqueada = isConsegnaRealizada(op) && !recorrido;
@@ -601,10 +611,18 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                   <TouchableOpacity style={styles.addBtn} onPress={addRetiro} activeOpacity={0.7}><Plus size={16} color={C.textMuted} /><Text style={styles.addText}>Agregar retiro</Text></TouchableOpacity>
 
                   <Text style={styles.stepHeading}>Destino(s)</Text>
-                  <TextField value={form.lugar_entrega} onChangeText={(t) => setForm({ ...form, lugar_entrega: t })} placeholder="Dirección de entrega" styles={styles} />
+                  <View style={styles.destinoRow}>
+                    <View style={{ flex: 1 }}><TextField value={form.lugar_entrega} onChangeText={(t) => setForm({ ...form, lugar_entrega: t })} placeholder="Dirección de entrega" styles={styles} /></View>
+                    {etaForStop(form.lugar_entrega) != null && (
+                      <View style={styles.etaChip}><Clock size={12} color={C.info} /><Text style={styles.etaChipTxt}>{fmtEta(etaForStop(form.lugar_entrega)!)}</Text></View>
+                    )}
+                  </View>
                   {form.destinos.map((d, i) => (
                     <View key={i} style={styles.destinoRow}>
                       <View style={{ flex: 1 }}><TextField value={d} onChangeText={(t) => updateDestino(i, t)} placeholder={`Destino adicional ${i + 1}`} styles={styles} /></View>
+                      {etaForStop(d) != null && (
+                        <View style={styles.etaChip}><Clock size={12} color={C.info} /><Text style={styles.etaChipTxt}>{fmtEta(etaForStop(d)!)}</Text></View>
+                      )}
                       <TouchableOpacity onPress={() => removeDestino(i)} style={styles.destinoRemove}><Trash2 size={16} color={C.danger} /></TouchableOpacity>
                     </View>
                   ))}
@@ -613,7 +631,9 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                   {(form.lugar_retiro && stops.length > 0) && (
                     <>
                       <Text style={styles.stepHeading}>Ruta</Text>
-                      <MapboxWebView style={styles.map} mapStyle="streets" route={{ originAddress: form.lugar_retiro, destinationAddress: stops[stops.length - 1], waypoints: stops.slice(0, -1) }} fit />
+                      {/* La ETA por destino sale inline junto a cada input (arriba). El mapa
+                          cierra el bucle (origen→destinos→origen) y su pill muestra el total. */}
+                      <MapboxWebView style={styles.map} mapStyle="streets" route={{ originAddress: form.lugar_retiro, destinationAddress: form.lugar_retiro, waypoints: stops }} fit onRouteInfo={(info) => setPrepLegs(info.legs || [])} />
                       {/* Abrir la ruta en una app de navegación externa. */}
                       <View style={styles.navBtnsRow}>
                         <TouchableOpacity
@@ -1132,6 +1152,9 @@ const makeStyles = () => StyleSheet.create({
   etaTime: { fontSize: 13, fontWeight: '800', color: C.text },
   etaKm: { fontSize: 12, color: C.textMuted },
   etaLabel: { flex: 1, fontSize: 12, color: C.textMuted },
+  // Chip de ETA inline junto a cada input de destino (como la web).
+  etaChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.info + '18', borderRadius: Theme.radius.md, paddingHorizontal: 8, paddingVertical: 6 },
+  etaChipTxt: { fontSize: 12, fontWeight: '700', color: C.info },
   rendOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   rendSheet: { backgroundColor: C.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '85%' },
   rendHead: { flexDirection: 'row', alignItems: 'center', gap: S.sm, paddingHorizontal: S.lg, paddingVertical: S.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
