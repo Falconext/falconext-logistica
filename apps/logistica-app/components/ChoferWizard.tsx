@@ -687,6 +687,7 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                       <Row icon={MapPin} label="Ciudad" value={op?.ciudad} />
                       <Row icon={Clock} label="Attesa" value={op?.attesa} />
                       {op?.km != null && op?.km !== 0 ? <Row icon={Navigation} label="KM" value={`${op.km} km`} /> : null}
+                      {op?.tiempo_min != null && op?.tiempo_min !== 0 ? <Row icon={Clock} label="Tiempo" value={fmtEta(op.tiempo_min)} /> : null}
                       {!!op?.otros_datos && (<View style={styles.notaBox}><Text style={styles.notaLabel}>Mensaje / contactos (WhatsApp)</Text><Text style={styles.notaText} selectable>{op.otros_datos}</Text></View>)}
                       {!!op?.nota && (<View style={styles.notaBox}><Text style={styles.notaLabel}>Nota</Text><Text style={styles.notaText} selectable>{op.nota}</Text></View>)}
                     </View>

@@ -116,9 +116,10 @@ function RouteDetailCard({ selected, format, onEdit, onDelete, canDelete = true 
                     <span className="ml-auto font-semibold text-slate-900 tabular-nums">{format(selected.ingreso_estimado)}</span>
                 )}
             </div>
-            {(selected.km || selected.ciudad || selected.app || selected.spedizione || selected.compactado || selected.attesa) && (
+            {(selected.km || selected.tiempo_min || selected.ciudad || selected.app || selected.spedizione || selected.compactado || selected.attesa) && (
                 <div className="mt-2 pt-2 border-t border-slate-100 flex items-center gap-4 text-xs text-slate-500 flex-wrap">
                     {selected.km ? <span className="flex items-center gap-1.5"><Route size={13} /> {selected.km} km</span> : null}
+                    {selected.tiempo_min ? <span className="flex items-center gap-1.5"><Clock size={13} /> {selected.tiempo_min >= 60 ? `${Math.floor(selected.tiempo_min / 60)}h ${selected.tiempo_min % 60}m` : `${selected.tiempo_min} min`}</span> : null}
                     {selected.ciudad ? <span className="flex items-center gap-1.5"><MapPinned size={13} /> {selected.ciudad}</span> : null}
                     {selected.app ? <span className="flex items-center gap-1.5"><Smartphone size={13} /> {selected.app}</span> : null}
                     {selected.spedizione ? <span className="flex items-center gap-1.5"><Package size={13} /> {selected.spedizione}</span> : null}

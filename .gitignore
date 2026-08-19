@@ -32,3 +32,6 @@ apps/logistica-app/submit-ios.sh
 # Vercel link metadata
 .vercel
 apps/logistica-app/assets/images/_backup_logo/
+
+# iOS build artifacts (archive/ipa/logs)
+apps/logistica-app/build-out/

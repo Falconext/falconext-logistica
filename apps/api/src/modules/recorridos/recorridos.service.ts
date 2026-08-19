@@ -52,6 +52,32 @@ export class RecorridosService {
         return null;
     }
 
+    // Estimado (km + min) de una ruta por carretera con Google Directions, aceptando
+    // direcciones de texto y waypoints. Suma todos los legs. null si falla o no hay key.
+    // Se usa para el bucle completo origen→destinos→origen (respaldo del GPS real).
+    private async directionsRoute(origin: string, waypoints: string[], destination: string): Promise<{ km: number; min: number } | null> {
+        const gkey = this.googleKey();
+        if (!gkey || !origin?.trim() || !destination?.trim()) return null;
+        try {
+            const wp = (waypoints || []).map((s) => (s || '').trim()).filter(Boolean);
+            const wpParam = wp.length ? `&waypoints=${wp.map(encodeURIComponent).join('|')}` : '';
+            const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}${wpParam}&departure_time=now&region=it&key=${gkey}`;
+            const res = await fetch(url);
+            const j: any = await res.json();
+            const legs = j?.routes?.[0]?.legs;
+            if (!Array.isArray(legs) || !legs.length) return null;
+            let meters = 0, secs = 0;
+            for (const leg of legs) {
+                meters += leg?.distance?.value || 0;
+                secs += leg?.duration_in_traffic?.value ?? leg?.duration?.value ?? 0;
+            }
+            return { km: Math.round((meters / 1000) * 10) / 10, min: Math.round(secs / 60) };
+        } catch (e) {
+            console.warn('[Recorridos] directionsRoute Google falló:', (e as any)?.message);
+            return null;
+        }
+    }
+
     private haversineKm(a: LatLng, b: LatLng): number {
         const R = 6371;
         const dLat = ((b.lat - a.lat) * Math.PI) / 180;
@@ -239,6 +265,13 @@ export class RecorridosService {
         ]);
         // "Esperado": ETA por carretera origen→destino al iniciar (base del esperado vs real).
         const esperadoIda = oGeo && dGeo ? await this.etaMin(oGeo, dGeo) : null;
+        // Estimado de la RUTA COMPLETA (bucle origen→destinos→origen). Respaldo del
+        // GPS real al finalizar: si el chofer no manejó o el GPS falló, se usa esto.
+        const destinosProg = Array.isArray((prog as any).destinos) ? (prog as any).destinos : [];
+        const loopStops = [prog.lugar_entrega, ...destinosProg].map((s: any) => (s || '').trim()).filter(Boolean);
+        const est = prog.lugar_retiro && loopStops.length
+            ? await this.directionsRoute(prog.lugar_retiro, loopStops, prog.lugar_retiro)
+            : null;
 
         const recorrido = await this.prisma.recorrido.create({
             data: {
@@ -254,6 +287,8 @@ export class RecorridosService {
                 destino_lat: dGeo?.lat ?? null,
                 destino_lng: dGeo?.lng ?? null,
                 esperado_ida_min: esperadoIda,
+                esperado_km: est?.km ?? null,
+                esperado_min: est?.min ?? null,
                 estado: 'EN_RUTA_IDA',
             },
         });
@@ -370,10 +405,36 @@ export class RecorridosService {
             data.ida_km = await this.distanciaKm(r.device_id, r.iniciado_en, now);
             data.ida_min = Math.round((now.getTime() - r.iniciado_en.getTime()) / 60000);
         }
+
+        // ----- Total FIEL del recorrido: GPS real con respaldo del estimado -----
+        // km real (ida+vuelta) con tope anti-basura (un tramo no puede implicar >160 km/h).
+        const capKm = (km: any, min: any) => {
+            const k = Number(km) || 0, m = Number(min) || 0;
+            const max = (m / 60) * 160; // km máximos plausibles para esos minutos
+            return m > 0 && k > max ? max : k;
+        };
+        const idaKm = data.ida_km ?? r.ida_km, idaMin = data.ida_min ?? r.ida_min;
+        const vueltaKm = data.vuelta_km ?? r.vuelta_km, vueltaMin = data.vuelta_min ?? r.vuelta_min;
+        const realKm = capKm(idaKm, idaMin) + capKm(vueltaKm, vueltaMin);
+        const realMin = (Number(idaMin) || 0) + (Number(vueltaMin) || 0);
+        // Respaldo: si el GPS real es implausiblemente bajo respecto al estimado de la
+        // ruta (GPS falló o no se manejó de verdad), usamos el estimado de Directions.
+        const estKm = Number(r.esperado_km) || 0;
+        const estMin = Number(r.esperado_min) || 0;
+        const usarEstimado = estKm > 0 && realKm < 0.7 * estKm;
+        const finalKm = Math.round((usarEstimado ? estKm : realKm) * 10) / 10;
+        const finalMin = Math.round(usarEstimado && estMin > 0 ? estMin : realMin);
+        data.total_km = finalKm;
+        data.total_min = finalMin;
+
         const updated = await this.prisma.recorrido.update({ where: { id: r.id }, data });
 
         if (r.programacion_id) {
-            await this.prisma.programacion.updateMany({ where: { id: r.programacion_id, tenant_id: tenantId }, data: { estado: 'ENTREGADO' } });
+            // Estampa el km/tiempo FIEL en la operación (fuente de verdad para su detalle).
+            await this.prisma.programacion.updateMany({
+                where: { id: r.programacion_id, tenant_id: tenantId },
+                data: { estado: 'ENTREGADO', km: finalKm, tiempo_min: finalMin },
+            });
         }
         await this.prisma.trabajador.updateMany({ where: { id: r.trabajador_id, tenant_id: tenantId }, data: { disponible: true } });
         if (r.vehiculo_id) {

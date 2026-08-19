@@ -84,6 +84,7 @@ export interface Programacion {
     nota?: string;
 
     km?: number;
+    tiempo_min?: number; // tiempo total del recorrido (min), estampado al finalizar
     ciudad?: string;
     app?: string;
     spedizione?: string;

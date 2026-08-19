@@ -187,7 +187,8 @@ model Programacion {
   nota             String?  // 'NOTA'
 
   // Datos operativos de consegna
-  km               Float?   @default(0)     // Kilómetros del recorrido
+  km               Float?   @default(0)     // Kilómetros del recorrido (real al finalizar)
+  tiempo_min       Int?                     // Tiempo total del recorrido (min) al finalizar
   ciudad           String?                  // Ciudad
   app              String?                  // App/plataforma (SENSA APP, MILANO 01..18, APP ROMA)
   compactado       Boolean? @default(false) // Chofer con dos rutas/consegnas en un mismo viaje (N/Y)
@@ -533,12 +534,21 @@ model Recorrido {
   // ETA estimada de la ida (min), calculada por carretera al iniciar → base del
   // "esperado vs real" (se compara con ida_min real).
   esperado_ida_min Float?
+  // Estimado de la RUTA COMPLETA (bucle origen→destinos→origen) según Google
+  // Directions al iniciar: sirve de respaldo cuando el GPS real es bajo/basura.
+  esperado_km     Float?
+  esperado_min    Float?
 
   // Métricas por tramo (km / minutos), calculadas al cerrar cada tramo.
   ida_km          Float?
   ida_min         Float?
   vuelta_km       Float?
   vuelta_min      Float?
+  // Totales FIELES del recorrido al finalizar: GPS real (ida+vuelta, con tope
+  // anti-basura) y, si el GPS es implausiblemente bajo, el estimado de la ruta.
+  // Es la fuente de verdad del km/tiempo de la operación y del perfil del mes.
+  total_km        Float?
+  total_min       Float?
 
   creado_en       DateTime @default(now())
   actualizado_en  DateTime @updatedAt

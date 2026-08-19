@@ -10,9 +10,21 @@ const LOCATION_TASK_NAME = 'background-location-task';
 // servicio tras cerrar la app, cambiar de pantalla o reabrir el teléfono.
 const TRACKING_ENABLED_KEY = 'tracking_enabled';
 
-// Queue for offline storage
-let locationQueue: any[] = [];
+// Buffer de puntos pendientes de enviar. En vez de 1 request HTTP por cada punto
+// GPS (cada ~3 s → decenas de miles de requests/día por chofer, lo que agota el
+// plan serverless), acumulamos y enviamos en LOTE. Reduce ~5-10x las invocaciones.
+let pendingPoints: any[] = [];
 let isFlushing = false;
+let lastFlushAt = 0;
+let flushTimer: ReturnType<typeof setInterval> | null = null;
+
+// Enviar el lote cuando pasen estos segundos o se acumulen estos puntos (lo que
+// ocurra primero). 20 s ≈ 6-7 puntos por request → buena frescura en el mapa y
+// gran ahorro de invocaciones. El historial NO pierde densidad: cada punto
+// conserva su timestamp real.
+const FLUSH_INTERVAL_MS = 20000;
+const MAX_BATCH = 20;
+const MAX_BUFFER = 1000; // tope defensivo si hay muchas fallas de red seguidas
 
 // Opciones del servicio de ubicación. Centralizadas para que el arranque manual
 // y la reanudación automática usen exactamente la misma configuración.
@@ -52,7 +64,9 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: any) => {
     }
 });
 
-// Helper to process a single location (Shared by both FG and BG if needed)
+// Acumula un punto en el buffer y decide si toca enviar el lote. Funciona igual
+// en primer plano y en segundo plano (el task de expo despierta el JS por cada
+// punto, así que el flush por tamaño/tiempo se evalúa sin depender de timers).
 const processLocation = async (location: Location.LocationObject) => {
     const token = await AsyncStorage.getItem(DEVICE_TOKEN_KEY);
     if (!token) return;
@@ -67,46 +81,63 @@ const processLocation = async (location: Location.LocationObject) => {
         accuracy: location.coords.accuracy
     };
 
-    console.log('[GPS] New Point:', payload.lat, payload.lng);
+    pendingPoints.push(payload);
+    if (pendingPoints.length > MAX_BUFFER) pendingPoints.shift();
 
-    try {
-        await axios.post(`${Env.API_URL}/gps/ingest`, {
-            token: token,
-            ...payload
-        });
-
-        // If success, try flush queue
-        flushQueue(token);
-    } catch (err) {
-        console.error('[GPS] Upload Failed, Queuing:', err);
-        locationQueue.push(payload);
-        if (locationQueue.length > 1000) locationQueue.shift();
+    const elapsed = Date.now() - lastFlushAt;
+    if (pendingPoints.length >= MAX_BATCH || elapsed >= FLUSH_INTERVAL_MS) {
+        await flushBatch(token);
     }
 };
 
-const flushQueue = async (token: string) => {
-    if (isFlushing || locationQueue.length === 0) return;
+// Envía TODOS los puntos acumulados en una sola petición (/gps/ingest-batch).
+// Si falla (sin red), los devuelve al buffer para reintentar en el próximo flush.
+const flushBatch = async (token: string) => {
+    if (isFlushing || pendingPoints.length === 0) return;
     isFlushing = true;
 
-    console.log(`[Queue] Flushing ${locationQueue.length} points...`);
-    const queueSnapshot = [...locationQueue];
-    locationQueue = [];
+    const batch = pendingPoints;
+    pendingPoints = [];
 
-    for (const data of queueSnapshot) {
-        try {
-            await axios.post(`${Env.API_URL}/gps/ingest`, { ...data, token });
-        } catch (error) {
-            console.error('[Queue] Failed to flush point.');
-            const remaining = queueSnapshot.slice(queueSnapshot.indexOf(data));
-            locationQueue = [...remaining, ...locationQueue];
-            break;
+    try {
+        console.log(`[GPS] Enviando lote de ${batch.length} puntos...`);
+        await axios.post(`${Env.API_URL}/gps/ingest-batch`, { token, positions: batch });
+        lastFlushAt = Date.now();
+    } catch (err) {
+        console.error('[GPS] Falló el envío del lote, se reintentará:', err);
+        // Reencolar al frente para no perder los puntos ni alterar el orden
+        pendingPoints = [...batch, ...pendingPoints];
+        if (pendingPoints.length > MAX_BUFFER) {
+            pendingPoints = pendingPoints.slice(pendingPoints.length - MAX_BUFFER);
         }
+    } finally {
+        isFlushing = false;
     }
-    isFlushing = false;
+};
+
+// Timer de respaldo: cuando el chofer está detenido no llegan puntos nuevos, así
+// que el flush "por punto" no se dispara y el último tramo quedaría en el buffer.
+// Este intervalo lo vacía periódicamente (fiable en primer plano; en segundo
+// plano el propio task cubre el envío al llegar el siguiente punto).
+const startFlushTimer = () => {
+    if (flushTimer) return;
+    flushTimer = setInterval(async () => {
+        if (pendingPoints.length === 0) return;
+        const token = await AsyncStorage.getItem(DEVICE_TOKEN_KEY);
+        if (token) await flushBatch(token);
+    }, FLUSH_INTERVAL_MS);
+};
+
+const stopFlushTimer = () => {
+    if (flushTimer) {
+        clearInterval(flushTimer);
+        flushTimer = null;
+    }
 };
 
 // Arranca las actualizaciones si no están ya corriendo. Idempotente.
 const beginUpdates = async (): Promise<boolean> => {
+    startFlushTimer();
     const isRegistered = await TaskManager.isTaskRegisteredAsync(LOCATION_TASK_NAME);
     if (isRegistered) return true;
     await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, LOCATION_OPTIONS);
@@ -139,6 +170,12 @@ export const startTracking = async (): Promise<boolean> => {
 export const stopTracking = async (): Promise<void> => {
     // Limpia la intención: a partir de aquí NO se debe reanudar solo.
     await AsyncStorage.setItem(TRACKING_ENABLED_KEY, '0');
+    stopFlushTimer();
+    // Envío final para no perder los últimos puntos acumulados en el buffer.
+    try {
+        const token = await AsyncStorage.getItem(DEVICE_TOKEN_KEY);
+        if (token) await flushBatch(token);
+    } catch { /* best-effort */ }
     const isRegistered = await TaskManager.isTaskRegisteredAsync(LOCATION_TASK_NAME);
     if (isRegistered) {
         await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);

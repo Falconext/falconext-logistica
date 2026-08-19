@@ -167,7 +167,7 @@ export class RegistrosService {
         const [recorridos, reperibilita, attesaAgg] = await Promise.all([
             this.prisma.recorrido.findMany({
                 where: { tenant_id: tenantId, trabajador_id: trabajadorId, finalizado_en: { gte: desde, lte: hasta } },
-                select: { ida_km: true, vuelta_km: true, ida_min: true, vuelta_min: true, iniciado_en: true, llegada_en: true, retorno_en: true, finalizado_en: true, descanso_min: true },
+                select: { total_km: true, ida_km: true, vuelta_km: true, ida_min: true, vuelta_min: true, iniciado_en: true, llegada_en: true, retorno_en: true, finalizado_en: true, descanso_min: true },
             }),
             this.prisma.programacion.count({
                 where: { tenant_id: tenantId, trabajador_id: trabajadorId, reperibilita: true, fecha: { gte: desde, lte: hasta } },
@@ -191,7 +191,11 @@ export class RegistrosService {
 
         let km = 0, diaMin = 0, nocheMin = 0;
         for (const r of recorridos) {
-            km += capKm(r.ida_km as any, r.ida_min as any) + capKm(r.vuelta_km as any, r.vuelta_min as any);
+            // km FIEL: total del recorrido (GPS real con respaldo del estimado) cuando
+            // existe; para recorridos viejos, suma de tramos con tope anti-basura.
+            km += (r as any).total_km != null
+                ? num((r as any).total_km)
+                : capKm(r.ida_km as any, r.ida_min as any) + capKm(r.vuelta_km as any, r.vuelta_min as any);
             const ida = minutosDiaNoche(r.iniciado_en, r.llegada_en);
             const vuelta = minutosDiaNoche(r.retorno_en, r.finalizado_en);
             const diaEl = ida.dia + vuelta.dia;

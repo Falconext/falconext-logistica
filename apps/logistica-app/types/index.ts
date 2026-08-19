@@ -85,6 +85,7 @@ export interface Programacion {
 
   // Datos operativos de consegna
   km?: number;
+  tiempo_min?: number; // tiempo total del recorrido (min), estampado al finalizar
   ciudad?: string;
   app?: string;
   compactado?: boolean;

@@ -20,6 +20,15 @@ export class GpsController {
         });
     }
 
+    // Ingesta por LOTE. La app envía varios puntos acumulados en una sola
+    // petición → reduce ~5-10x las invocaciones serverless (Vercel).
+    // Body: { token: "uuid", positions: [{ lat, lng, speed, heading, timestamp, battery }, ...] }
+    @Post('ingest-batch')
+    async ingestBatch(@Body() body: any) {
+        const positions = Array.isArray(body?.positions) ? body.positions : [];
+        return this.gpsService.ingestBatch(body.token, positions);
+    }
+
     @Get('verify/:token')
     async verifyToken(@Param('token') token: string) {
         const isValid = await this.gpsService.verifyDeviceToken(token);

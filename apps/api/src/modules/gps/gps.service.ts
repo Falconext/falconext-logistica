@@ -207,6 +207,54 @@ export class GpsService {
         return { success: true, positionId: position.id };
     }
 
+    // Ingesta por LOTE: la app agrupa varios puntos GPS y los envía en una sola
+    // petición. Reduce ~5-10x las invocaciones serverless frente a 1 request por
+    // punto, sin perder densidad del historial (cada punto conserva su timestamp).
+    async ingestBatch(
+        token: string,
+        positions: Array<{ lat: number, lng: number, speed?: number, heading?: number, timestamp?: Date | string, battery?: number }>,
+    ) {
+        // 1. Validar el dispositivo UNA sola vez para todo el lote
+        const device = await this.prisma.device.findUnique({ where: { token } });
+        if (!device) {
+            throw new NotFoundException('Invalid Device Token');
+        }
+
+        // Filtrar puntos con coordenadas válidas (defensivo ante datos corruptos del cliente)
+        const validos = (positions || []).filter(
+            (p) => p && Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)),
+        );
+        if (validos.length === 0) {
+            return { success: true, inserted: 0 };
+        }
+
+        // 2. Insertar TODOS los puntos en una sola query
+        const result = await this.prisma.position.createMany({
+            data: validos.map((p) => ({
+                device_id: device.id,
+                latitude: Number(p.lat),
+                longitude: Number(p.lng),
+                speed: p.speed != null ? Number(p.speed) : undefined,
+                heading: p.heading != null ? Number(p.heading) : undefined,
+                battery: p.battery != null ? Number(p.battery) : undefined,
+                timestamp: p.timestamp ? new Date(p.timestamp) : new Date(),
+            })),
+        });
+
+        // 3. Actualizar la última actividad UNA sola vez
+        await this.prisma.device.update({
+            where: { id: device.id },
+            data: { last_activity: new Date() },
+        });
+
+        // 4. Chequear geofences solo con el ÚLTIMO punto del lote (posición actual)
+        const ultimo = validos[validos.length - 1];
+        this.checkGeofences(device.id, device.tenant_id, Number(ultimo.lat), Number(ultimo.lng))
+            .catch((err) => console.error('Geofence Error:', err));
+
+        return { success: true, inserted: result.count };
+    }
+
     private async checkGeofences(deviceId: string, tenantId: string, lat: number, lng: number) {
         // Fetch active CIRCLE geofences for this tenant
         const geofences = await this.prisma.geofence.findMany({
