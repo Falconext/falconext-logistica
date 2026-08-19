@@ -89,7 +89,7 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
   // Rendición al llegar a una parada: parada objetivo + gastos/anticipo locales.
   const [paradaRend, setParadaRend] = useState<{ id: string; label: string } | null>(null);
   const [rendAnticipo, setRendAnticipo] = useState('');
-  const [rendGastos, setRendGastos] = useState<{ tipo: string; monto: string; descripcion: string }[]>([]);
+  const [rendGastos, setRendGastos] = useState<GastoRow[]>([]);
   const [fullOp, setFullOp] = useState<Programacion | null>(null);
   const [showRendicion, setShowRendicion] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm());
@@ -283,8 +283,8 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
     setParadaRend(parada);
   };
 
-  const rendAddGasto = () => setRendGastos((g) => [...g, { tipo: 'PEAJE', monto: '', descripcion: '' }]);
-  const rendSetGasto = (i: number, patch: Partial<{ tipo: string; monto: string; descripcion: string }>) =>
+  const rendAddGasto = () => setRendGastos((g) => [...g, { tipo: 'PEAJE', monto: '', descripcion: '', numero_mancato: '', link_peaje: '', comprobantes: [] }]);
+  const rendSetGasto = (i: number, patch: Partial<GastoRow>) =>
     setRendGastos((g) => g.map((x, idx) => (idx === i ? { ...x, ...patch } : x)));
   const rendRmGasto = (i: number) => setRendGastos((g) => g.filter((_, idx) => idx !== i));
 
@@ -293,7 +293,13 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
     if (!recorrido || !paradaRend) return;
     const gastos = rendGastos
       .filter((g) => Number(g.monto) > 0)
-      .map((g) => ({ tipo: g.tipo, monto: Number(g.monto), descripcion: g.descripcion || null }));
+      .map((g) => ({
+        tipo: g.tipo, monto: Number(g.monto),
+        descripcion: g.descripcion || null,
+        numero_mancato: g.numero_mancato || null,
+        link_peaje: g.link_peaje || null,
+        comprobantes: g.comprobantes || [],
+      }));
     setBusy(true);
     try {
       await api.post(`/recorridos/${recorrido.id}/paradas/${paradaRend.id}/llegada`, {
@@ -903,19 +909,34 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                 </View>
                 {rendGastos.map((g, i) => (
                   <View key={i} style={{ gap: 6, borderWidth: 1, borderColor: C.border, borderRadius: Theme.radius.md, padding: S.sm }}>
-                    <Select label="Tipo" value={g.tipo} onChange={(v) => rendSetGasto(i, { tipo: v })} options={GASTO_TIPOS} searchable={false} />
-                    <View style={{ flexDirection: 'row', gap: S.sm }}>
-                      <TextInput style={[styles.input, { flex: 1 }]} value={g.monto} onChangeText={(v) => rendSetGasto(i, { monto: v })} placeholder="Monto" placeholderTextColor={C.textFaint} keyboardType="decimal-pad" />
-                      <TouchableOpacity onPress={() => rendRmGasto(i)} style={{ justifyContent: 'center', paddingHorizontal: 4 }}><Trash2 size={18} color={C.danger} /></TouchableOpacity>
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: S.sm }}>
+                      <View style={{ flex: 1 }}>
+                        <Select label="Tipo" value={g.tipo} onChange={(v) => rendSetGasto(i, { tipo: v })} options={GASTO_TIPOS} searchable={false} />
+                      </View>
+                      <TouchableOpacity onPress={() => rendRmGasto(i)} style={{ justifyContent: 'center', paddingHorizontal: 4, paddingBottom: 10 }}><Trash2 size={18} color={C.danger} /></TouchableOpacity>
                     </View>
-                    <TextInput style={styles.input} value={g.descripcion} onChangeText={(v) => rendSetGasto(i, { descripcion: v })} placeholder="Descripción" placeholderTextColor={C.textFaint} />
+                    <Text style={styles.rendLabel}>Monto ({moneda || 'EUR'})</Text>
+                    <TextInput style={styles.input} value={g.monto} onChangeText={(v) => rendSetGasto(i, { monto: v })} placeholder="0.00" placeholderTextColor={C.textFaint} keyboardType="decimal-pad" />
+                    {g.tipo === 'OTRO' && (<>
+                      <Text style={styles.rendLabel}>Descripción</Text>
+                      <TextInput style={styles.input} value={g.descripcion} onChangeText={(v) => rendSetGasto(i, { descripcion: v })} placeholder="¿En qué se gastó?" placeholderTextColor={C.textFaint} />
+                    </>)}
+                    {g.tipo === 'PEAJE' && (<>
+                      <Text style={styles.rendLabel}>Nº de mancato</Text>
+                      <TextInput style={styles.input} value={g.numero_mancato} onChangeText={(v) => rendSetGasto(i, { numero_mancato: v })} placeholder="Número de mancato" placeholderTextColor={C.textFaint} />
+                      <Text style={styles.rendLabel}>Link de peaje</Text>
+                      <TextInput style={styles.input} value={g.link_peaje} onChangeText={(v) => rendSetGasto(i, { link_peaje: v })} placeholder="https://…" placeholderTextColor={C.textFaint} keyboardType="url" autoCapitalize="none" autoCorrect={false} />
+                    </>)}
+                    <Text style={styles.rendLabel}>Comprobante(s)</Text>
+                    <MultiFileUpload value={g.comprobantes} onChange={(urls) => rendSetGasto(i, { comprobantes: urls })} />
                   </View>
                 ))}
               </View>
             </ScrollView>
             <View style={styles.rendFooter}>
-              <TouchableOpacity style={[styles.nextBtn, { backgroundColor: C.success }, busy && { opacity: 0.6 }]} disabled={busy} onPress={confirmarLlegadaParada} activeOpacity={0.85}>
-                {busy ? <ActivityIndicator color="#fff" size="small" /> : <Flag size={18} color="#fff" />}<Text style={styles.nextText}>Confirmar llegada</Text>
+              <TouchableOpacity style={[styles.rendConfirmBtn, busy && { opacity: 0.6 }]} disabled={busy} onPress={confirmarLlegadaParada} activeOpacity={0.85}>
+                {busy ? <ActivityIndicator color="#fff" size="small" /> : <Flag size={19} color="#fff" />}
+                <Text style={styles.rendConfirmTxt}>Confirmar llegada</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1040,6 +1061,8 @@ const makeStyles = () => StyleSheet.create({
   rendLabel: { fontSize: 12, fontWeight: '700', color: C.textMuted, textTransform: 'uppercase', marginBottom: 4 },
   rendAdd: { fontSize: 13, color: C.primary, fontWeight: '700' },
   rendFooter: { padding: S.lg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border },
+  rendConfirmBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 52, borderRadius: Theme.radius.lg, backgroundColor: C.success },
+  rendConfirmTxt: { fontSize: 16, fontWeight: '800', color: '#fff' },
   attesaLabel: { fontSize: 13, fontWeight: '600', color: C.textMuted, marginBottom: 6 },
   attesaValue: { fontSize: 20, fontWeight: '800', color: C.warning, marginTop: 1 },
   attesaHint: { fontSize: 12, color: C.textMuted, marginTop: 4 },
