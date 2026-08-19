@@ -53,7 +53,7 @@ function buildHtml(config: any): string {
   return `<!DOCTYPE html><html><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <style>html,body,#map{margin:0;padding:0;height:100%;width:100%;background:${config.preset === 'night' ? '#0f1522' : '#e8eef5'}}
-#routeInfo{position:absolute;top:10px;left:10px;z-index:5;display:none;align-items:center;gap:10px;padding:7px 12px;border-radius:12px;background:${config.preset === 'night' ? 'rgba(15,21,34,.95)' : 'rgba(255,255,255,.95)'};box-shadow:0 2px 10px rgba(0,0,0,.15);font:600 13px -apple-system,system-ui,sans-serif;color:${config.preset === 'night' ? '#fff' : '#0f172a'}}
+#routeInfo{position:absolute;top:10px;right:10px;z-index:5;display:none;align-items:center;gap:10px;padding:7px 12px;border-radius:12px;background:${config.preset === 'night' ? 'rgba(15,21,34,.95)' : 'rgba(255,255,255,.95)'};box-shadow:0 2px 10px rgba(0,0,0,.15);font:600 13px -apple-system,system-ui,sans-serif;color:${config.preset === 'night' ? '#fff' : '#0f172a'}}
 #routeInfo .sep{color:#94a3b8;font-weight:400}
 </style>
 </head><body><div id="map"></div><div id="routeInfo"></div><script>
