@@ -543,9 +543,35 @@ model Recorrido {
   creado_en       DateTime @default(now())
   actualizado_en  DateTime @updatedAt
 
+  // Paradas del recorrido (destino principal + destinos adicionales). El chofer
+  // marca la llegada de cada una y puede registrar su rendición/gastos ahí.
+  paradas         RecorridoParada[]
+
   @@index([tenant_id, estado])
   @@index([trabajador_id, estado])
   @@map("recorridos")
+}
+
+// Una parada (destino) del recorrido. Se crean al iniciar, en orden, desde
+// lugar_entrega + destinos[] de la programación. El chofer registra por parada:
+// hora de llegada + rendición (anticipo + gastos) opcional.
+model RecorridoParada {
+  id             String    @id @default(uuid())
+  recorrido_id   String
+  tenant_id      String
+  orden          Int       // 1, 2, 3… (orden de visita)
+  label          String    // dirección del destino
+  llegada_en     DateTime? // cuándo el chofer marcó la llegada a esta parada
+  anticipo       Float?    // rendición: adelanto recibido en esta parada (opcional)
+  gastos         Json?     // lista de gastos [{ tipo, monto, descripcion }] (opcional)
+  nota           String?
+  creado_en      DateTime  @default(now())
+  actualizado_en DateTime  @updatedAt
+
+  recorrido      Recorrido @relation(fields: [recorrido_id], references: [id], onDelete: Cascade)
+
+  @@index([recorrido_id])
+  @@map("recorrido_paradas")
 }
 
 // Parte diario de servicio (los registros "DHL" y "FARMACIA" del sistema viejo).

@@ -19,9 +19,19 @@ export const APP_OPTIONS: { value: string; label: string }[] = [
     { value: 'APP ROMA', label: 'App Roma' },
 ];
 
+// Opciones del campo SPEDIZIONE (expedición/cliente). Debe coincidir con
+// SPEDIZIONE_OPTIONS del app (apps/logistica-app/constants/operaciones.ts).
+export const SPEDIZIONE_OPTIONS: { value: string; label: string }[] = [
+    { value: 'AB', label: 'AB' },
+    { value: 'DHL', label: 'DHL' },
+    { value: 'EXTRAS ALFREDO', label: 'Extras Alfredo' },
+    { value: 'EXTRAS ESTEFANIA', label: 'Extras Estefanía' },
+];
+
 // Estados de consegna (italiano). El value es el código canónico persistido.
 export const ESTADO_CONSEGNA_OPTIONS: { value: string; label: string }[] = [
     { value: 'RICHIESTA', label: 'Richiesta' },
+    { value: 'ACCETTATA', label: 'Aceptada' }, // el chofer aceptó la consegna
     { value: 'CONSEGNATO', label: 'Consegnato' },
     { value: 'IN_CONSEGNA', label: 'In Consegna' },
     { value: 'IN_SOSPESO', label: 'In Sospeso' },
@@ -33,6 +43,7 @@ export const ESTADO_CONSEGNA_OPTIONS: { value: string; label: string }[] = [
 // Colores del badge por estado de consegna (mismo criterio que la imagen de referencia).
 export const ESTADO_CONSEGNA_META: Record<string, { label: string; badge: string; dot: string }> = {
     RICHIESTA: { label: 'Richiesta', badge: 'text-blue-600 border-blue-200 bg-blue-50', dot: 'bg-blue-500' },
+    ACCETTATA: { label: 'Aceptada', badge: 'text-emerald-600 border-emerald-200 bg-emerald-50', dot: 'bg-emerald-500' },
     CONSEGNATO: { label: 'Consegnato', badge: 'text-emerald-600 border-emerald-200 bg-emerald-50', dot: 'bg-emerald-500' },
     IN_CONSEGNA: { label: 'In Consegna', badge: 'text-orange-600 border-orange-200 bg-orange-50', dot: 'bg-orange-500' },
     IN_SOSPESO: { label: 'In Sospeso', badge: 'text-blue-600 border-blue-200 bg-blue-50', dot: 'bg-blue-500' },

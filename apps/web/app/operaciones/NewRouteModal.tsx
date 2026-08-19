@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Save, Loader2, MapPin, Calendar, Clock, User, Truck, FileText, Package, Play, CheckCircle2, PauseCircle, Undo2, RefreshCw, Ban, Flag, Wallet, Plus, Trash2 } from 'lucide-react';
+import { X, Save, Loader2, MapPin, Calendar, Clock, User, Truck, FileText, Package, Play, CheckCircle2, PauseCircle, Undo2, RefreshCw, Ban, Bell, Flag, Wallet, Plus, Trash2 } from 'lucide-react';
 import { Programacion } from '../../types';
 import api from '../../lib/api';
 import DatePicker from '../../components/DatePicker';
@@ -9,7 +9,9 @@ import Select from '../../components/Select';
 import FileUpload from '../../components/FileUpload';
 import MultiFileUpload from '../../components/MultiFileUpload';
 import { useCurrency } from '../../lib/useCurrency';
-import { APP_OPTIONS, ESTADO_CONSEGNA_META, RETIRO_PRESETS, isCoords } from './constants';
+import { APP_OPTIONS, SPEDIZIONE_OPTIONS, ESTADO_CONSEGNA_META, RETIRO_PRESETS, isCoords } from './constants';
+import { useGoogleMaps } from '../../components/tracking/googleMaps';
+import { fmtMin } from '../../components/tracking/MapboxRouteMap';
 
 // Fila de gasto en el formulario (monto como string para el input).
 type GastoRow = { tipo: string; monto: string; descripcion: string; numero_mancato: string; link_peaje: string; comprobantes: string[] };
@@ -23,7 +25,10 @@ const GASTO_TIPOS = [
 
 // Acciones de estado de consegna que el chofer/admin marca según avanza la ruta.
 // El value es el estado que se guarda; label/Icon son la UI del botón.
+// Acciones de estado que el admin/chofer marca según avanza la ruta. Debe
+// coincidir con CONSEGNA_ACTIONS del app (apps/logistica-app/constants/operaciones.ts).
 const CONSEGNA_ACTIONS: { value: string; label: string; Icon: any }[] = [
+    { value: 'RICHIESTA', label: 'Richiesta', Icon: Bell },
     { value: 'IN_CONSEGNA', label: 'Iniciar consegna', Icon: Play },
     { value: 'CONSEGNATO', label: 'Consegnato', Icon: CheckCircle2 },
     { value: 'IN_SOSPESO', label: 'In Sospeso', Icon: PauseCircle },
@@ -103,6 +108,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
         km: '',
         ciudad: '',
         app: '',
+        spedizione: '',
         compactado: false,
         estado_consegna: '',
         attesa: '',
@@ -115,6 +121,44 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
 
         nota: ''
     });
+
+    // ── ETA por destino ──────────────────────────────────────────────────
+    // Calcula el tiempo acumulado (por carretera) del origen a cada parada:
+    // etaEntrega = origen → destino principal; etaDestinos[i] = hasta el destino i.
+    const { isLoaded: mapsLoaded } = useGoogleMaps();
+    const [etaEntrega, setEtaEntrega] = useState<string>('');
+    const [etaDestinos, setEtaDestinos] = useState<string[]>([]);
+
+    useEffect(() => {
+        if (!isOpen || !mapsLoaded || typeof google === 'undefined') return;
+        const origen = (formData.retiro_lugar || '').trim();
+        const entrega = (formData.entrega_lugar || '').trim();
+        const destinos = formData.destinos.map((d) => (d || '').trim()).filter(Boolean);
+        if (!origen || !entrega) { setEtaEntrega(''); setEtaDestinos([]); return; }
+
+        let cancelled = false;
+        const stops = [entrega, ...destinos]; // paradas tras el origen, en orden
+        const t = setTimeout(async () => {
+            try {
+                const svc = new google.maps.DirectionsService();
+                const res = await svc.route({
+                    origin: origen,
+                    destination: stops[stops.length - 1],
+                    waypoints: stops.slice(0, -1).map((location) => ({ location, stopover: true })),
+                    travelMode: google.maps.TravelMode.DRIVING,
+                });
+                if (cancelled) return;
+                const legs = res.routes?.[0]?.legs || [];
+                let acc = 0;
+                const cum = legs.map((l) => { acc += (l.duration?.value ?? 0) / 60; return acc; });
+                setEtaEntrega(cum[0] != null ? fmtMin(cum[0]) : '');
+                setEtaDestinos(destinos.map((_, i) => (cum[i + 1] != null ? fmtMin(cum[i + 1]) : '')));
+            } catch {
+                if (!cancelled) { setEtaEntrega(''); setEtaDestinos([]); }
+            }
+        }, 500);
+        return () => { cancelled = true; clearTimeout(t); };
+    }, [isOpen, mapsLoaded, formData.retiro_lugar, formData.entrega_lugar, formData.destinos.join('|')]);
 
     useEffect(() => {
         if (isOpen) {
@@ -157,6 +201,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 km: src.km != null ? String(src.km) : '',
                 ciudad: src.ciudad || '',
                 app: src.app || '',
+                spedizione: src.spedizione || '',
                 compactado: !!src.compactado,
                 estado_consegna: src.estado_consegna || '',
                 attesa: src.attesa || '',
@@ -197,6 +242,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 km: '',
                 ciudad: '',
                 app: '',
+                spedizione: '',
                 compactado: false,
                 estado_consegna: '',
                 attesa: '',
@@ -255,6 +301,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 km: formData.km !== '' ? Number(formData.km) : null,
                 ciudad: formData.ciudad || null,
                 app: formData.app || null,
+                spedizione: formData.spedizione || null,
                 compactado: formData.compactado,
                 estado_consegna: formData.estado_consegna || null,
                 attesa: formData.attesa || null,
@@ -301,6 +348,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 km: '',
                 ciudad: '',
                 app: '',
+                spedizione: '',
                 compactado: false,
                 estado_consegna: '',
                 attesa: '',
@@ -518,7 +566,14 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
 
                                 <div className="space-y-3">
                                     <div className="space-y-1">
-                                        <label className="text-[10px] font-bold text-slate-400 uppercase">Dirección</label>
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase">Dirección</label>
+                                            {etaEntrega && (
+                                                <span className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 text-[11px] font-semibold" title="Tiempo estimado desde el origen">
+                                                    <Clock size={12} /> {etaEntrega}
+                                                </span>
+                                            )}
+                                        </div>
                                         <input
                                             type="text"
                                             placeholder="Ej: Aeropuerto Jorge Chávez, Callao"
@@ -566,6 +621,11 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                             value={dest}
                                             onChange={(e) => updateDestino(i, e.target.value)}
                                         />
+                                        {etaDestinos[i] && (
+                                            <span className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 text-[11px] font-semibold" title="Tiempo estimado desde el origen">
+                                                <Clock size={12} /> {etaDestinos[i]}
+                                            </span>
+                                        )}
                                         <button
                                             type="button"
                                             onClick={() => removeDestino(i)}
@@ -660,6 +720,17 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                 value={formData.app}
                                 onChange={(v) => setFormData({ ...formData, app: v })}
                                 options={APP_OPTIONS}
+                            />
+
+                            {/* SPEDIZIONE */}
+                            <Select
+                                label="Spedizione"
+                                placeholder="-- Seleccionar --"
+                                searchable
+                                clearable
+                                value={formData.spedizione}
+                                onChange={(v) => setFormData({ ...formData, spedizione: v })}
+                                options={SPEDIZIONE_OPTIONS}
                             />
 
                             {/* Estado consegna se controla arriba con los botones de acción */}

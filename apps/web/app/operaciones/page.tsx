@@ -116,11 +116,12 @@ function RouteDetailCard({ selected, format, onEdit, onDelete, canDelete = true 
                     <span className="ml-auto font-semibold text-slate-900 tabular-nums">{format(selected.ingreso_estimado)}</span>
                 )}
             </div>
-            {(selected.km || selected.ciudad || selected.app || selected.compactado || selected.attesa) && (
+            {(selected.km || selected.ciudad || selected.app || selected.spedizione || selected.compactado || selected.attesa) && (
                 <div className="mt-2 pt-2 border-t border-slate-100 flex items-center gap-4 text-xs text-slate-500 flex-wrap">
                     {selected.km ? <span className="flex items-center gap-1.5"><Route size={13} /> {selected.km} km</span> : null}
                     {selected.ciudad ? <span className="flex items-center gap-1.5"><MapPinned size={13} /> {selected.ciudad}</span> : null}
                     {selected.app ? <span className="flex items-center gap-1.5"><Smartphone size={13} /> {selected.app}</span> : null}
+                    {selected.spedizione ? <span className="flex items-center gap-1.5"><Package size={13} /> {selected.spedizione}</span> : null}
                     {selected.attesa ? <span className="flex items-center gap-1.5"><Clock size={13} /> Attesa: {selected.attesa}</span> : null}
                     {selected.compactado ? <span className="flex items-center gap-1.5 text-blue-600 font-medium"><Boxes size={13} /> Compactado</span> : null}
                 </div>
@@ -619,6 +620,7 @@ const RouteCard = memo(function RouteCard({ ruta, isSelected, onSelect }: {
                 <span className="flex items-center gap-1"><Truck size={12} /> {ruta.vehiculo_id || '—'}</span>
                 <span className="flex items-center gap-1 truncate"><User size={12} /> {ruta.trabajador_nombre || ruta.trabajador_id || t('operaciones.sinAsignar')}</span>
                 {ruta.app ? <span className="flex items-center gap-1"><Smartphone size={12} /> {ruta.app}</span> : null}
+                {ruta.spedizione ? <span className="flex items-center gap-1"><Package size={12} /> {ruta.spedizione}</span> : null}
                 {ruta.compactado ? <span className="flex items-center gap-1 text-blue-600 font-medium"><Boxes size={12} /> Compactado</span> : null}
             </div>
             {estadoConsegnaMeta(ruta.estado_consegna) && (

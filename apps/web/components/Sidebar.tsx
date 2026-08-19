@@ -27,6 +27,13 @@ const primaryItems = [
 ];
 
 const trackingItems = [
+    { key: 'mi-resumen', href: '/mi-resumen', icon: LayoutDashboard },
+    { key: 'mi-ruta', href: '/mi-ruta', icon: Navigation },
+    { key: 'mis-consegnas', href: '/mis-consegnas', icon: Package },
+    { key: 'parte-diario', href: '/parte-diario', icon: Receipt },
+    { key: 'historial-mensual', href: '/historial-mensual', icon: CalendarClock },
+    { key: 'ganancias-direccion', href: '/ganancias-direccion', icon: BarChart3 },
+    { key: 'mi-perfil', href: '/mi-perfil', icon: Users },
     { key: 'recorridos', href: '/recorridos', icon: Route },
     { key: 'rastreo', href: '/rastreo', icon: Navigation },
     { key: 'alertas', href: '/alertas', icon: Bell },

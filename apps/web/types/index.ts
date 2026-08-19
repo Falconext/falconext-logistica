@@ -86,6 +86,7 @@ export interface Programacion {
     km?: number;
     ciudad?: string;
     app?: string;
+    spedizione?: string;
     compactado?: boolean;
     estado_consegna?: string; // CONSEGNATO | IN_CONSEGNA | IN_SOSPESO | RITIRATO | ANNULLATO | RISCHEDULATO
     attesa?: string; // Tiempo de espera del chofer al cliente

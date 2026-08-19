@@ -129,7 +129,11 @@ export class RecorridosService {
             where: {
                 tenant_id: tenantId,
                 trabajador_id: { in: codigos },
-                estado: { in: ['PENDIENTE', 'PENDING', 'REPROGRAMADO'] },
+                // El chofer debe ver sus consegnas asignadas (PENDIENTE), reprogramadas
+                // y también las que ya inició/retiró (RETIRADO): antes RETIRADO no estaba
+                // y la consegna en curso desaparecía de su lista. Se excluyen solo los
+                // estados terminales (ENTREGADO, COMPLETADO, CANCELADO, ANULADO).
+                estado: { in: ['PENDIENTE', 'PENDING', 'REPROGRAMADO', 'RETIRADO'] },
                 fecha: { gte: desde },
             },
             orderBy: { fecha_entrega: 'asc' },
@@ -148,6 +152,59 @@ export class RecorridosService {
         return this.prisma.recorrido.findFirst({
             where: { tenant_id: tenantId, trabajador_id: trabajadorId, estado: { in: ACTIVOS } },
             orderBy: { iniciado_en: 'desc' },
+            include: { paradas: { orderBy: { orden: 'asc' } } },
+        });
+    }
+
+    /**
+     * Marca la llegada del chofer a una PARADA del recorrido y guarda su rendición
+     * (anticipo + gastos) opcional. Si es la última parada pendiente, además marca
+     * el recorrido como EN_DESTINO (para las métricas de la ida).
+     */
+    async llegadaParada(
+        tenantId: string,
+        recorridoId: string,
+        paradaId: string,
+        trabajadorId: string,
+        body: { anticipo?: number; gastos?: any; nota?: string },
+    ) {
+        const r = await this.getOwned(tenantId, recorridoId, trabajadorId);
+        const parada = await this.prisma.recorridoParada.findFirst({
+            where: { id: paradaId, recorrido_id: r.id, tenant_id: tenantId },
+        });
+        if (!parada) throw new NotFoundException('Parada no encontrada.');
+
+        const now = new Date();
+        await this.prisma.recorridoParada.update({
+            where: { id: parada.id },
+            data: {
+                llegada_en: parada.llegada_en ?? now,
+                anticipo: body?.anticipo != null ? Number(body.anticipo) : parada.anticipo,
+                gastos: body?.gastos ?? parada.gastos ?? undefined,
+                nota: body?.nota ?? parada.nota,
+            },
+        });
+
+        // ¿Quedan paradas pendientes? Si esta era la última, cerramos el tramo de ida.
+        const pendientes = await this.prisma.recorridoParada.count({
+            where: { recorrido_id: r.id, llegada_en: null },
+        });
+        if (pendientes === 0 && r.estado === 'EN_RUTA_IDA') {
+            const km = await this.distanciaKm(r.device_id, r.iniciado_en, now);
+            await this.prisma.recorrido.update({
+                where: { id: r.id },
+                data: {
+                    estado: 'EN_DESTINO',
+                    llegada_en: now,
+                    ida_km: km,
+                    ida_min: Math.round((now.getTime() - r.iniciado_en.getTime()) / 60000),
+                },
+            });
+        }
+
+        return this.prisma.recorrido.findUnique({
+            where: { id: r.id },
+            include: { paradas: { orderBy: { orden: 'asc' } } },
         });
     }
 
@@ -187,6 +244,23 @@ export class RecorridosService {
                 estado: 'EN_RUTA_IDA',
             },
         });
+
+        // Paradas del recorrido: destino principal (lugar_entrega) + destinos[]
+        // adicionales, en orden. El chofer marcará la llegada de cada una.
+        const destinos = Array.isArray((prog as any).destinos) ? (prog as any).destinos : [];
+        const stops = [prog.lugar_entrega, ...destinos]
+            .map((s: any) => (s || '').trim())
+            .filter(Boolean);
+        if (stops.length > 0) {
+            await this.prisma.recorridoParada.createMany({
+                data: stops.map((label, i) => ({
+                    recorrido_id: recorrido.id,
+                    tenant_id: tenantId,
+                    orden: i + 1,
+                    label,
+                })),
+            });
+        }
 
         // Integraciones: operación "en ruta" (aparece En Consegna) + chofer/vehículo ocupados.
         await this.prisma.programacion.update({ where: { id: prog.id }, data: { estado: 'RETIRADO' } });

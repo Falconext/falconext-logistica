@@ -151,6 +151,19 @@ export const isTrackingDesired = async (): Promise<boolean> => {
     return (await AsyncStorage.getItem(TRACKING_ENABLED_KEY)) === '1';
 };
 
+// ¿Se concedió el permiso de ubicación en SEGUNDO PLANO ("Permitir siempre")?
+// Sin él, el teléfono deja de reportar cuando la app se cierra o la pantalla se
+// bloquea → el supervisor deja de ver al chofer en el mapa. Se usa para avisar
+// al iniciar la ruta.
+export const isBackgroundGranted = async (): Promise<boolean> => {
+    try {
+        const { status } = await Location.getBackgroundPermissionsAsync();
+        return status === 'granted';
+    } catch {
+        return false;
+    }
+};
+
 // Reanuda el rastreo si el usuario lo tenía activo pero el servicio se cayó
 // (app cerrada por el SO, reinicio del teléfono, cambio de red, etc.).
 // Se llama al abrir la app y cada vez que vuelve a primer plano. NO vuelve a

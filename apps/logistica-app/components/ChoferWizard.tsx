@@ -12,7 +12,7 @@ import ImageUpload from './ImageUpload';
 import MultiFileUpload from './MultiFileUpload';
 import MapboxWebView from './MapboxWebView';
 import api, { DEVICE_TOKEN_KEY } from '../services/api';
-import { startTracking, stopTracking } from '../services/LocationService';
+import { startTracking, stopTracking, isBackgroundGranted } from '../services/LocationService';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { formatMoney } from '../constants/currency';
@@ -215,6 +215,29 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
         Alert.alert('Rastreo GPS requerido', 'No puedes iniciar la consegna sin el rastreo GPS activo. Concede el permiso de ubicación e inténtalo de nuevo.');
         return;
       }
+      // GPS OBLIGATORIO en "Permitir siempre" (segundo plano): sin él, el celular
+      // deja de reportar al bloquear la pantalla y el supervisor deja de verte.
+      // Por pedido del empresario NO se puede iniciar la consegna sin esto: se
+      // manda a Ajustes y NO se crea el recorrido hasta que esté concedido.
+      if (!(await isBackgroundGranted())) {
+        // Un re-request puede mostrar el diálogo la primera vez; si el SO ya no lo
+        // muestra, guiamos a Ajustes. Se vuelve a verificar tras el intento.
+        try { await Location.requestBackgroundPermissionsAsync(); } catch { /* noop */ }
+        if (!(await isBackgroundGranted())) {
+          Alert.alert(
+            'Activa "Permitir siempre"',
+            'Para iniciar la consegna, tu ubicación debe estar en "Permitir siempre" (así el supervisor te sigue aunque bloquees el teléfono). Ábrelo en Ajustes → Ubicación y vuelve a tocar Iniciar.',
+            [
+              { text: 'Cancelar', style: 'cancel' },
+              { text: 'Abrir Ajustes', onPress: () => Linking.openSettings() },
+            ],
+          );
+          // Se detiene el rastreo recién iniciado para no dejarlo a medias, y NO se
+          // crea el recorrido: el chofer debe conceder el permiso y reintentar.
+          try { await stopTracking(); } catch { /* noop */ }
+          return;
+        }
+      }
 
       // 2) GPS activo → recién ahora se inicia el recorrido.
       await guardarDatos();
@@ -239,6 +262,41 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
     } catch (e: any) { Alert.alert('Error', e?.response?.data?.message || 'No se pudo actualizar.'); }
     finally { setBusy(false); }
   };
+
+  // Marca la llegada a una PARADA (destino) y registra su rendición usando los
+  // gastos/anticipo que el chofer ya cargó en el wizard. Luego los limpia para la
+  // siguiente parada. Los gastos son opcionales, pero se recuerda registrarlos.
+  const llegarParada = async (parada: { id: string; label: string }) => {
+    if (!recorrido) return;
+    const gastos = form.gastos
+      .filter((g) => Number(g.monto) > 0)
+      .map((g) => ({ tipo: g.tipo, monto: Number(g.monto), descripcion: g.descripcion || null }));
+    const doPost = async () => {
+      setBusy(true);
+      try {
+        await api.post(`/recorridos/${recorrido.id}/paradas/${parada.id}/llegada`, {
+          anticipo: form.anticipo ? Number(form.anticipo) : undefined,
+          gastos: gastos.length ? gastos : undefined,
+        });
+        setForm((f) => ({ ...f, gastos: [], anticipo: '' }));
+        await loadRecorrido();
+      } catch (e: any) { Alert.alert('Error', e?.response?.data?.message || 'No se pudo registrar la llegada.'); }
+      finally { setBusy(false); }
+    };
+    if (gastos.length === 0 && !form.anticipo) {
+      Alert.alert('Rendición de la parada', 'No registraste gastos ni anticipo de esta parada. Se recomienda hacerlo. ¿Marcar la llegada igual?', [
+        { text: 'Volver', style: 'cancel' },
+        { text: 'Marcar llegada', onPress: () => { void doPost(); } },
+      ]);
+      return;
+    }
+    void doPost();
+  };
+
+  // Paradas del recorrido (destino + destinos adicionales) y la próxima pendiente.
+  const paradas: Array<{ id: string; orden: number; label: string; llegada_en?: string | null }> =
+    Array.isArray(recorrido?.paradas) ? [...recorrido.paradas].sort((a: any, b: any) => a.orden - b.orden) : [];
+  const proximaParada = paradas.find((p) => !p.llegada_en) || null;
 
   const confirmCancelar = () => Alert.alert('Cancelar recorrido', '¿Seguro que quieres cancelar este traslado?', [
     { text: 'No', style: 'cancel' }, { text: 'Sí, cancelar', style: 'destructive', onPress: () => accion('cancelar', { stop: true }).then(() => onSaved()) },
@@ -619,6 +677,25 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                     );
                   })()}
 
+                  {/* Checklist de paradas: llegada de cada destino */}
+                  {paradas.length > 0 && (
+                    <View style={styles.paradasBox}>
+                      {paradas.map((p) => (
+                        <View key={p.id} style={styles.paradaRow}>
+                          <View style={[styles.paradaDot, p.llegada_en ? styles.paradaDotOk : proximaParada?.id === p.id ? styles.paradaDotNext : styles.paradaDotPend]}>
+                            <Text style={styles.paradaDotTxt}>{p.llegada_en ? '✓' : String(p.orden)}</Text>
+                          </View>
+                          <Text style={styles.paradaLabel} numberOfLines={1}>{p.label}</Text>
+                          {p.llegada_en
+                            ? <Text style={styles.paradaOk}>{new Date(p.llegada_en).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</Text>
+                            : proximaParada?.id === p.id
+                              ? <Text style={styles.paradaNext}>Próxima</Text>
+                              : <Text style={styles.paradaPend}>Pendiente</Text>}
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
                   {recorrido.descanso_desde ? (
                     <>
                       <BigBtn label="Reanudar ruta" Icon={Play} onPress={() => accion('reanudar')} disabled={busy} />
@@ -626,7 +703,19 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                     </>
                   ) : (
                     <>
-                      {recorrido.estado === 'EN_RUTA_IDA' && <BigBtn label="Llegué al destino" Icon={Flag} onPress={() => accion('llegada')} disabled={busy} />}
+                      {/* En ruta: si hay paradas, un botón por la próxima parada
+                          ("Llegar a ‹destino›"); si no, el botón único de llegada. */}
+                      {recorrido.estado === 'EN_RUTA_IDA' && paradas.length > 0 && proximaParada && (
+                        <BigBtn
+                          label={`Llegar a ${(proximaParada.label || '').split(',')[0].slice(0, 22)}`}
+                          Icon={Flag}
+                          onPress={() => llegarParada(proximaParada)}
+                          disabled={busy}
+                        />
+                      )}
+                      {recorrido.estado === 'EN_RUTA_IDA' && paradas.length === 0 && (
+                        <BigBtn label="Llegué al destino" Icon={Flag} onPress={() => accion('llegada')} disabled={busy} />
+                      )}
                       {recorrido.estado === 'EN_DESTINO' && !yaEntregada && (<>
                         {/* Attesa: el chofer COLOCA las horas de espera (el contador es
                             solo referencia). El supervisor luego la autoriza/rechaza. */}
@@ -819,6 +908,17 @@ const makeStyles = () => StyleSheet.create({
   map: { height: 240, borderRadius: Theme.radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, marginBottom: S.md },
   trackCard: { backgroundColor: C.surface, borderRadius: Theme.radius.lg, borderWidth: 1, borderColor: C.border, padding: S.md, marginBottom: S.md },
   attesaCard: { flexDirection: 'row', alignItems: 'flex-start', gap: S.md, backgroundColor: C.warning + '14', borderRadius: Theme.radius.lg, borderWidth: 1, borderColor: C.warning + '55', paddingHorizontal: S.md, paddingVertical: S.md, marginBottom: S.sm },
+  paradasBox: { borderWidth: 1, borderColor: C.border, borderRadius: Theme.radius.lg, marginBottom: S.sm, overflow: 'hidden' },
+  paradaRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm, paddingHorizontal: S.md, paddingVertical: S.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
+  paradaDot: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  paradaDotOk: { backgroundColor: C.success },
+  paradaDotNext: { backgroundColor: C.primary },
+  paradaDotPend: { backgroundColor: C.surfaceAlt },
+  paradaDotTxt: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  paradaLabel: { flex: 1, fontSize: 13, color: C.text, fontWeight: '600' },
+  paradaOk: { fontSize: 12, color: C.success, fontWeight: '700' },
+  paradaNext: { fontSize: 12, color: C.primary, fontWeight: '700' },
+  paradaPend: { fontSize: 12, color: C.textMuted },
   attesaLabel: { fontSize: 13, fontWeight: '600', color: C.textMuted, marginBottom: 6 },
   attesaValue: { fontSize: 20, fontWeight: '800', color: C.warning, marginTop: 1 },
   attesaHint: { fontSize: 12, color: C.textMuted, marginTop: 4 },

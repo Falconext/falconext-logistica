@@ -1,11 +1,12 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Alert, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Alert, ScrollView, TouchableOpacity, Linking } from 'react-native';
+import * as Location from 'expo-location';
 import { useFocusEffect, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Navigation, MapPin, CornerUpLeft, Flag, Play, Package, Clock, Coffee, Pencil, Camera, Save, CheckCircle2 } from 'lucide-react-native';
 import { Screen, AppHeader, Card, Button, Badge, FormField, LoadingState, EmptyState, Theme } from '../../components/ui';
 import api, { DEVICE_TOKEN_KEY } from '../../services/api';
-import { startTracking, stopTracking } from '../../services/LocationService';
+import { startTracking, stopTracking, isBackgroundGranted } from '../../services/LocationService';
 import { useTheme } from '../../context/ThemeContext';
 import ChoferWizard from '../../components/ChoferWizard';
 import MapboxWebView from '../../components/MapboxWebView';
@@ -122,20 +123,49 @@ export default function MiRutaScreen() {
     setBusy(true);
     try {
       const trackable = await ensureDeviceToken();
+
+      if (trackable) {
+        // GPS OBLIGATORIO ANTES de iniciar (por pedido del empresario: "que no se
+        // pueda olvidar"). Se verifica y arranca el rastreo primero; solo si queda
+        // activo se crea el recorrido. Si algo falta, se manda a Ajustes y NO se
+        // inicia la ruta.
+        const serviciosOn = await Location.hasServicesEnabledAsync();
+        if (!serviciosOn) {
+          Alert.alert('Activa la ubicación', 'Debes activar el GPS/ubicación del teléfono para iniciar la ruta.', [
+            { text: 'Cancelar', style: 'cancel' },
+            { text: 'Abrir Ajustes', onPress: () => Linking.openSettings() },
+          ]);
+          return;
+        }
+        const ok = await startTracking();
+        if (!ok) {
+          Alert.alert('Rastreo GPS requerido', 'No puedes iniciar la ruta sin el rastreo GPS activo. Concede el permiso de ubicación e inténtalo de nuevo.', [
+            { text: 'Cancelar', style: 'cancel' },
+            { text: 'Abrir Ajustes', onPress: () => Linking.openSettings() },
+          ]);
+          return;
+        }
+        if (!(await isBackgroundGranted())) {
+          try { await Location.requestBackgroundPermissionsAsync(); } catch { /* noop */ }
+          if (!(await isBackgroundGranted())) {
+            Alert.alert(
+              'Activa "Permitir siempre"',
+              'Para iniciar la ruta, tu ubicación debe estar en "Permitir siempre" (así el supervisor te sigue aunque bloquees el teléfono). Ábrelo en Ajustes → Ubicación y vuelve a tocar Iniciar.',
+              [
+                { text: 'Cancelar', style: 'cancel' },
+                { text: 'Abrir Ajustes', onPress: () => Linking.openSettings() },
+              ],
+            );
+            try { await stopTracking(); } catch { /* noop */ }
+            return;
+          }
+        }
+      }
+
+      // GPS ya activo (o cuenta no rastreable): recién ahora se crea el recorrido.
       await api.post('/recorridos/iniciar', { programacionId: op.id });
       if (!trackable) {
-        // Cuenta no rastreable: la ruta arranca pero el supervisor no verá GPS.
         Alert.alert('Ruta iniciada · sin GPS', 'Tu cuenta no está habilitada para rastreo, así que el supervisor no verá tu ubicación ni el tiempo estimado. Pide al administrador que active «Será rastreado» en tu ficha.');
-      } else {
-        // El GPS es secundario: si falla (permiso denegado, Expo Go sin background),
-        // la ruta ya quedó iniciada — no abortamos el flujo por eso.
-        try {
-          const ok = await startTracking();
-          if (!ok) Alert.alert('GPS', 'Ruta iniciada, pero falta permiso de ubicación para rastrear. Actívalo para compartir tu posición.');
-        } catch (gpsErr) {
-          console.warn('[MiRuta] startTracking falló:', gpsErr);
-          Alert.alert('GPS', 'Ruta iniciada, pero no se pudo activar el rastreo en este dispositivo.');
-        }
       }
       await load();
     } catch (e: any) {

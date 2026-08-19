@@ -73,6 +73,17 @@ export class RecorridosController {
         return this.service.llegada(req.user.tenantId, id, req.user.trabajadorId);
     }
 
+    // Llegada a una PARADA (destino) concreta + su rendición/gastos opcional.
+    @Post(':id/paradas/:paradaId/llegada')
+    llegadaParada(
+        @Param('id') id: string,
+        @Param('paradaId') paradaId: string,
+        @Body() body: { anticipo?: number; gastos?: any; nota?: string },
+        @Req() req,
+    ) {
+        return this.service.llegadaParada(req.user.tenantId, id, paradaId, req.user.trabajadorId, body || {});
+    }
+
     @Post(':id/descanso')
     descanso(@Param('id') id: string, @Req() req) {
         return this.service.descanso(req.user.tenantId, id, req.user.trabajadorId);

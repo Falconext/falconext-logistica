@@ -6,6 +6,12 @@ import { useGoogleMaps, GOOGLE_MAPS_KEY } from './googleMaps';
 import { stylesFor } from './mapTheme';
 import { useT } from '../../lib/i18n';
 
+export interface LegInfo {
+  label: string;          // dirección de la parada
+  etaMin: number;         // minutos acumulados desde el origen hasta esta parada
+  distanceKm: number;     // km acumulados hasta esta parada
+}
+
 interface Props {
   originAddress: string;
   destinationAddress: string;
@@ -13,6 +19,18 @@ interface Props {
   mapType?: 'roadmap' | 'satellite';
   statusText?: string;
   statusDotClass?: string; // clase Tailwind para el color del punto de estado
+  // Se llama con la ETA/distancia ACUMULADA a cada parada (waypoints + destino).
+  onLegsInfo?: (legs: LegInfo[]) => void;
+  // Muestra dentro del mapa la lista de ETA por parada (útil en Mi Ruta).
+  showLegs?: boolean;
+}
+
+// "2h 15min" cuando pasa de 60 min; si no, "45 min".
+export function fmtMin(mins: number): string {
+  const m = Math.round(mins);
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  return h > 0 ? (r > 0 ? `${h}h ${r}min` : `${h}h`) : `${r} min`;
 }
 
 const geoCache = new Map<string, google.maps.LatLng | null>();
@@ -42,7 +60,7 @@ async function geocode(addr: string): Promise<google.maps.LatLng | null> {
   }
 }
 
-export function MapboxRouteMap({ originAddress, destinationAddress, waypoints, mapType = 'roadmap', statusText, statusDotClass = 'bg-emerald-500' }: Props) {
+export function MapboxRouteMap({ originAddress, destinationAddress, waypoints, mapType = 'roadmap', statusText, statusDotClass = 'bg-emerald-500', onLegsInfo, showLegs }: Props) {
   const t = useT();
   const resolvedStatusText = statusText ?? t('componentes.routeMap.enTransito');
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -51,6 +69,7 @@ export function MapboxRouteMap({ originAddress, destinationAddress, waypoints, m
   const markersRef = useRef<google.maps.Marker[]>([]);
   const [eta, setEta] = useState('');
   const [dist, setDist] = useState('');
+  const [legs, setLegs] = useState<LegInfo[]>([]);
   const [err, setErr] = useState(false);
 
   const { isLoaded } = useGoogleMaps();
@@ -121,8 +140,19 @@ export function MapboxRouteMap({ originAddress, destinationAddress, waypoints, m
           // Suma de todos los tramos (origen → paradas → destino).
           const totMin = (route.legs || []).reduce((s, l) => s + (l.duration?.value ?? 0), 0);
           const totM = (route.legs || []).reduce((s, l) => s + (l.distance?.value ?? 0), 0);
-          if (totMin) setEta(`${Math.round(totMin / 60)} min`);
+          if (totMin) setEta(fmtMin(totMin / 60));
           if (totM) setDist(`${(totM / 1000).toFixed(1)} km`);
+
+          // ETA/distancia ACUMULADA a cada parada (waypoints en orden + destino).
+          const stopLabels = [...(wps || []), destinationAddress];
+          let accMin = 0, accM = 0;
+          const legInfos: LegInfo[] = (route.legs || []).map((l, i) => {
+            accMin += (l.duration?.value ?? 0) / 60;
+            accM += (l.distance?.value ?? 0);
+            return { label: stopLabels[i] ?? `Parada ${i + 1}`, etaMin: accMin, distanceKm: accM / 1000 };
+          });
+          setLegs(legInfos);
+          onLegsInfo?.(legInfos);
         }
       } catch { /* usa línea recta origen→paradas→destino */ }
       if (cancelled) return;
@@ -184,6 +214,21 @@ export function MapboxRouteMap({ originAddress, destinationAddress, waypoints, m
           </span>
           {eta && <span className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300"><Clock size={14} /> {eta}</span>}
           {dist && <span className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300"><Navigation size={14} /> {dist}</span>}
+        </div>
+      )}
+
+      {/* ETA acumulada a cada destino (waypoints + destino final) */}
+      {showLegs && legs.length > 1 && (
+        <div className="absolute bottom-3 left-3 z-10 max-w-[70%] px-3 py-2 rounded-xl bg-white/95 dark:bg-[#0f1522]/95 backdrop-blur shadow-lg border border-slate-200 dark:border-[#202a40] text-xs space-y-1">
+          {legs.map((l, i) => (
+            <div key={i} className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+              <span className="h-4 w-4 shrink-0 rounded-full bg-blue-600 text-white grid place-items-center text-[9px] font-bold">{i + 1}</span>
+              <span className="font-semibold text-slate-800 dark:text-white">{fmtMin(l.etaMin)}</span>
+              <span className="text-slate-400">·</span>
+              <span>{l.distanceKm.toFixed(1)} km</span>
+              <span className="truncate text-slate-400">{l.label.split(',')[0]}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>
