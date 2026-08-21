@@ -183,10 +183,21 @@ model Programacion {
   lugar_retiro     String?  // 'LUOGO RITIRO' (primer/único origen de retiro)
   retiros          String[] // Retiros adicionales (recogidas) tras lugar_retiro, en orden
   fecha_retiro     DateTime? // New: Specific Date+Time for pickup
+  // Fecha/hora de cada retiro adicional — paralelo a `retiros[]` por índice:
+  // [{ fecha, hora }]. Cada almacén adicional puede tener su propio horario.
+  retiros_detalle  Json?
 
   lugar_entrega    String?  // 'LUOGO CONSEGNA' (primer/único destino)
   fecha_entrega    DateTime? // New: Specific Date+Time for delivery
   destinos         String[] // Destinos adicionales (paradas) tras lugar_entrega, en orden
+  // Detalle de cada destino adicional — paralelo a `destinos[]` por índice:
+  // [{ fecha, hora, cliente, spedizione, km_facturable, ingreso }]. fecha/hora
+  // sirven para CUALQUIER ruta con paradas (hora límite de esa entrega).
+  // cliente/spedizione/km_facturable/ingreso solo se usan cuando `compactado`
+  // es true: una "compactada" son 2+ entregas REALES de clientes distintos en
+  // un mismo viaje (no un mandado aparte) — cada una necesita su propio cliente/
+  // km/ingreso para poder cruzarlas después contra lo que reporta cada cliente.
+  destinos_detalle Json?
 
   hora_retiro      String?  // Deprecated? Keep for legacy
   eta              String?  // Deprecated? Keep for legacy

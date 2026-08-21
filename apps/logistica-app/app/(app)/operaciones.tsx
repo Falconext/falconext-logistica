@@ -126,6 +126,33 @@ const monthRangeISO = () => {
 
 type GastoRow = { tipo: string; monto: string; descripcion: string; numero_mancato: string; comprobantes: string[]; pagado_por_chofer: boolean };
 
+// Fecha/hora de un retiro adicional (paralelo a `retiros[]` por índice).
+type RetiroDetalleRow = { fecha: string; hora: string };
+const emptyRetiroDetalle = (): RetiroDetalleRow => ({ fecha: '', hora: '' });
+
+// Detalle de un destino adicional (paralelo a `destinos[]` por índice). fecha/hora
+// sirven para cualquier ruta; cliente/spedizione/km_facturable/ingreso solo se usan
+// cuando la operación es "compactada" (2+ entregas reales de clientes distintos).
+type DestinoDetalleRow = { fecha: string; hora: string; cliente: string; spedizione: string; km_facturable: string; ingreso: string };
+const emptyDestinoDetalle = (): DestinoDetalleRow => ({ fecha: '', hora: '', cliente: '', spedizione: '', km_facturable: '', ingreso: '' });
+const buildRetirosDetalle = (src: any): RetiroDetalleRow[] => {
+  const arr = Array.isArray(src.retiros) ? src.retiros : [];
+  const fromApi = Array.isArray(src.retiros_detalle) ? src.retiros_detalle : [];
+  return arr.map((_: string, i: number) => ({ fecha: fromApi[i]?.fecha || '', hora: fromApi[i]?.hora || '' }));
+};
+const buildDestinosDetalle = (src: any): DestinoDetalleRow[] => {
+  const arr = Array.isArray(src.destinos) ? src.destinos : [];
+  const fromApi = Array.isArray(src.destinos_detalle) ? src.destinos_detalle : [];
+  return arr.map((_: string, i: number) => ({
+    fecha: fromApi[i]?.fecha || '',
+    hora: fromApi[i]?.hora || '',
+    cliente: fromApi[i]?.cliente || '',
+    spedizione: fromApi[i]?.spedizione || '',
+    km_facturable: fromApi[i]?.km_facturable != null ? String(fromApi[i].km_facturable) : '',
+    ingreso: fromApi[i]?.ingreso != null ? String(fromApi[i].ingreso) : '',
+  }));
+};
+
 interface FormState {
   vehiculo_id: string;
   trabajador_id: string;
@@ -135,10 +162,12 @@ interface FormState {
   retiro_fecha: string;
   retiro_hora: string;
   retiros: string[];
+  retirosDetalle: RetiroDetalleRow[];
   entrega_lugar: string;
   entrega_fecha: string;
   entrega_hora: string;
   destinos: string[];
+  destinosDetalle: DestinoDetalleRow[];
   nota: string;
   estado: string;
   // Datos de consegna
@@ -173,10 +202,12 @@ const emptyForm = (): FormState => ({
   retiro_fecha: todayISO(),
   retiro_hora: '',
   retiros: [],
+  retirosDetalle: [],
   entrega_lugar: '',
   entrega_fecha: todayISO(),
   entrega_hora: '',
   destinos: [],
+  destinosDetalle: [],
   nota: '',
   estado: 'PENDIENTE',
   km: '',
@@ -551,10 +582,12 @@ export default function OperacionesScreen() {
     retiro_fecha: src.fecha_retiro ? src.fecha_retiro.split('T')[0] : todayISO(),
     retiro_hora: src.hora_retiro || '',
     retiros: Array.isArray(src.retiros) ? src.retiros : [],
+    retirosDetalle: buildRetirosDetalle(src),
     entrega_lugar: src.lugar_entrega || '',
     entrega_fecha: src.fecha_entrega ? src.fecha_entrega.split('T')[0] : todayISO(),
     entrega_hora: '',
     destinos: Array.isArray(src.destinos) ? src.destinos : [],
+    destinosDetalle: buildDestinosDetalle(src),
     nota: src.nota || '',
     estado: src.estado || 'PENDIENTE',
     km: src.km != null ? String(src.km) : '',
@@ -634,16 +667,28 @@ export default function OperacionesScreen() {
     }
   };
 
-  // --- Destinos adicionales ---
-  const addDestino = () => setForm((f) => ({ ...f, destinos: [...f.destinos, ''] }));
+  // --- Destinos adicionales --- destinosDetalle es paralelo a destinos (mismo índice).
+  const addDestino = () => setForm((f) => ({ ...f, destinos: [...f.destinos, ''], destinosDetalle: [...f.destinosDetalle, emptyDestinoDetalle()] }));
   const updateDestino = (i: number, val: string) => setForm((f) => ({ ...f, destinos: f.destinos.map((d, idx) => (idx === i ? val : d)) }));
-  const removeDestino = (i: number) => setForm((f) => ({ ...f, destinos: f.destinos.filter((_, idx) => idx !== i) }));
+  const removeDestino = (i: number) => setForm((f) => ({
+    ...f,
+    destinos: f.destinos.filter((_, idx) => idx !== i),
+    destinosDetalle: f.destinosDetalle.filter((_, idx) => idx !== i),
+  }));
+  const updateDestinoDetalle = (i: number, patch: Partial<DestinoDetalleRow>) =>
+    setForm((f) => ({ ...f, destinosDetalle: f.destinosDetalle.map((d, idx) => (idx === i ? { ...d, ...patch } : d)) }));
 
   // Orígenes/retiros adicionales: mismo patrón que destinos. El primero es
   // `retiro_lugar`; estos son los almacenes intermedios (ej. B-service).
-  const addRetiro = () => setForm((f) => ({ ...f, retiros: [...f.retiros, ''] }));
+  const addRetiro = () => setForm((f) => ({ ...f, retiros: [...f.retiros, ''], retirosDetalle: [...f.retirosDetalle, emptyRetiroDetalle()] }));
   const updateRetiro = (i: number, val: string) => setForm((f) => ({ ...f, retiros: f.retiros.map((d, idx) => (idx === i ? val : d)) }));
-  const removeRetiro = (i: number) => setForm((f) => ({ ...f, retiros: f.retiros.filter((_, idx) => idx !== i) }));
+  const removeRetiro = (i: number) => setForm((f) => ({
+    ...f,
+    retiros: f.retiros.filter((_, idx) => idx !== i),
+    retirosDetalle: f.retirosDetalle.filter((_, idx) => idx !== i),
+  }));
+  const updateRetiroDetalle = (i: number, patch: Partial<RetiroDetalleRow>) =>
+    setForm((f) => ({ ...f, retirosDetalle: f.retirosDetalle.map((d, idx) => (idx === i ? { ...d, ...patch } : d)) }));
 
   // --- Gastos (rendición) ---
   const addGasto = () => setForm((f) => ({ ...f, gastos: [...f.gastos, { tipo: 'PEAJE', monto: '', descripcion: '', numero_mancato: '', comprobantes: [], pagado_por_chofer: true }] }));
@@ -677,6 +722,15 @@ export default function OperacionesScreen() {
         const dt = new Date(`${fecha}T${hora || fallback}:00`);
         return isNaN(dt.getTime()) ? null : dt.toISOString();
       };
+      // retiros/destinos filtran las direcciones vacías; retirosDetalle/destinosDetalle
+      // se filtran EXACTAMENTE igual (mismo índice) para que sigan alineados 1:1.
+      const retirosFinal = form.retiros
+        .map((addr, idx) => ({ addr: addr.trim(), det: form.retirosDetalle[idx] }))
+        .filter((x) => x.addr);
+      const destinosFinal = form.destinos
+        .map((addr, idx) => ({ addr: addr.trim(), det: form.destinosDetalle[idx] }))
+        .filter((x) => x.addr);
+
       const payload: Record<string, any> = {
         vehiculo_id: form.vehiculo_id,
         trabajador_id: form.trabajador_id,
@@ -685,10 +739,19 @@ export default function OperacionesScreen() {
         lugar_retiro: form.retiro_lugar,
         fecha_retiro: toIso(form.retiro_fecha, form.retiro_hora, '00:00'),
         hora_retiro: form.retiro_hora,
-        retiros: form.retiros.map((s) => s.trim()).filter(Boolean),
+        retiros: retirosFinal.map((x) => x.addr),
+        retiros_detalle: retirosFinal.map((x) => ({ fecha: x.det?.fecha || null, hora: x.det?.hora || null })),
         lugar_entrega: form.entrega_lugar,
         fecha_entrega: toIso(form.entrega_fecha, form.entrega_hora, '23:59'),
-        destinos: form.destinos.map((s) => s.trim()).filter(Boolean),
+        destinos: destinosFinal.map((x) => x.addr),
+        destinos_detalle: destinosFinal.map((x) => ({
+          fecha: x.det?.fecha || null,
+          hora: x.det?.hora || null,
+          cliente: x.det?.cliente || null,
+          spedizione: x.det?.spedizione || null,
+          km_facturable: x.det && x.det.km_facturable !== '' ? Number(x.det.km_facturable) : null,
+          ingreso: x.det && x.det.ingreso !== '' ? Number(x.det.ingreso) : null,
+        })),
         nota: form.nota,
         km: form.km !== '' ? Number(form.km) : null,
         km_facturable: form.km_facturable !== '' ? Number(form.km_facturable) : null,
@@ -1382,17 +1445,36 @@ export default function OperacionesScreen() {
 
         <Text style={styles.formSection}>Orígenes adicionales</Text>
         {form.retiros.map((r, i) => (
-          <View key={i} style={styles.destinoRow}>
-            <FormField
-              label={`Retiro ${i + 2}`}
-              value={r}
-              onChangeText={(t) => updateRetiro(i, t)}
-              placeholder="Ej: B-Service, Via ... (otro almacén)"
-              style={{ flex: 1 }}
-            />
-            <TouchableOpacity style={styles.destinoRemove} onPress={() => removeRetiro(i)} activeOpacity={0.7}>
-              <Trash2 size={16} color={C.danger} />
-            </TouchableOpacity>
+          <View key={i} style={styles.destinoCard}>
+            <View style={styles.destinoRow}>
+              <FormField
+                label={`Retiro ${i + 2}`}
+                value={r}
+                onChangeText={(t) => updateRetiro(i, t)}
+                placeholder="Ej: B-Service, Via ... (otro almacén)"
+                style={{ flex: 1 }}
+              />
+              <TouchableOpacity style={styles.destinoRemove} onPress={() => removeRetiro(i)} activeOpacity={0.7}>
+                <Trash2 size={16} color={C.danger} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.dateRow}>
+              <View style={{ flex: 1 }}>
+                <DatePicker
+                  label="Fecha"
+                  value={form.retirosDetalle[i]?.fecha || ''}
+                  onChange={(v) => updateRetiroDetalle(i, { fecha: v })}
+                  placeholder="AAAA-MM-DD"
+                />
+              </View>
+              <FormField
+                label="Hora"
+                value={form.retirosDetalle[i]?.hora || ''}
+                onChangeText={(t) => updateRetiroDetalle(i, { hora: t })}
+                placeholder="HH:MM"
+                style={{ flex: 1 }}
+              />
+            </View>
           </View>
         ))}
         <TouchableOpacity style={styles.addGasto} onPress={addRetiro} activeOpacity={0.7}>
@@ -1426,20 +1508,95 @@ export default function OperacionesScreen() {
         </View>
 
         <Text style={styles.formSection}>Destinos adicionales</Text>
-        {form.destinos.map((d, i) => (
-          <View key={i} style={styles.destinoRow}>
-            <FormField
-              label={`Destino ${i + 2}`}
-              value={d}
-              onChangeText={(t) => updateDestino(i, t)}
-              placeholder="Ej: Via Roma 10, Milano"
-              style={{ flex: 1 }}
-            />
-            <TouchableOpacity style={styles.destinoRemove} onPress={() => removeDestino(i)} activeOpacity={0.7}>
-              <Trash2 size={16} color={C.danger} />
-            </TouchableOpacity>
-          </View>
-        ))}
+        {form.destinos.map((d, i) => {
+          const det = form.destinosDetalle[i];
+          const sugerido = form.compactado
+            ? calcularIngresoSugerido(det?.km_facturable, categoriaDeVehiculo(form.vehiculo_id), form.es_navetta, det?.spedizione || form.spedizione, tarifasConfig)
+            : null;
+          return (
+            <View key={i} style={styles.destinoCard}>
+              <View style={styles.destinoRow}>
+                <FormField
+                  label={`Destino ${i + 2}`}
+                  value={d}
+                  onChangeText={(t) => updateDestino(i, t)}
+                  placeholder="Ej: Via Roma 10, Milano"
+                  style={{ flex: 1 }}
+                />
+                <TouchableOpacity style={styles.destinoRemove} onPress={() => removeDestino(i)} activeOpacity={0.7}>
+                  <Trash2 size={16} color={C.danger} />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.dateRow}>
+                <View style={{ flex: 1 }}>
+                  <DatePicker
+                    label="Fecha"
+                    value={det?.fecha || ''}
+                    onChange={(v) => updateDestinoDetalle(i, { fecha: v })}
+                    placeholder="AAAA-MM-DD"
+                  />
+                </View>
+                <FormField
+                  label="Hora límite"
+                  value={det?.hora || ''}
+                  onChangeText={(t) => updateDestinoDetalle(i, { hora: t })}
+                  placeholder="HH:MM"
+                  style={{ flex: 1 }}
+                />
+              </View>
+              {form.compactado && (
+                <View style={styles.compactadaBox}>
+                  <Text style={styles.compactadaLabel}>Esta parada es otra entrega — sus propios datos</Text>
+                  <View style={styles.dateRow}>
+                    <FormField
+                      label="Cliente"
+                      value={det?.cliente || ''}
+                      onChangeText={(t) => updateDestinoDetalle(i, { cliente: t })}
+                      placeholder="Nombre del cliente"
+                      style={{ flex: 1 }}
+                    />
+                  </View>
+                  <Select
+                    label="Spedizione"
+                    value={det?.spedizione || ''}
+                    onChange={(v) => updateDestinoDetalle(i, { spedizione: v })}
+                    options={SPEDIZIONE_OPTIONS}
+                    placeholder="Selecciona spedizione"
+                    clearable
+                  />
+                  <View style={styles.dateRow}>
+                    <FormField
+                      label="Km facturable"
+                      value={det?.km_facturable || ''}
+                      onChangeText={(t) => {
+                        const sug = calcularIngresoSugerido(t, categoriaDeVehiculo(form.vehiculo_id), form.es_navetta, det?.spedizione || form.spedizione, tarifasConfig);
+                        updateDestinoDetalle(i, { km_facturable: t, ...(sug ? { ingreso: String(sug.monto) } : {}) });
+                      }}
+                      placeholder="Km"
+                      keyboardType="numeric"
+                      style={{ flex: 1 }}
+                    />
+                    <FormField
+                      label={`Ingreso (${moneda || 'EUR'})`}
+                      value={det?.ingreso || ''}
+                      onChangeText={(t) => updateDestinoDetalle(i, { ingreso: t })}
+                      placeholder="0.00"
+                      keyboardType="numeric"
+                      style={{ flex: 1 }}
+                    />
+                  </View>
+                  {sugerido ? (
+                    <Text style={styles.sugeridoText}>
+                      {sugerido.esNavetta
+                        ? 'Auto: navetta, pago fijo'
+                        : `Auto: ${categoriaVehiculoLabel(sugerido.categoria)}${sugerido.aplicaMinimo ? ', mínimo' : ` · ${sugerido.factor}€/km`}`} — puedes editarlo si varía
+                    </Text>
+                  ) : null}
+                </View>
+              )}
+            </View>
+          );
+        })}
         <TouchableOpacity style={styles.addGasto} onPress={addDestino} activeOpacity={0.7}>
           <Plus size={16} color={C.textMuted} />
           <Text style={styles.addGastoText}>Agregar destino</Text>
@@ -1850,6 +2007,9 @@ const makeStyles = () => StyleSheet.create({
   gpsHint: { fontSize: 12, color: C.info, fontWeight: '600', marginTop: 4 },
   destinoRow: { flexDirection: 'row', alignItems: 'flex-end', gap: S.sm, marginBottom: S.sm },
   destinoRemove: { paddingBottom: 12, paddingHorizontal: 4 },
+  destinoCard: { padding: S.md, borderRadius: Theme.radius.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.surfaceAlt, marginBottom: S.sm },
+  compactadaBox: { marginTop: S.sm, paddingTop: S.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border },
+  compactadaLabel: { fontSize: 11.5, fontWeight: '700', color: C.textMuted, marginBottom: S.sm, textTransform: 'uppercase' },
   paradaRow: { paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
   paradaLabel: { fontSize: 13, fontWeight: '600', color: C.text },
   paradaMeta: { fontSize: 12, color: C.textMuted, marginTop: 2 },

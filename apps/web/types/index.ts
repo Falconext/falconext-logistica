@@ -75,10 +75,16 @@ export interface Programacion {
     cliente?: string;
     lugar_retiro?: string;
     fecha_retiro?: string; // Added
+    retiros?: string[]; // Retiros/orígenes adicionales (almacenes) tras lugar_retiro
+    // Fecha/hora de cada retiro adicional, paralelo a retiros[] por índice.
+    retiros_detalle?: Array<{ fecha?: string | null; hora?: string | null }> | null;
 
     lugar_entrega?: string;
     fecha_entrega?: string; // Added (for countdown)
     destinos?: string[]; // Destinos adicionales (paradas) tras lugar_entrega
+    // Detalle de cada destino adicional, paralelo a destinos[] por índice. fecha/hora
+    // para cualquier ruta; cliente/spedizione/km_facturable/ingreso solo si compactado.
+    destinos_detalle?: Array<{ fecha?: string | null; hora?: string | null; cliente?: string | null; spedizione?: string | null; km_facturable?: number | null; ingreso?: number | null }> | null;
 
     hora_retiro?: string;
     eta?: string;

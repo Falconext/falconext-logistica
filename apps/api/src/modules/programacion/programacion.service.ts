@@ -188,6 +188,7 @@ export class ProgramacionService {
                     id: true, fecha: true, cliente: true, spedizione: true, lugar_entrega: true,
                     vehiculo_id: true, trabajador_id: true, km_facturable: true, ingreso_estimado: true,
                     reperibilita: true, attesa_estado: true, attesa_horas: true, tenant_id: true,
+                    compactado: true, destinos: true, destinos_detalle: true,
                     gastos: { select: { monto: true, pagado_por_chofer: true } },
                 },
             }),
@@ -236,15 +237,27 @@ export class ProgramacionService {
             vehiculoByCode.set(v.placa, { placa: v.placa, categoria: v.categoria });
         });
 
-        const items = ops.map((op, i) => {
+        // Una "compactada" (op.compactado) son 2+ entregas REALES de clientes
+        // distintos hechas en un solo viaje (ej: aeropuerto=AB 50km, San Miguel=DHL
+        // 100km) — no un mandado aparte. El reporte tiene que desglosarlas en una
+        // fila POR ENTREGA (cada una con su propio cliente/spedizione/km/ingreso)
+        // para poder cruzarlas contra lo que reporta cada cliente por separado.
+        // El costo del chofer (Gastado) es del viaje completo, no se puede repartir
+        // con criterio real — se muestra UNA sola vez, en la fila principal, para
+        // que sumar la columna no infle el total ni lo duplique.
+        const items = ops.flatMap((op, i) => {
             const costoTotal = costos[i].total;
+            const veh = op.vehiculo_id ? vehiculoByCode.get(op.vehiculo_id) : undefined;
+            const trabajadorNombre = (op.trabajador_id && nombreByCode.get(op.trabajador_id)) || null;
+
             // Ingreso REAL guardado por el supervisor. null = aún no lo llenó (no se
             // rellena con el sugerido: eso es una decisión manual de la operación).
-            const ingreso = op.ingreso_estimado != null ? op.ingreso_estimado : null;
-            const rentabilidad = ingreso != null ? round2(ingreso - costoTotal) : null;
-            const rentabilidad_pct = ingreso ? round2(((rentabilidad as number) / ingreso) * 100) : null;
-            const veh = op.vehiculo_id ? vehiculoByCode.get(op.vehiculo_id) : undefined;
-            return {
+            const ingresoPrincipal = op.ingreso_estimado != null ? op.ingreso_estimado : null;
+            const rentabilidadPrincipal = ingresoPrincipal != null ? round2(ingresoPrincipal - costoTotal) : null;
+            const rentabilidadPctPrincipal = ingresoPrincipal
+                ? round2(((rentabilidadPrincipal as number) / ingresoPrincipal) * 100) : null;
+
+            const filaPrincipal = {
                 id: op.id,
                 fecha: op.fecha,
                 cliente: op.cliente,
@@ -252,13 +265,43 @@ export class ProgramacionService {
                 lugar_entrega: op.lugar_entrega,
                 vehiculo_placa: veh?.placa ?? op.vehiculo_id ?? null,
                 vehiculo_categoria: veh?.categoria ?? null,
-                trabajador_nombre: (op.trabajador_id && nombreByCode.get(op.trabajador_id)) || null,
+                trabajador_nombre: trabajadorNombre,
                 km_facturable: op.km_facturable ?? null,
-                ingreso,
+                ingreso: ingresoPrincipal,
                 costo_chofer: costoTotal,
-                rentabilidad,
-                rentabilidad_pct,
+                rentabilidad: rentabilidadPrincipal,
+                rentabilidad_pct: rentabilidadPctPrincipal,
+                compactado: !!op.compactado,
             };
+
+            const destinosArr = Array.isArray(op.destinos) ? op.destinos : [];
+            const detalleArr: any[] = Array.isArray(op.destinos_detalle) ? op.destinos_detalle : [];
+            if (!op.compactado || !detalleArr.length) return [filaPrincipal];
+
+            const filasExtra = detalleArr
+                .map((d, idx) => {
+                    if (!d || (d.km_facturable == null && d.ingreso == null && !d.cliente && !d.spedizione)) return null;
+                    const ingresoD = d.ingreso != null ? Number(d.ingreso) : null;
+                    return {
+                        id: `${op.id}-c${idx + 1}`,
+                        fecha: op.fecha,
+                        cliente: d.cliente || op.cliente,
+                        spedizione: d.spedizione || op.spedizione,
+                        lugar_entrega: destinosArr[idx] || op.lugar_entrega,
+                        vehiculo_placa: veh?.placa ?? op.vehiculo_id ?? null,
+                        vehiculo_categoria: veh?.categoria ?? null,
+                        trabajador_nombre: trabajadorNombre,
+                        km_facturable: d.km_facturable != null ? Number(d.km_facturable) : null,
+                        ingreso: ingresoD,
+                        costo_chofer: 0,
+                        rentabilidad: null as number | null,
+                        rentabilidad_pct: null as number | null,
+                        compactado: true,
+                    };
+                })
+                .filter((f): f is NonNullable<typeof f> => f !== null);
+
+            return [filaPrincipal, ...filasExtra];
         });
 
         let sumIngreso = 0, sumCosto = 0, sumRentabilidad = 0, conIngreso = 0;

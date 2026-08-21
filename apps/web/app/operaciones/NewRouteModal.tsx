@@ -16,6 +16,33 @@ import { fmtMin } from '../../components/tracking/MapboxRouteMap';
 // Fila de gasto en el formulario (monto como string para el input).
 type GastoRow = { tipo: string; monto: string; descripcion: string; numero_mancato: string; link_peaje: string; comprobantes: string[]; pagado_por_chofer: boolean };
 
+// Fecha/hora de un retiro adicional (paralelo a `retiros[]` por índice).
+type RetiroDetalleRow = { fecha: string; hora: string };
+const emptyRetiroDetalle = (): RetiroDetalleRow => ({ fecha: '', hora: '' });
+
+// Detalle de un destino adicional (paralelo a `destinos[]` por índice). fecha/hora
+// sirven para cualquier ruta; cliente/spedizione/km_facturable/ingreso solo se usan
+// cuando la operación es "compactada" (2+ entregas reales de clientes distintos).
+type DestinoDetalleRow = { fecha: string; hora: string; cliente: string; spedizione: string; km_facturable: string; ingreso: string };
+const emptyDestinoDetalle = (): DestinoDetalleRow => ({ fecha: '', hora: '', cliente: '', spedizione: '', km_facturable: '', ingreso: '' });
+const buildRetirosDetalle = (src: any): RetiroDetalleRow[] => {
+    const arr = Array.isArray(src.retiros) ? src.retiros : [];
+    const fromApi = Array.isArray(src.retiros_detalle) ? src.retiros_detalle : [];
+    return arr.map((_: string, i: number) => ({ fecha: fromApi[i]?.fecha || '', hora: fromApi[i]?.hora || '' }));
+};
+const buildDestinosDetalle = (src: any): DestinoDetalleRow[] => {
+    const arr = Array.isArray(src.destinos) ? src.destinos : [];
+    const fromApi = Array.isArray(src.destinos_detalle) ? src.destinos_detalle : [];
+    return arr.map((_: string, i: number) => ({
+        fecha: fromApi[i]?.fecha || '',
+        hora: fromApi[i]?.hora || '',
+        cliente: fromApi[i]?.cliente || '',
+        spedizione: fromApi[i]?.spedizione || '',
+        km_facturable: fromApi[i]?.km_facturable != null ? String(fromApi[i].km_facturable) : '',
+        ingreso: fromApi[i]?.ingreso != null ? String(fromApi[i].ingreso) : '',
+    }));
+};
+
 const GASTO_TIPOS = [
     { value: 'PEAJE', label: 'Peaje' },
     { value: 'COMBUSTIBLE', label: 'Combustible' },
@@ -101,6 +128,9 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
         retiro_lugar: '',
         retiro_fecha: new Date().toISOString().split('T')[0],
         retiro_hora: '',
+        // Orígenes adicionales (otros almacenes de retiro)
+        retiros: [] as string[],
+        retirosDetalle: [] as RetiroDetalleRow[],
 
         // Delivery
         entrega_lugar: '',
@@ -109,6 +139,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
 
         // Destinos adicionales (paradas tras el destino principal)
         destinos: [] as string[],
+        destinosDetalle: [] as DestinoDetalleRow[],
 
         // Datos de consegna
         km: '',
@@ -223,10 +254,13 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 retiro_lugar: src.lugar_retiro || '',
                 retiro_fecha: isoToDate(src.fecha_retiro) || today,
                 retiro_hora: src.hora_retiro || isoToTime(src.fecha_retiro),
+                retiros: Array.isArray(src.retiros) ? src.retiros : [],
+                retirosDetalle: buildRetirosDetalle(src),
                 entrega_lugar: src.lugar_entrega || '',
                 entrega_fecha: isoToDate(src.fecha_entrega) || today,
                 entrega_hora: isoToTime(src.fecha_entrega),
                 destinos: Array.isArray(src.destinos) ? src.destinos : [],
+                destinosDetalle: buildDestinosDetalle(src),
                 km: src.km != null ? String(src.km) : '',
                 km_facturable: src.km_facturable != null ? String(src.km_facturable) : '',
                 ingreso_estimado: src.ingreso_estimado != null ? String(src.ingreso_estimado) : '',
@@ -271,10 +305,13 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 retiro_lugar: '',
                 retiro_fecha: today,
                 retiro_hora: '',
+                retiros: [],
+                retirosDetalle: [],
                 entrega_lugar: '',
                 entrega_fecha: today,
                 entrega_hora: '',
                 destinos: [],
+                destinosDetalle: [],
                 km: '',
                 km_facturable: '',
                 ingreso_estimado: '',
@@ -327,6 +364,15 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
             // but relying on what we have.
             const fechaEntregaIso = formData.entrega_fecha ? new Date(`${formData.entrega_fecha}T${formData.entrega_hora || '23:59'}:00`).toISOString() : null;
 
+            // retiros/destinos filtran las direcciones vacías; retirosDetalle/destinosDetalle
+            // se filtran EXACTAMENTE igual (mismo índice) para que sigan alineados 1:1.
+            const retirosFinal = formData.retiros
+                .map((addr, idx) => ({ addr: addr.trim(), det: formData.retirosDetalle[idx] }))
+                .filter((x) => x.addr);
+            const destinosFinal = formData.destinos
+                .map((addr, idx) => ({ addr: addr.trim(), det: formData.destinosDetalle[idx] }))
+                .filter((x) => x.addr);
+
             const payload = {
                 vehiculo_id: formData.vehiculo_id,
                 trabajador_id: formData.trabajador_id,
@@ -334,9 +380,19 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 lugar_retiro: formData.retiro_lugar,
                 fecha_retiro: fechaRetiroIso,
                 hora_retiro: formData.retiro_hora, // Legacy support
+                retiros: retirosFinal.map((x) => x.addr),
+                retiros_detalle: retirosFinal.map((x) => ({ fecha: x.det?.fecha || null, hora: x.det?.hora || null })),
                 lugar_entrega: formData.entrega_lugar,
                 fecha_entrega: fechaEntregaIso,
-                destinos: formData.destinos.map((s) => s.trim()).filter(Boolean),
+                destinos: destinosFinal.map((x) => x.addr),
+                destinos_detalle: destinosFinal.map((x) => ({
+                    fecha: x.det?.fecha || null,
+                    hora: x.det?.hora || null,
+                    cliente: x.det?.cliente || null,
+                    spedizione: x.det?.spedizione || null,
+                    km_facturable: x.det && x.det.km_facturable !== '' ? Number(x.det.km_facturable) : null,
+                    ingreso: x.det && x.det.ingreso !== '' ? Number(x.det.ingreso) : null,
+                })),
                 km: formData.km !== '' ? Number(formData.km) : null,
                 km_facturable: formData.km_facturable !== '' ? Number(formData.km_facturable) : null,
                 ingreso_estimado: formData.ingreso_estimado !== '' ? Number(formData.ingreso_estimado) : null,
@@ -384,10 +440,13 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 retiro_lugar: '',
                 retiro_fecha: '',
                 retiro_hora: '',
+                retiros: [],
+                retirosDetalle: [],
                 entrega_lugar: '',
                 entrega_fecha: '',
                 entrega_hora: '',
                 destinos: [],
+                destinosDetalle: [],
                 km: '',
                 km_facturable: '',
                 ingreso_estimado: '',
@@ -413,10 +472,27 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
         }
     };
 
-    // --- Destinos adicionales (paradas) ---
-    const addDestino = () => setFormData((f) => ({ ...f, destinos: [...f.destinos, ''] }));
+    // --- Destinos adicionales (paradas) --- destinosDetalle es paralelo a destinos.
+    const addDestino = () => setFormData((f) => ({ ...f, destinos: [...f.destinos, ''], destinosDetalle: [...f.destinosDetalle, emptyDestinoDetalle()] }));
     const updateDestino = (i: number, val: string) => setFormData((f) => ({ ...f, destinos: f.destinos.map((d, idx) => (idx === i ? val : d)) }));
-    const removeDestino = (i: number) => setFormData((f) => ({ ...f, destinos: f.destinos.filter((_, idx) => idx !== i) }));
+    const removeDestino = (i: number) => setFormData((f) => ({
+        ...f,
+        destinos: f.destinos.filter((_, idx) => idx !== i),
+        destinosDetalle: f.destinosDetalle.filter((_, idx) => idx !== i),
+    }));
+    const updateDestinoDetalle = (i: number, patch: Partial<DestinoDetalleRow>) =>
+        setFormData((f) => ({ ...f, destinosDetalle: f.destinosDetalle.map((d, idx) => (idx === i ? { ...d, ...patch } : d)) }));
+
+    // --- Orígenes adicionales (otros almacenes de retiro) --- mismo patrón que destinos.
+    const addRetiro = () => setFormData((f) => ({ ...f, retiros: [...f.retiros, ''], retirosDetalle: [...f.retirosDetalle, emptyRetiroDetalle()] }));
+    const updateRetiro = (i: number, val: string) => setFormData((f) => ({ ...f, retiros: f.retiros.map((d, idx) => (idx === i ? val : d)) }));
+    const removeRetiro = (i: number) => setFormData((f) => ({
+        ...f,
+        retiros: f.retiros.filter((_, idx) => idx !== i),
+        retirosDetalle: f.retirosDetalle.filter((_, idx) => idx !== i),
+    }));
+    const updateRetiroDetalle = (i: number, patch: Partial<RetiroDetalleRow>) =>
+        setFormData((f) => ({ ...f, retirosDetalle: f.retirosDetalle.map((d, idx) => (idx === i ? { ...d, ...patch } : d)) }));
 
     // --- Posición actual del conductor (usa su última ubicación GPS como origen) ---
     const usarPosicionActual = async () => {
@@ -654,6 +730,61 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                             </div>
                         </div>
 
+                        {/* Orígenes adicionales (otros almacenes de retiro) */}
+                        <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800">
+                            <h4 className="flex items-center gap-2 text-slate-700 dark:text-slate-200 font-bold mb-3">
+                                <MapPin size={16} className="text-emerald-500" />
+                                Orígenes adicionales
+                            </h4>
+                            <div className="space-y-2">
+                                {formData.retiros.map((r, i) => (
+                                    <div key={i} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 space-y-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] font-bold text-slate-400 w-5 shrink-0 text-center">{i + 2}</span>
+                                            <input
+                                                type="text"
+                                                placeholder="Ej: B-Service, Via ... (otro almacén)"
+                                                className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-emerald-500/50 outline-none"
+                                                value={r}
+                                                onChange={(e) => updateRetiro(i, e.target.value)}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => removeRetiro(i)}
+                                                className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition shrink-0"
+                                                aria-label="Quitar origen"
+                                            >
+                                                <Trash2 size={15} />
+                                            </button>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 pl-7">
+                                            <DatePicker
+                                                label="Fecha"
+                                                value={formData.retirosDetalle[i]?.fecha || ''}
+                                                onChange={(v) => updateRetiroDetalle(i, { fecha: v })}
+                                            />
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-bold text-slate-400 uppercase">Hora</label>
+                                                <input
+                                                    type="time"
+                                                    className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-emerald-500/50 outline-none"
+                                                    value={formData.retirosDetalle[i]?.hora || ''}
+                                                    onChange={(e) => updateRetiroDetalle(i, { hora: e.target.value })}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                <button
+                                    type="button"
+                                    onClick={addRetiro}
+                                    className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-500 hover:text-emerald-600 hover:border-emerald-400 text-sm font-medium transition"
+                                >
+                                    <Plus size={16} /> Agregar retiro
+                                </button>
+                            </div>
+                        </div>
+
                         {/* Destinos adicionales (paradas después del destino principal) */}
                         <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800">
                             <h4 className="flex items-center gap-2 text-slate-700 dark:text-slate-200 font-bold mb-3">
@@ -661,31 +792,106 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                 Destinos adicionales
                             </h4>
                             <div className="space-y-2">
-                                {formData.destinos.map((dest, i) => (
-                                    <div key={i} className="flex items-center gap-2">
-                                        <span className="text-[10px] font-bold text-slate-400 w-5 shrink-0 text-center">{i + 2}</span>
-                                        <input
-                                            type="text"
-                                            placeholder="Dirección de la parada adicional"
-                                            className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-red-500/50 outline-none"
-                                            value={dest}
-                                            onChange={(e) => updateDestino(i, e.target.value)}
-                                        />
-                                        {etaDestinos[i] && (
-                                            <span className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 text-[11px] font-semibold" title="Tiempo estimado desde el origen">
-                                                <Clock size={12} /> {etaDestinos[i]}
-                                            </span>
-                                        )}
-                                        <button
-                                            type="button"
-                                            onClick={() => removeDestino(i)}
-                                            className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition shrink-0"
-                                            aria-label="Quitar destino"
-                                        >
-                                            <Trash2 size={15} />
-                                        </button>
-                                    </div>
-                                ))}
+                                {formData.destinos.map((dest, i) => {
+                                    const det = formData.destinosDetalle[i];
+                                    const sugerido = formData.compactado
+                                        ? calcularIngresoSugerido(det?.km_facturable, categoriaDeVehiculo(formData.vehiculo_id), formData.es_navetta, det?.spedizione || formData.spedizione, tarifasConfig)
+                                        : null;
+                                    return (
+                                        <div key={i} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 space-y-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-bold text-slate-400 w-5 shrink-0 text-center">{i + 2}</span>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Dirección de la parada adicional"
+                                                    className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-red-500/50 outline-none"
+                                                    value={dest}
+                                                    onChange={(e) => updateDestino(i, e.target.value)}
+                                                />
+                                                {etaDestinos[i] && (
+                                                    <span className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 text-[11px] font-semibold" title="Tiempo estimado desde el origen">
+                                                        <Clock size={12} /> {etaDestinos[i]}
+                                                    </span>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeDestino(i)}
+                                                    className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition shrink-0"
+                                                    aria-label="Quitar destino"
+                                                >
+                                                    <Trash2 size={15} />
+                                                </button>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2 pl-7">
+                                                <DatePicker
+                                                    label="Fecha"
+                                                    value={det?.fecha || ''}
+                                                    onChange={(v) => updateDestinoDetalle(i, { fecha: v })}
+                                                />
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-bold text-slate-400 uppercase">Hora límite</label>
+                                                    <input
+                                                        type="time"
+                                                        className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-red-500/50 outline-none"
+                                                        value={det?.hora || ''}
+                                                        onChange={(e) => updateDestinoDetalle(i, { hora: e.target.value })}
+                                                    />
+                                                </div>
+                                            </div>
+                                            {formData.compactado && (
+                                                <div className="pl-7 pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase">Esta parada es otra entrega — sus propios datos</p>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Cliente"
+                                                        className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-red-500/50 outline-none"
+                                                        value={det?.cliente || ''}
+                                                        onChange={(e) => updateDestinoDetalle(i, { cliente: e.target.value })}
+                                                    />
+                                                    <Select
+                                                        label="Spedizione"
+                                                        placeholder="-- Seleccionar --"
+                                                        searchable
+                                                        clearable
+                                                        value={det?.spedizione || ''}
+                                                        onChange={(v) => updateDestinoDetalle(i, { spedizione: v })}
+                                                        options={SPEDIZIONE_OPTIONS}
+                                                    />
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            step="any"
+                                                            placeholder="Km facturable"
+                                                            className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-red-500/50"
+                                                            value={det?.km_facturable || ''}
+                                                            onChange={(e) => {
+                                                                const sug = calcularIngresoSugerido(e.target.value, categoriaDeVehiculo(formData.vehiculo_id), formData.es_navetta, det?.spedizione || formData.spedizione, tarifasConfig);
+                                                                updateDestinoDetalle(i, { km_facturable: e.target.value, ...(sug ? { ingreso: String(sug.monto) } : {}) });
+                                                            }}
+                                                        />
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            step="any"
+                                                            placeholder={`Ingreso (${currency})`}
+                                                            className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-red-500/50"
+                                                            value={det?.ingreso || ''}
+                                                            onChange={(e) => updateDestinoDetalle(i, { ingreso: e.target.value })}
+                                                        />
+                                                    </div>
+                                                    {sugerido && (
+                                                        <p className="text-xs font-semibold text-blue-600">
+                                                            {sugerido.esNavetta
+                                                                ? 'Auto: navetta, pago fijo'
+                                                                : `Auto: ${categoriaVehiculoLabel(sugerido.categoria)}${sugerido.aplicaMinimo ? ', mínimo' : ` · ${sugerido.factor}${currency}/km`}`} — puedes editarlo si varía
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                                 <button
                                     type="button"
                                     onClick={addDestino}
