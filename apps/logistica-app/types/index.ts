@@ -90,6 +90,12 @@ export interface Programacion {
   // Sugerencia calculada por el backend (GET /programacion/:id): null si falta
   // km_facturable/categoría o si la spedizione se cobra manual (Extras).
   ingreso_sugerido?: { monto: number; factor: number; categoria: string; aplicaMinimo: boolean } | null;
+  // Desglose de facturación por destino (índice 0 = lugar_entrega, índice i =
+  // destinos[i-1]). Si tiene datos, km_facturable/ingreso_estimado son su SUMA.
+  destinos_facturacion?: DestinoFacturacion[] | null;
+  // Una sugerencia por cada entrada de destinos_facturacion (mismo orden). null si
+  // la operación no tiene desglose por destino.
+  ingreso_sugerido_por_destino?: Array<{ monto: number; factor: number; categoria: string; aplicaMinimo: boolean } | null> | null;
 
   // Datos operativos de consegna
   km?: number;
@@ -110,6 +116,13 @@ export interface Programacion {
   // Costo del chofer en esta operación (horas + reperibilità + attesa + gastos
   // pagados por él). Lo calcula el backend en GET /programacion/:id.
   costo_chofer?: CostoChofer;
+}
+
+// Facturación de UN destino dentro de destinos_facturacion (ver Programacion).
+export interface DestinoFacturacion {
+  km_facturable?: number | null;
+  ingreso?: number | null;
+  referencia_dhl?: string | null; // tracking/código que reporta DHL para ese destino
 }
 
 export interface CostoChofer {

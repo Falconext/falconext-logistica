@@ -211,6 +211,14 @@ model Programacion {
   // FACTURA, distinto del km real recorrido (GPS, en el campo `km`). El supervisor
   // lo escribe a mano. Con la categoría del vehículo se sugiere el ingreso.
   km_facturable    Float?
+  // Desglose de facturación por destino cuando la operación tiene varias paradas:
+  // [{ km_facturable, ingreso, referencia_dhl }], índice 0 = lugar_entrega (destino
+  // principal), índice i = destinos[i-1]. Independiente del Recorrido/
+  // RecorridoParada (vive mientras exista la operación, aunque el viaje se rehaga o
+  // el chofer nunca use "Mi Ruta"). Si viene con datos, la SUMA sobrescribe
+  // km_facturable/ingreso_estimado; si no, se usa el campo único de siempre
+  // (compatibilidad total con operaciones de un solo destino).
+  destinos_facturacion Json?
 
   // Rendición del chofer: bonifico inicial + abonos recibidos en ruta y gastos.
   // Recibido = anticipo + abonos_ruta. Saldo a devolver = recibido - gastos pagados por el chofer.
@@ -618,6 +626,12 @@ model RecorridoParada {
   abono_de       String?   // quién le entregó el dinero (supervisor/persona)
   gastos         Json?     // lista de gastos [{ tipo, monto, descripcion }] (opcional)
   nota           String?
+  // Km/min GPS del TRAMO hasta esta parada (desde la parada anterior, o desde el
+  // inicio/retorno si es la primera). Solo informativo — NO alimenta ida_km/
+  // vuelta_km/total_km del Recorrido (eso sigue calculándose igual que siempre);
+  // sirve para comparar tramo por tramo contra lo que reporta DHL.
+  km_tramo       Float?
+  min_tramo      Float?
   creado_en      DateTime  @default(now())
   actualizado_en DateTime  @updatedAt
 

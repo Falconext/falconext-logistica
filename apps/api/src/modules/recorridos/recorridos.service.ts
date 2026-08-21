@@ -206,6 +206,30 @@ export class RecorridosService {
         }
 
         const now = new Date();
+
+        // Km/min GPS del TRAMO hasta esta parada (solo informativo, para comparar
+        // tramo a tramo contra lo que reporta DHL — no toca ida_km/vuelta_km/total_km).
+        let kmTramo: number | null = null;
+        let minTramo: number | null = null;
+        if (!parada.llegada_en) {
+            let desde: Date | null;
+            if (parada.es_retorno) {
+                desde = r.retorno_en ?? r.iniciado_en;
+            } else if (parada.orden === 1) {
+                desde = r.iniciado_en;
+            } else {
+                const anterior = await this.prisma.recorridoParada.findFirst({
+                    where: { recorrido_id: r.id, orden: parada.orden - 1 },
+                    select: { llegada_en: true },
+                });
+                desde = anterior?.llegada_en ?? r.iniciado_en;
+            }
+            if (desde) {
+                kmTramo = await this.distanciaKm(r.device_id, desde, now);
+                minTramo = Math.round((now.getTime() - desde.getTime()) / 60000);
+            }
+        }
+
         await this.prisma.recorridoParada.update({
             where: { id: parada.id },
             data: {
@@ -216,6 +240,8 @@ export class RecorridosService {
                 nota: body?.nota ?? parada.nota,
                 entregado: body?.entregado ?? parada.entregado,
                 foto_bolla: body?.foto_bolla ?? parada.foto_bolla,
+                km_tramo: parada.llegada_en ? undefined : kmTramo,
+                min_tramo: parada.llegada_en ? undefined : minTramo,
             },
         });
 

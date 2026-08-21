@@ -129,11 +129,12 @@ export class ProgramacionService {
             include: { gastos: { orderBy: { creado_en: 'asc' } } },
         });
         if (!op) return op;
-        const [costo_chofer, ingreso_sugerido] = await Promise.all([
+        const [costo_chofer, ingreso_sugerido, ingreso_sugerido_por_destino] = await Promise.all([
             this.costoChofer(op),
             this.ingresoSugerido(op),
+            this.ingresoSugeridoPorDestino(op),
         ]);
-        return { ...op, costo_chofer, ingreso_sugerido };
+        return { ...op, costo_chofer, ingreso_sugerido, ingreso_sugerido_por_destino };
     }
 
     // Panel financiero (Fase C): rentabilidad por operación en un período —
@@ -296,6 +297,30 @@ export class ProgramacionService {
         return ingresoSugerido(op, vehiculo?.categoria, tarifasIngresoFromTenant(tenant));
     }
 
+    // Igual que ingresoSugerido() pero UNA sugerencia por cada entrada de
+    // destinos_facturacion (una operación con 3 destinos DHL puede tener 3 km
+    // facturables distintos). null si la operación no tiene desglose por destino.
+    private async ingresoSugeridoPorDestino(op: {
+        vehiculo_id?: string | null; spedizione?: string | null; tenant_id: string;
+        destinos_facturacion?: any;
+    }) {
+        const entradas: any[] = Array.isArray(op.destinos_facturacion) ? op.destinos_facturacion : [];
+        if (!entradas.length || !op.vehiculo_id) return null;
+        const [vehiculo, tenant] = await Promise.all([
+            this.prisma.vehiculo.findFirst({
+                where: { tenant_id: op.tenant_id, OR: [{ id: op.vehiculo_id }, { placa: op.vehiculo_id }] },
+                select: { categoria: true },
+            }),
+            this.prisma.tenant.findUnique({ where: { id: op.tenant_id }, select: TARIFAS_INGRESO_TENANT_SELECT }),
+        ]);
+        const tar = tarifasIngresoFromTenant(tenant);
+        return entradas.map((e) =>
+            e && e.km_facturable != null
+                ? ingresoSugerido({ km_facturable: Number(e.km_facturable), spedizione: op.spedizione }, vehiculo?.categoria, tar)
+                : null,
+        );
+    }
+
     // Costo del chofer de ESTA operación: pago por horas de manejo (día/noche,
     // del recorrido GPS ligado a la operación) + reperibilità (fijo) + attesa
     // AUTORIZADA (€/h, solo si es ≥1h, misma regla que el resumen mensual) +
@@ -414,8 +439,29 @@ export class ProgramacionService {
         return data;
     }
 
+    // Si viene destinos_facturacion (un desglose por CADA destino de la operación,
+    // principal incluido — índice 0 = lugar_entrega, índice i = destinos[i-1]),
+    // km_facturable/ingreso_estimado dejan de ser lo que se escribió antes y pasan a
+    // ser la SUMA del desglose. Es una recomputación PURA a partir del arreglo (no
+    // incremental sobre el valor guardado), a propósito: así guardar dos veces
+    // seguidas nunca duplica el total. Si no viene el arreglo (operación de un solo
+    // destino, caso de siempre), no se toca nada — financiero()/costoChofer()/
+    // reportes siguen leyendo un solo total por operación sin enterarse de que por
+    // dentro puede haber varios destinos.
+    private aplicarDestinosFacturacion(data: any) {
+        if (!data || !Array.isArray(data.destinos_facturacion)) return data;
+        const entradas = data.destinos_facturacion;
+        const conValor = entradas.some((e: any) => e && (e.km_facturable != null || e.ingreso != null));
+        if (!conValor) return data;
+        const round2 = (n: number) => Math.round(n * 100) / 100;
+        data.km_facturable = round2(entradas.reduce((s: number, e: any) => s + (Number(e?.km_facturable) || 0), 0));
+        data.ingreso_estimado = round2(entradas.reduce((s: number, e: any) => s + (Number(e?.ingreso) || 0), 0));
+        return data;
+    }
+
     async create(data: any, tenantId?: string) {
         this.syncEstadosEntrega(data);
+        this.aplicarDestinosFacturacion(data);
         // `gastos` es una relación (array de objetos), no una columna: se maneja aparte.
         const { gastos, ...rest } = data;
         // Scope the new record to the caller's tenant (from the JWT). Fall back to
@@ -447,6 +493,7 @@ export class ProgramacionService {
 
     async update(id: string, data: any, opts?: { isChofer?: boolean }) {
         this.syncEstadosEntrega(data);
+        this.aplicarDestinosFacturacion(data);
         // Separamos los gastos (relación) del resto de columnas.
         const { gastos, ...rest } = data;
         // La autorización de la attesa (estado/quién autorizó) NO se cambia por el
