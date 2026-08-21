@@ -424,7 +424,7 @@ export class RegistrosService {
             tarifa_reperibilita: tar.reperibilita, tarifa_ore_attesa: tar.attesaHora, moneda: tar.moneda,
             factor_km_auto_furgoneta: ing.factores.AUTO_FURGONETA, factor_km_h1_l1: ing.factores.H1_L1,
             factor_km_h2_l2: ing.factores.H2_L2, factor_km_cassonato: ing.factores.CASSONATO,
-            ingreso_km_minimo: ing.minimo, ingreso_km_umbral: ing.umbralKm,
+            ingreso_km_minimo: ing.minimo, ingreso_km_umbral: ing.umbralKm, pago_navetta: ing.pagoNavetta,
         };
     }
 
@@ -444,6 +444,7 @@ export class RegistrosService {
         if (body.factor_km_cassonato !== undefined && body.factor_km_cassonato !== '') data.factor_km_cassonato = num(body.factor_km_cassonato);
         if (body.ingreso_km_minimo !== undefined && body.ingreso_km_minimo !== '') data.ingreso_km_minimo = num(body.ingreso_km_minimo);
         if (body.ingreso_km_umbral !== undefined && body.ingreso_km_umbral !== '') data.ingreso_km_umbral = Math.max(0, Math.round(num(body.ingreso_km_umbral)));
+        if (body.pago_navetta !== undefined && body.pago_navetta !== '') data.pago_navetta = num(body.pago_navetta);
         await this.prisma.tenant.update({ where: { id: tenantId }, data });
         return this.getConfig(tenantId);
     }

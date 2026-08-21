@@ -11,16 +11,19 @@ export interface TarifasIngreso {
     factores: Record<CategoriaVehiculo, number>;
     minimo: number;
     umbralKm: number;
+    // Pago fijo cuando la operación es una NAVETTA (traslado/lanzadera entre
+    // almacenes, no una entrega): no depende del km ni de la categoría.
+    pagoNavetta: number;
 }
 
 export const TARIFAS_INGRESO_TENANT_SELECT = {
     factor_km_auto_furgoneta: true, factor_km_h1_l1: true, factor_km_h2_l2: true, factor_km_cassonato: true,
-    ingreso_km_minimo: true, ingreso_km_umbral: true,
+    ingreso_km_minimo: true, ingreso_km_umbral: true, pago_navetta: true,
 } as const;
 
 export function tarifasIngresoFromTenant(t: {
     factor_km_auto_furgoneta?: any; factor_km_h1_l1?: any; factor_km_h2_l2?: any; factor_km_cassonato?: any;
-    ingreso_km_minimo?: any; ingreso_km_umbral?: number | null;
+    ingreso_km_minimo?: any; ingreso_km_umbral?: number | null; pago_navetta?: any;
 } | null): TarifasIngreso {
     return {
         factores: {
@@ -31,6 +34,7 @@ export function tarifasIngresoFromTenant(t: {
         },
         minimo: num(t?.ingreso_km_minimo ?? 15),
         umbralKm: t?.ingreso_km_umbral ?? 35,
+        pagoNavetta: num(t?.pago_navetta ?? 15),
     };
 }
 
@@ -41,11 +45,16 @@ const SPEDIZIONI_SIN_AUTOCALCULO = ['EXTRAS ALFREDO', 'EXTRAS ESTEFANIA'];
 // Ingreso sugerido de una operación: km_facturable × factor(categoría del
 // vehículo), o el fijo `minimo` si el km es corto (< umbral). null si falta
 // algún dato (km, categoría) o la spedizione se factura manualmente.
+// Si es_navetta, el pago es SIEMPRE el fijo de navetta — no importa el km, la
+// categoría, ni la spedizione (una navetta no es una entrega facturable normal).
 export function ingresoSugerido(
-    op: { km_facturable?: number | null; spedizione?: string | null },
+    op: { km_facturable?: number | null; spedizione?: string | null; es_navetta?: boolean | null },
     categoria: string | null | undefined,
     tar: TarifasIngreso,
-): { monto: number; factor: number; categoria: CategoriaVehiculo; aplicaMinimo: boolean } | null {
+): { monto: number; factor: number | null; categoria: CategoriaVehiculo | null; aplicaMinimo: boolean; esNavetta: boolean } | null {
+    if (op.es_navetta) {
+        return { monto: Math.round(tar.pagoNavetta * 100) / 100, factor: null, categoria: null, aplicaMinimo: false, esNavetta: true };
+    }
     const sped = (op.spedizione || '').trim().toUpperCase();
     if (SPEDIZIONI_SIN_AUTOCALCULO.includes(sped)) return null;
     const km = num(op.km_facturable);
@@ -55,5 +64,5 @@ export function ingresoSugerido(
     const factor = tar.factores[cat];
     const aplicaMinimo = km < tar.umbralKm;
     const monto = Math.round((aplicaMinimo ? tar.minimo : km * factor) * 100) / 100;
-    return { monto, factor, categoria: cat, aplicaMinimo };
+    return { monto, factor, categoria: cat, aplicaMinimo, esNavetta: false };
 }

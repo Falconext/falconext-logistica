@@ -86,7 +86,7 @@ export default function ServiciosPage() {
     const [tarifas, setTarifas] = useState({
         tarifa_ore_giorno: '', tarifa_ore_notte: '', hora_corte_notte: '', tarifa_reperibilita: '', tarifa_ore_attesa: '',
         factor_km_auto_furgoneta: '', factor_km_h1_l1: '', factor_km_h2_l2: '', factor_km_cassonato: '',
-        ingreso_km_minimo: '', ingreso_km_umbral: '',
+        ingreso_km_minimo: '', ingreso_km_umbral: '', pago_navetta: '',
     });
     const [savingTarifas, setSavingTarifas] = useState(false);
 
@@ -131,6 +131,7 @@ export default function ServiciosPage() {
                 factor_km_cassonato: String(data.factor_km_cassonato ?? ''),
                 ingreso_km_minimo: String(data.ingreso_km_minimo ?? ''),
                 ingreso_km_umbral: String(data.ingreso_km_umbral ?? ''),
+                pago_navetta: String(data.pago_navetta ?? ''),
             });
             setShowTarifas(true);
         } catch { /* noop */ }
@@ -453,6 +454,11 @@ export default function ServiciosPage() {
                                 <label className="block">
                                     <span className="text-xs font-bold text-slate-500 uppercase">{t('servicios.ingresoUmbral')}</span>
                                     <input type="number" min="0" value={tarifas.ingreso_km_umbral} onChange={(e) => setTarifas({ ...tarifas, ingreso_km_umbral: e.target.value })}
+                                        className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100" />
+                                </label>
+                                <label className="block">
+                                    <span className="text-xs font-bold text-slate-500 uppercase">{t('servicios.pagoNavetta')}</span>
+                                    <input type="number" step="0.01" value={tarifas.pago_navetta} onChange={(e) => setTarifas({ ...tarifas, pago_navetta: e.target.value })}
                                         className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100" />
                                 </label>
                             </div>

@@ -179,6 +179,9 @@ interface FormState {
   ciudad: string;
   app: string;
   reperibilita: boolean;
+  // Navetta: traslado/lanzadera entre almacenes (no una entrega normal). El
+  // ingreso sugerido pasa a ser SIEMPRE el fijo de navetta, sin importar km/categoría.
+  es_navetta: boolean;
   compactado: boolean;
   estado_consegna: string;
   attesa: string;
@@ -213,6 +216,7 @@ const emptyForm = (): FormState => ({
   ciudad: '',
   app: '',
   reperibilita: false,
+  es_navetta: false,
   compactado: false,
   estado_consegna: '',
   attesa: '',
@@ -574,6 +578,7 @@ export default function OperacionesScreen() {
     ciudad: src.ciudad || '',
     app: src.app || '',
     reperibilita: !!src.reperibilita,
+    es_navetta: !!src.es_navetta,
     compactado: !!src.compactado,
     estado_consegna: src.estado_consegna || '',
     attesa: src.attesa || '',
@@ -731,6 +736,7 @@ export default function OperacionesScreen() {
         ciudad: form.ciudad || null,
         app: form.app || null,
         reperibilita: form.reperibilita,
+        es_navetta: form.es_navetta,
         compactado: form.compactado,
         estado_consegna: form.estado_consegna || null,
         attesa: form.attesa || null,
@@ -1520,8 +1526,9 @@ export default function OperacionesScreen() {
                 activeOpacity={0.7}
               >
                 <Text style={styles.sugeridoText}>
-                  Sugerido: {formatMoney(ingresoSugerido.monto, moneda)} ({categoriaVehiculoLabel(ingresoSugerido.categoria)}
-                  {ingresoSugerido.aplicaMinimo ? ', mínimo' : ` · ${ingresoSugerido.factor}€/km`}) · Usar
+                  Sugerido: {formatMoney(ingresoSugerido.monto, moneda)} {ingresoSugerido.esNavetta
+                    ? '(navetta, fijo)'
+                    : `(${categoriaVehiculoLabel(ingresoSugerido.categoria)}${ingresoSugerido.aplicaMinimo ? ', mínimo' : ` · ${ingresoSugerido.factor}€/km`})`} · Usar
                 </Text>
               </TouchableOpacity>
             ) : null}
@@ -1571,8 +1578,9 @@ export default function OperacionesScreen() {
                       activeOpacity={0.7}
                     >
                       <Text style={styles.sugeridoText}>
-                        Sugerido: {formatMoney(sugerido.monto, moneda)} ({categoriaVehiculoLabel(sugerido.categoria)}
-                        {sugerido.aplicaMinimo ? ', mínimo' : ` · ${sugerido.factor}€/km`}) · Usar
+                        Sugerido: {formatMoney(sugerido.monto, moneda)} {sugerido.esNavetta
+                          ? '(navetta, fijo)'
+                          : `(${categoriaVehiculoLabel(sugerido.categoria)}${sugerido.aplicaMinimo ? ', mínimo' : ` · ${sugerido.factor}€/km`})`} · Usar
                       </Text>
                     </TouchableOpacity>
                   ) : null}
@@ -1642,6 +1650,24 @@ export default function OperacionesScreen() {
             activeOpacity={0.7}
           >
             <Text style={[styles.toggleBtnText, form.compactado && { color: '#fff' }]}>Y</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.fieldLabelSm}>¿Es navetta? (traslado entre almacenes, no entrega)</Text>
+        <View style={styles.dateRow}>
+          <TouchableOpacity
+            style={[styles.toggleBtn, !form.es_navetta && styles.toggleBtnActiveDark, lockOthers && { opacity: 0.55 }]}
+            onPress={() => !lockOthers && setForm({ ...form, es_navetta: false })}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.toggleBtnText, !form.es_navetta && { color: '#fff' }]}>N</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toggleBtn, form.es_navetta && styles.toggleBtnActiveBlue, lockOthers && { opacity: 0.55 }]}
+            onPress={() => !lockOthers && setForm({ ...form, es_navetta: true })}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.toggleBtnText, form.es_navetta && { color: '#fff' }]}>Y</Text>
           </TouchableOpacity>
         </View>
         <FormField

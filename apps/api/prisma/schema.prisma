@@ -176,6 +176,10 @@ model Programacion {
   cliente          String?  // 'CLIENTE'
   spedizione       String?  // 'SPEDIZIONE' — expedición/cliente (AB, DHL, Extras Alfredo, Extras Estefanía)
   reperibilita     Boolean? @default(false) // Reperibilità (disponibilidad on-call) marcada por el supervisor
+  // Navetta: traslado/lanzadera entre almacenes (no una entrega normal). El
+  // ingreso sugerido pasa a ser SIEMPRE el fijo de Tenant.pago_navetta, sin
+  // importar km ni categoría del vehículo.
+  es_navetta       Boolean? @default(false)
   lugar_retiro     String?  // 'LUOGO RITIRO' (primer/único origen de retiro)
   retiros          String[] // Retiros adicionales (recogidas) tras lugar_retiro, en orden
   fecha_retiro     DateTime? // New: Specific Date+Time for pickup
@@ -299,6 +303,9 @@ model Tenant {
   factor_km_cassonato      Decimal @default(1.00) // €/km — Cassonato
   ingreso_km_minimo Decimal @default(15) // € fijo si el km facturable es corto
   ingreso_km_umbral Int     @default(35) // km bajo el cual aplica el fijo (todas las categorías)
+  // Pago fijo de una NAVETTA (traslado/lanzadera entre almacenes, no una
+  // entrega): siempre este monto, sin importar km ni categoría del vehículo.
+  pago_navetta      Decimal @default(15)
 
   creado_en      DateTime @default(now())
   actualizado_en DateTime @updatedAt

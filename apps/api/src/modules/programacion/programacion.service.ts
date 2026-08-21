@@ -283,7 +283,7 @@ export class ProgramacionService {
 
     // Ingreso SUGERIDO (no se guarda): km_facturable × factor de la categoría del
     // vehículo asignado. El supervisor lo usa o edita `ingreso_estimado` a mano.
-    private async ingresoSugerido(op: { vehiculo_id?: string | null; km_facturable?: number | null; spedizione?: string | null; tenant_id: string }) {
+    private async ingresoSugerido(op: { vehiculo_id?: string | null; km_facturable?: number | null; spedizione?: string | null; es_navetta?: boolean | null; tenant_id: string }) {
         if (!op.vehiculo_id) return null;
         // El picker de vehículo guarda la PLACA (no el UUID) en `Programacion.vehiculo_id`
         // — igual que `trabajador_id` acepta código o UUID. Toleramos ambos formatos.
@@ -301,7 +301,7 @@ export class ProgramacionService {
     // destinos_facturacion (una operación con 3 destinos DHL puede tener 3 km
     // facturables distintos). null si la operación no tiene desglose por destino.
     private async ingresoSugeridoPorDestino(op: {
-        vehiculo_id?: string | null; spedizione?: string | null; tenant_id: string;
+        vehiculo_id?: string | null; spedizione?: string | null; es_navetta?: boolean | null; tenant_id: string;
         destinos_facturacion?: any;
     }) {
         const entradas: any[] = Array.isArray(op.destinos_facturacion) ? op.destinos_facturacion : [];
@@ -316,7 +316,7 @@ export class ProgramacionService {
         const tar = tarifasIngresoFromTenant(tenant);
         return entradas.map((e) =>
             e && e.km_facturable != null
-                ? ingresoSugerido({ km_facturable: Number(e.km_facturable), spedizione: op.spedizione }, vehiculo?.categoria, tar)
+                ? ingresoSugerido({ km_facturable: Number(e.km_facturable), spedizione: op.spedizione, es_navetta: op.es_navetta }, vehiculo?.categoria, tar)
                 : null,
         );
     }

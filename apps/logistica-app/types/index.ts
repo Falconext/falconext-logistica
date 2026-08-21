@@ -89,13 +89,16 @@ export interface Programacion {
   km_facturable?: number | null;
   // Sugerencia calculada por el backend (GET /programacion/:id): null si falta
   // km_facturable/categoría o si la spedizione se cobra manual (Extras).
-  ingreso_sugerido?: { monto: number; factor: number; categoria: string; aplicaMinimo: boolean } | null;
+  ingreso_sugerido?: { monto: number; factor: number | null; categoria: string | null; aplicaMinimo: boolean; esNavetta: boolean } | null;
+  // Navetta: traslado/lanzadera entre almacenes (no una entrega). Fuerza el
+  // ingreso sugerido al fijo de navetta, sin importar km ni categoría.
+  es_navetta?: boolean;
   // Desglose de facturación por destino (índice 0 = lugar_entrega, índice i =
   // destinos[i-1]). Si tiene datos, km_facturable/ingreso_estimado son su SUMA.
   destinos_facturacion?: DestinoFacturacion[] | null;
   // Una sugerencia por cada entrada de destinos_facturacion (mismo orden). null si
   // la operación no tiene desglose por destino.
-  ingreso_sugerido_por_destino?: Array<{ monto: number; factor: number; categoria: string; aplicaMinimo: boolean } | null> | null;
+  ingreso_sugerido_por_destino?: Array<{ monto: number; factor: number | null; categoria: string | null; aplicaMinimo: boolean; esNavetta: boolean } | null> | null;
 
   // Datos operativos de consegna
   km?: number;

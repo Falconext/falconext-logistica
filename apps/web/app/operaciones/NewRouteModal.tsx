@@ -148,6 +148,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
         app: '',
         spedizione: '',
         compactado: false,
+        es_navetta: false,
         estado_consegna: '',
         attesa: '',
         otros_datos: '',
@@ -244,6 +245,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 app: src.app || '',
                 spedizione: src.spedizione || '',
                 compactado: !!src.compactado,
+                es_navetta: !!src.es_navetta,
                 estado_consegna: src.estado_consegna || '',
                 attesa: src.attesa || '',
                 otros_datos: src.otros_datos || '',
@@ -298,6 +300,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 app: '',
                 spedizione: '',
                 compactado: false,
+                es_navetta: false,
                 estado_consegna: '',
                 attesa: '',
                 otros_datos: '',
@@ -369,6 +372,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 app: formData.app || null,
                 spedizione: formData.spedizione || null,
                 compactado: formData.compactado,
+                es_navetta: formData.es_navetta,
                 estado_consegna: formData.estado_consegna || null,
                 attesa: formData.attesa || null,
                 otros_datos: formData.otros_datos || null,
@@ -420,6 +424,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 app: '',
                 spedizione: '',
                 compactado: false,
+                es_navetta: false,
                 estado_consegna: '',
                 attesa: '',
                 otros_datos: '',
@@ -827,8 +832,9 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                                 onClick={() => setFormData((f) => ({ ...f, ingreso_estimado: String(ingresoSugerido!.monto) }))}
                                                 className="text-xs font-semibold text-blue-600 hover:text-blue-700"
                                             >
-                                                Sugerido: {currency} {ingresoSugerido.monto.toFixed(2)} ({categoriaVehiculoLabel(ingresoSugerido.categoria)}
-                                                {ingresoSugerido.aplicaMinimo ? ', mínimo' : ` · ${ingresoSugerido.factor}${currency}/km`}) · Usar
+                                                Sugerido: {currency} {ingresoSugerido.monto.toFixed(2)} {ingresoSugerido.esNavetta
+                                                    ? '(navetta, fijo)'
+                                                    : `(${categoriaVehiculoLabel(ingresoSugerido.categoria)}${ingresoSugerido.aplicaMinimo ? ', mínimo' : ` · ${ingresoSugerido.factor}${currency}/km`})`} · Usar
                                             </button>
                                         )}
                                     </div>
@@ -880,8 +886,9 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                                         onClick={() => updateDestinoFact(i, { ingreso: String(sugerido.monto) })}
                                                         className="text-xs font-semibold text-blue-600 hover:text-blue-700"
                                                     >
-                                                        Sugerido: {currency} {sugerido.monto.toFixed(2)} ({categoriaVehiculoLabel(sugerido.categoria)}
-                                                        {sugerido.aplicaMinimo ? ', mínimo' : ` · ${sugerido.factor}${currency}/km`}) · Usar
+                                                        Sugerido: {currency} {sugerido.monto.toFixed(2)} {sugerido.esNavetta
+                                                            ? '(navetta, fijo)'
+                                                            : `(${categoriaVehiculoLabel(sugerido.categoria)}${sugerido.aplicaMinimo ? ', mínimo' : ` · ${sugerido.factor}${currency}/km`})`} · Usar
                                                     </button>
                                                 )}
                                             </div>
@@ -947,6 +954,32 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                         type="button"
                                         onClick={() => setFormData({ ...formData, compactado: true })}
                                         className={`px-4 py-2.5 rounded-xl border text-sm font-bold transition ${formData.compactado
+                                            ? 'bg-blue-600 text-white border-blue-600'
+                                            : 'bg-slate-50 dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-100'}`}
+                                    >
+                                        Y
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* NAVETTA: traslado/lanzadera entre almacenes, no una entrega — el ingreso
+                                sugerido pasa a ser SIEMPRE el fijo de navetta, sin importar km/categoría. */}
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-500 uppercase">¿Es navetta?</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData({ ...formData, es_navetta: false })}
+                                        className={`px-4 py-2.5 rounded-xl border text-sm font-bold transition ${!formData.es_navetta
+                                            ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900'
+                                            : 'bg-slate-50 dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-100'}`}
+                                    >
+                                        N
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData({ ...formData, es_navetta: true })}
+                                        className={`px-4 py-2.5 rounded-xl border text-sm font-bold transition ${formData.es_navetta
                                             ? 'bg-blue-600 text-white border-blue-600'
                                             : 'bg-slate-50 dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-100'}`}
                                     >
