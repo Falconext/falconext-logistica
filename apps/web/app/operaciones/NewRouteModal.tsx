@@ -875,7 +875,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                                 </div>
                                                 <input
                                                     type="text"
-                                                    placeholder="Referencia DHL (opcional): tracking/código que reporta"
+                                                    placeholder={formData.spedizione === 'DHL' ? 'Referencia DHL (opcional): tracking/código que reporta' : 'Referencia (opcional): tracking/código que reporta el cliente'}
                                                     className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-blue-500/50"
                                                     value={d.referencia_dhl}
                                                     onChange={(e) => updateDestinoFact(i, { referencia_dhl: e.target.value })}

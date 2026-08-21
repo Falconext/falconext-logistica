@@ -1137,7 +1137,7 @@ export default function OperacionesScreen() {
                 {detail.destinos_facturacion.map((d, i) => (
                   <Text key={i} style={styles.metaSmall}>
                     · Destino {i + 1}: {d?.km_facturable != null ? `${d.km_facturable} km` : '—'} · {d?.ingreso != null ? formatMoney(d.ingreso, moneda) : '—'}
-                    {d?.referencia_dhl ? ` · DHL ${d.referencia_dhl}` : ''}
+                    {d?.referencia_dhl ? ` · Ref. ${d.referencia_dhl}` : ''}
                   </Text>
                 ))}
               </View>
@@ -1566,10 +1566,10 @@ export default function OperacionesScreen() {
                     />
                   </View>
                   <FormField
-                    label="Referencia DHL (opcional)"
+                    label={form.spedizione === 'DHL' ? 'Referencia DHL (opcional)' : 'Referencia (opcional)'}
                     value={d.referencia_dhl}
                     onChangeText={(t) => updateDestinoFact(i, { referencia_dhl: t })}
-                    placeholder="Tracking / código que reporta DHL"
+                    placeholder={form.spedizione === 'DHL' ? 'Tracking / código que reporta DHL' : 'Tracking / código que reporta el cliente'}
                   />
                   {sugerido ? (
                     <TouchableOpacity
