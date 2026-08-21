@@ -30,17 +30,35 @@ export class GpsService {
         });
     }
 
+    // Trae la última posición de CADA dispositivo en una sola consulta (DISTINCT ON)
+    // en vez de que Prisma haga una subconsulta correlacionada por dispositivo — con
+    // la tabla de positions ya grande, eso se volvía lento y terminaba en timeout.
     async getDevices(tenantId: string) {
-        return this.prisma.device.findMany({
+        const devices = await this.prisma.device.findMany({
             where: { tenant_id: tenantId },
             include: {
-                positions: { take: 1, orderBy: { timestamp: 'desc' } },
                 vehiculo: true,
                 trabajador: {
                     select: { id: true, nombre_completo: true, cargo: true, url_foto: true, telefono: true }
                 }
             }
         });
+        if (!devices.length) return [];
+
+        const deviceIds = devices.map((d) => d.id);
+        const latestPositions = await this.prisma.$queryRaw<Array<{
+            id: string; device_id: string; latitude: number; longitude: number; speed: number | null;
+            heading: number | null; altitude: number | null; accuracy: number | null; battery: number | null;
+            ignition: boolean | null; timestamp: Date; server_time: Date;
+        }>>`
+            SELECT DISTINCT ON (device_id)
+                id, device_id, latitude, longitude, speed, heading, altitude, accuracy, battery, ignition, timestamp, server_time
+            FROM positions
+            WHERE device_id = ANY(${deviceIds})
+            ORDER BY device_id, timestamp DESC
+        `;
+        const posByDevice = new Map(latestPositions.map((p) => [p.device_id, p]));
+        return devices.map((d) => ({ ...d, positions: posByDevice.has(d.id) ? [posByDevice.get(d.id)] : [] }));
     }
 
     // Device de un trabajador aceptando UUID o CÓDIGO (id_trabajador). Las operaciones
