@@ -33,7 +33,7 @@
         "NSPhotoLibraryAddUsageDescription": "Necesitamos guardar imágenes en tu galería."
       },
       "bundleIdentifier": "com.logistica.app",
-      "buildNumber": "20"
+      "buildNumber": "21"
     },
     "android": {
       "adaptiveIcon": {
