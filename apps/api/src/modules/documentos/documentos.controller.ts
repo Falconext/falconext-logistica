@@ -9,7 +9,7 @@ export class DocumentosController {
 
     @Post()
     create(@Body() data: any, @Req() req) {
-        return this.documentosService.create(data, req.user.tenantId);
+        return this.documentosService.create(data, req.user.tenantId, req.user);
     }
 
     @Get()
@@ -24,11 +24,11 @@ export class DocumentosController {
 
     @Patch(':id')
     update(@Param('id') id: string, @Body() data: any, @Req() req) {
-        return this.documentosService.update(id, data, req.user.tenantId);
+        return this.documentosService.update(id, data, req.user.tenantId, req.user);
     }
 
     @Delete(':id')
     remove(@Param('id') id: string, @Req() req) {
-        return this.documentosService.remove(id, req.user.tenantId);
+        return this.documentosService.remove(id, req.user.tenantId, req.user);
     }
 }

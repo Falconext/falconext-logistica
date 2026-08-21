@@ -78,7 +78,7 @@ export class RecorridosController {
     llegadaParada(
         @Param('id') id: string,
         @Param('paradaId') paradaId: string,
-        @Body() body: { anticipo?: number; abono_de?: string; gastos?: any; nota?: string },
+        @Body() body: { anticipo?: number; abono_de?: string; gastos?: any; nota?: string; entregado?: boolean; foto_bolla?: string },
         @Req() req,
     ) {
         return this.service.llegadaParada(req.user.tenantId, id, paradaId, req.user.trabajadorId, body || {});

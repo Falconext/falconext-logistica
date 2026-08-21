@@ -9,12 +9,12 @@ import Select from '../../components/Select';
 import FileUpload from '../../components/FileUpload';
 import MultiFileUpload from '../../components/MultiFileUpload';
 import { useCurrency } from '../../lib/useCurrency';
-import { APP_OPTIONS, SPEDIZIONE_OPTIONS, ESTADO_CONSEGNA_META, RETIRO_PRESETS, isCoords } from './constants';
+import { APP_OPTIONS, SPEDIZIONE_OPTIONS, ESTADO_CONSEGNA_META, RETIRO_PRESETS, isCoords, GASTO_TIPOS_CON_PAGADOR, pagadorLabels, categoriaVehiculoLabel } from './constants';
 import { useGoogleMaps } from '../../components/tracking/googleMaps';
 import { fmtMin } from '../../components/tracking/MapboxRouteMap';
 
 // Fila de gasto en el formulario (monto como string para el input).
-type GastoRow = { tipo: string; monto: string; descripcion: string; numero_mancato: string; link_peaje: string; comprobantes: string[] };
+type GastoRow = { tipo: string; monto: string; descripcion: string; numero_mancato: string; link_peaje: string; comprobantes: string[]; pagado_por_chofer: boolean };
 
 const GASTO_TIPOS = [
     { value: 'PEAJE', label: 'Peaje' },
@@ -83,6 +83,9 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
     const [workers, setWorkers] = useState<any[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const [loading, setLoading] = useState(false); // Added
+    // Hint "Sugerido" del ingreso (km_facturable × factor de la categoría del
+    // vehículo): lo devuelve GET /programacion/:id, no se guarda, solo se sugiere.
+    const [ingresoSugerido, setIngresoSugerido] = useState<Programacion['ingreso_sugerido']>(null);
 
     // Initial state with separate Date/Time for Pickup (Retiro) and Delivery (Entrega)
     const [formData, setFormData] = useState({
@@ -106,6 +109,10 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
 
         // Datos de consegna
         km: '',
+        // Km de IDA que factura el cliente (DHL/AB Servis, informado por mensaje) —
+        // distinto del `km` real (GPS) + el monto a cobrar (sugerido por categoría, editable).
+        km_facturable: '',
+        ingreso_estimado: '',
         ciudad: '',
         app: '',
         spedizione: '',
@@ -199,6 +206,8 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 entrega_hora: isoToTime(src.fecha_entrega),
                 destinos: Array.isArray(src.destinos) ? src.destinos : [],
                 km: src.km != null ? String(src.km) : '',
+                km_facturable: src.km_facturable != null ? String(src.km_facturable) : '',
+                ingreso_estimado: src.ingreso_estimado != null ? String(src.ingreso_estimado) : '',
                 ciudad: src.ciudad || '',
                 app: src.app || '',
                 spedizione: src.spedizione || '',
@@ -215,19 +224,26 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                     numero_mancato: g.numero_mancato || '',
                     link_peaje: g.link_peaje || '',
                     comprobantes: Array.isArray(g.comprobantes) ? g.comprobantes : [],
+                    pagado_por_chofer: g.pagado_por_chofer !== false,
                 })) : [],
                 nota: src.nota || '',
             });
             // Precargamos rápido con lo que trae la lista y luego con el registro COMPLETO:
-            // la lista (LIST_SELECT) no incluye nota/otros_datos/foto_bolla, y guardar sin
-            // ellos los borraría. GET /programacion/:id trae todos los campos.
+            // la lista (LIST_SELECT) no incluye nota/otros_datos/foto_bolla/ingreso_sugerido,
+            // y guardar sin ellos los borraría. GET /programacion/:id trae todos los campos.
             let cancelled = false;
+            setIngresoSugerido(null);
             populate(initialData);
             api.get(`/programacion/${initialData.id}`)
-                .then((res) => { if (!cancelled && res.data) populate({ ...initialData, ...res.data }); })
+                .then((res) => {
+                    if (cancelled || !res.data) return;
+                    populate({ ...initialData, ...res.data });
+                    setIngresoSugerido(res.data.ingreso_sugerido ?? null);
+                })
                 .catch(() => { /* se queda con los datos de la lista */ });
             return () => { cancelled = true; };
         } else {
+            setIngresoSugerido(null);
             setFormData({
                 vehiculo_id: '',
                 trabajador_id: '',
@@ -240,6 +256,8 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 entrega_hora: '',
                 destinos: [],
                 km: '',
+                km_facturable: '',
+                ingreso_estimado: '',
                 ciudad: '',
                 app: '',
                 spedizione: '',
@@ -299,6 +317,8 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 fecha_entrega: fechaEntregaIso,
                 destinos: formData.destinos.map((s) => s.trim()).filter(Boolean),
                 km: formData.km !== '' ? Number(formData.km) : null,
+                km_facturable: formData.km_facturable !== '' ? Number(formData.km_facturable) : null,
+                ingreso_estimado: formData.ingreso_estimado !== '' ? Number(formData.ingreso_estimado) : null,
                 ciudad: formData.ciudad || null,
                 app: formData.app || null,
                 spedizione: formData.spedizione || null,
@@ -317,6 +337,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                         numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null,
                         link_peaje: g.tipo === 'PEAJE' ? (g.link_peaje || null) : null,
                         comprobantes: g.comprobantes,
+                        pagado_por_chofer: GASTO_TIPOS_CON_PAGADOR.includes(g.tipo) ? g.pagado_por_chofer : true,
                     })),
                 nota: formData.nota
             };
@@ -346,6 +367,8 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 entrega_hora: '',
                 destinos: [],
                 km: '',
+                km_facturable: '',
+                ingreso_estimado: '',
                 ciudad: '',
                 app: '',
                 spedizione: '',
@@ -393,12 +416,16 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
     };
 
     // --- Gastos (rendición) ---
-    const addGasto = () => setFormData((f) => ({ ...f, gastos: [...f.gastos, { tipo: 'PEAJE', monto: '', descripcion: '', numero_mancato: '', link_peaje: '', comprobantes: [] }] }));
+    const addGasto = () => setFormData((f) => ({ ...f, gastos: [...f.gastos, { tipo: 'PEAJE', monto: '', descripcion: '', numero_mancato: '', link_peaje: '', comprobantes: [], pagado_por_chofer: true }] }));
     const updateGasto = (i: number, patch: Partial<GastoRow>) => setFormData((f) => ({ ...f, gastos: f.gastos.map((g, idx) => (idx === i ? { ...g, ...patch } : g)) }));
     const removeGasto = (i: number) => setFormData((f) => ({ ...f, gastos: f.gastos.filter((_, idx) => idx !== i) }));
+    // Costo total de la ruta (todos los gastos, los pague quien los pague).
     const totalGastos = formData.gastos.reduce((s, g) => s + (g.monto !== '' ? Number(g.monto) || 0 : 0), 0);
+    // Solo lo que pagó el chofer se descuenta de su anticipo (mancato/código/pendiente no).
+    const gastadoChofer = formData.gastos.reduce((s, g) => s + (g.pagado_por_chofer !== false && g.monto !== '' ? Number(g.monto) || 0 : 0), 0);
+    const gastadoEmpresa = totalGastos - gastadoChofer;
     const anticipoNum = formData.anticipo !== '' ? Number(formData.anticipo) || 0 : 0;
-    const saldo = anticipoNum - totalGastos;
+    const saldo = anticipoNum - gastadoChofer;
 
     if (!isOpen) return null;
 
@@ -711,6 +738,44 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                 />
                             </div>
 
+                            {/* KM FACTURABLE (ida) — el que informa el cliente, distinto del KM real GPS */}
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Km facturable (ida)</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    placeholder="Km que informa el cliente"
+                                    className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 outline-none focus:ring-2 focus:ring-blue-500 text-sm text-slate-900 dark:text-white"
+                                    value={formData.km_facturable}
+                                    onChange={(e) => setFormData({ ...formData, km_facturable: e.target.value })}
+                                />
+                            </div>
+
+                            {/* INGRESO — editable, con sugerencia (km_facturable × factor de categoría) */}
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Ingreso ({currency})</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    placeholder="0.00"
+                                    className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 outline-none focus:ring-2 focus:ring-blue-500 text-sm text-slate-900 dark:text-white"
+                                    value={formData.ingreso_estimado}
+                                    onChange={(e) => setFormData({ ...formData, ingreso_estimado: e.target.value })}
+                                />
+                                {ingresoSugerido && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData((f) => ({ ...f, ingreso_estimado: String(ingresoSugerido!.monto) }))}
+                                        className="text-xs font-semibold text-blue-600 hover:text-blue-700"
+                                    >
+                                        Sugerido: {currency} {ingresoSugerido.monto.toFixed(2)} ({categoriaVehiculoLabel(ingresoSugerido.categoria)}
+                                        {ingresoSugerido.aplicaMinimo ? ', mínimo' : ` · ${ingresoSugerido.factor}${currency}/km`}) · Usar
+                                    </button>
+                                )}
+                            </div>
+
                             {/* APP */}
                             <Select
                                 label="App"
@@ -847,7 +912,38 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                             />
                                         </div>
                                     )}
-                                    {g.tipo === 'PEAJE' && (
+                                    {GASTO_TIPOS_CON_PAGADOR.includes(g.tipo) && (() => {
+                                        const labels = pagadorLabels(g.tipo);
+                                        return (
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-bold text-slate-400 uppercase">¿Quién lo pagó?</label>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => updateGasto(i, { pagado_por_chofer: true })}
+                                                        className={`px-3 py-2 rounded-lg border text-xs font-bold transition ${g.pagado_por_chofer
+                                                            ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900'
+                                                            : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 hover:bg-slate-100'}`}
+                                                    >
+                                                        {labels.yes}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => updateGasto(i, { pagado_por_chofer: false })}
+                                                        className={`px-3 py-2 rounded-lg border text-xs font-bold transition ${!g.pagado_por_chofer
+                                                            ? 'bg-blue-600 text-white border-blue-600'
+                                                            : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 hover:bg-slate-100'}`}
+                                                    >
+                                                        {labels.no}
+                                                    </button>
+                                                </div>
+                                                <p className="text-[10px] text-slate-400 leading-tight pt-0.5">
+                                                    {g.pagado_por_chofer ? labels.hintYes : labels.hintNo}
+                                                </p>
+                                            </div>
+                                        );
+                                    })()}
+                                    {g.tipo === 'PEAJE' && !g.pagado_por_chofer && (
                                         <div className="space-y-1">
                                             <label className="text-[10px] font-bold text-slate-400 uppercase">Nº de mancato</label>
                                             <input
@@ -859,7 +955,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                             />
                                         </div>
                                     )}
-                                    {g.tipo === 'PEAJE' && (
+                                    {g.tipo === 'PEAJE' && !g.pagado_por_chofer && (
                                         <div className="space-y-1">
                                             <label className="text-[10px] font-bold text-slate-400 uppercase">Link de peaje</label>
                                             <input
@@ -905,12 +1001,18 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                 <span>Anticipo</span><span className="tabular-nums">{currency} {anticipoNum.toFixed(2)}</span>
                             </div>
                             <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
-                                <span>Total gastado</span><span className="tabular-nums">− {currency} {totalGastos.toFixed(2)}</span>
+                                <span>Pagado por el chofer</span><span className="tabular-nums">− {currency} {gastadoChofer.toFixed(2)}</span>
                             </div>
+                            {gastadoEmpresa > 0 && (
+                                <div className="flex items-center justify-between text-slate-400">
+                                    <span>Pagado por la empresa (no descuenta)</span><span className="tabular-nums">{currency} {gastadoEmpresa.toFixed(2)}</span>
+                                </div>
+                            )}
                             <div className={`flex items-center justify-between font-bold pt-1.5 border-t border-slate-100 dark:border-slate-800 ${saldo < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                                 <span>{saldo < 0 ? 'Excedido (falta)' : 'A devolver'}</span>
                                 <span className="tabular-nums">{currency} {Math.abs(saldo).toFixed(2)}</span>
                             </div>
+                            <p className="text-[11px] text-slate-400 pt-1">Costo total de la ruta: {currency} {totalGastos.toFixed(2)}</p>
                         </div>
                     </div>
 

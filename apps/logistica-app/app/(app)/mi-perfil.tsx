@@ -4,7 +4,9 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, RefreshControl, Linking } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { FileText, ExternalLink, Phone, Mail, MapPin, BadgeCheck, Route, Clock, Moon, ClipboardList } from 'lucide-react-native';
+import { FileText, ExternalLink, Phone, Mail, MapPin, BadgeCheck, Route, Clock, Moon, ClipboardList, UploadCloud, AlertTriangle } from 'lucide-react-native';
+import DocumentosPanel from '../../components/DocumentosPanel';
+import { TRABAJADOR_DOCS } from '../../components/documentTypes';
 import {
   Screen,
   AppHeader,
@@ -116,6 +118,7 @@ export default function MiPerfilScreen() {
   const [resumen, setResumen] = useState<Resumen | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [docsPanelOpen, setDocsPanelOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -165,6 +168,16 @@ export default function MiPerfilScreen() {
     venc: (perfil?.[vencKey] as string) || null,
   })).filter((d) => d.numero || d.venc);
 
+  // Avisos de vencimiento (vencido / por vencer ≤30 días) de los datos de la ficha
+  // y de los archivos subidos. Sirve para el banner "tu licencia está por vencer".
+  const alertas = [
+    ...docs.map((d) => ({ label: d.label, venc: d.venc })),
+    ...archivos.map((a) => ({ label: a.nombre || a.tipo || 'Documento', venc: a.fecha_vencimiento || null })),
+  ]
+    .map((x) => ({ ...x, b: vencimientoBadge(x.venc) }))
+    .filter((x) => x.b && (x.b.variant === 'danger' || x.b.variant === 'warning'));
+  const hayVencidos = alertas.some((a) => a.b?.variant === 'danger');
+
   return (
     <Screen
       scroll
@@ -172,6 +185,21 @@ export default function MiPerfilScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}
     >
       <AppHeader title="Mi Perfil" subtitle="Tus datos y documentos" />
+
+      {/* Avisos de vencimiento de documentos */}
+      {alertas.length > 0 && (
+        <TouchableOpacity activeOpacity={0.8} onPress={() => setDocsPanelOpen(true)} style={[styles.alertBanner, hayVencidos ? styles.alertDanger : styles.alertWarn]}>
+          <AlertTriangle size={18} color={hayVencidos ? C.danger : C.warning} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.alertTitle, { color: hayVencidos ? C.danger : C.warning }]}>
+              {hayVencidos ? 'Tienes documentos vencidos' : 'Documentos por vencer'}
+            </Text>
+            <Text style={styles.alertText} numberOfLines={2}>
+              {alertas.map((a) => `${a.label} (${a.b?.label.toLowerCase()})`).join(' · ')}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      )}
 
       {/* Cabecera de identidad */}
       <Card style={styles.identity}>
@@ -217,6 +245,11 @@ export default function MiPerfilScreen() {
 
       {/* Documentos con vencimiento */}
       <SectionTitle style={{ marginTop: S.lg }}>Mis documentos</SectionTitle>
+      <TouchableOpacity activeOpacity={0.85} onPress={() => setDocsPanelOpen(true)} style={styles.manageDocsBtn}>
+        <UploadCloud size={18} color={C.textOnPrimary} />
+        <Text style={styles.manageDocsText}>Subir / gestionar mis documentos</Text>
+      </TouchableOpacity>
+      <Text style={styles.manageDocsHint}>Sube tus documentos y sus fechas de vencimiento. Al confirmar, quedan bloqueados y solo el supervisor puede renovarlos.</Text>
       {docs.length === 0 ? (
         <EmptyState icon={FileText} title="Sin documentos registrados" subtitle="La empresa aún no registró tus documentos." />
       ) : (
@@ -261,6 +294,19 @@ export default function MiPerfilScreen() {
           ))}
         </>
       )}
+
+      {/* Auto-servicio: el chofer sube y confirma sus documentos (candado) */}
+      {!!perfil?.id && (
+        <DocumentosPanel
+          visible={docsPanelOpen}
+          onClose={() => { setDocsPanelOpen(false); load(); }}
+          entidad="TRABAJADOR"
+          entidadId={perfil.id}
+          docTypes={TRABAJADOR_DOCS}
+          nombre={perfil.nombre_completo}
+          chofer
+        />
+      )}
     </Screen>
   );
 }
@@ -282,6 +328,14 @@ const makeStyles = () => StyleSheet.create({
   statsRow: { flexDirection: 'row', gap: S.sm, marginTop: S.sm },
   docRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm, marginTop: S.sm },
   docIcon: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  alertBanner: { flexDirection: 'row', alignItems: 'center', gap: S.sm, marginTop: S.md, padding: S.md, borderRadius: R.md, borderWidth: 1 },
+  alertDanger: { backgroundColor: C.dangerSoft, borderColor: C.danger + '55' },
+  alertWarn: { backgroundColor: C.warningSoft, borderColor: C.warning + '55' },
+  alertTitle: { fontSize: 14, fontWeight: '700' },
+  alertText: { fontSize: 12, color: C.textMuted, marginTop: 1 },
+  manageDocsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: S.sm, height: 48, borderRadius: R.md, backgroundColor: C.primary },
+  manageDocsText: { color: C.textOnPrimary, fontSize: 15, fontWeight: '700' },
+  manageDocsHint: { fontSize: 11, color: C.textFaint, marginTop: 6, lineHeight: 15 },
   docLabel: { fontSize: F.size.md, fontWeight: '600', color: C.text },
   docValue: { fontSize: F.size.sm, color: C.textMuted, marginTop: 1 },
 });

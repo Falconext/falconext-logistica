@@ -83,7 +83,11 @@ export default function ServiciosPage() {
 
     // Config de tarifas (para el modal admin)
     const [showTarifas, setShowTarifas] = useState(false);
-    const [tarifas, setTarifas] = useState({ tarifa_ore_giorno: '', tarifa_ore_notte: '', hora_corte_notte: '' });
+    const [tarifas, setTarifas] = useState({
+        tarifa_ore_giorno: '', tarifa_ore_notte: '', hora_corte_notte: '', tarifa_reperibilita: '', tarifa_ore_attesa: '',
+        factor_km_auto_furgoneta: '', factor_km_h1_l1: '', factor_km_h2_l2: '', factor_km_cassonato: '',
+        ingreso_km_minimo: '', ingreso_km_umbral: '',
+    });
     const [savingTarifas, setSavingTarifas] = useState(false);
 
     const load = useCallback(async () => {
@@ -119,6 +123,14 @@ export default function ServiciosPage() {
                 tarifa_ore_giorno: String(data.tarifa_ore_giorno ?? ''),
                 tarifa_ore_notte: String(data.tarifa_ore_notte ?? ''),
                 hora_corte_notte: String(data.hora_corte_notte ?? ''),
+                tarifa_reperibilita: String(data.tarifa_reperibilita ?? ''),
+                tarifa_ore_attesa: String(data.tarifa_ore_attesa ?? ''),
+                factor_km_auto_furgoneta: String(data.factor_km_auto_furgoneta ?? ''),
+                factor_km_h1_l1: String(data.factor_km_h1_l1 ?? ''),
+                factor_km_h2_l2: String(data.factor_km_h2_l2 ?? ''),
+                factor_km_cassonato: String(data.factor_km_cassonato ?? ''),
+                ingreso_km_minimo: String(data.ingreso_km_minimo ?? ''),
+                ingreso_km_umbral: String(data.ingreso_km_umbral ?? ''),
             });
             setShowTarifas(true);
         } catch { /* noop */ }
@@ -376,7 +388,7 @@ export default function ServiciosPage() {
             {/* Modal tarifas */}
             {showTarifas && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowTarifas(false)}>
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-lg font-bold text-slate-900 dark:text-white">{t('servicios.editarTarifas')}</h3>
                             <button onClick={() => setShowTarifas(false)} className="text-slate-400 hover:text-slate-700"><X size={20} /></button>
@@ -397,7 +409,55 @@ export default function ServiciosPage() {
                                 <input type="number" min="0" max="23" value={tarifas.hora_corte_notte} onChange={(e) => setTarifas({ ...tarifas, hora_corte_notte: e.target.value })}
                                     className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100" />
                             </label>
+                            <label className="block">
+                                <span className="text-xs font-bold text-slate-500 uppercase">{t('servicios.tarifaReperibilita')}</span>
+                                <input type="number" step="0.01" value={tarifas.tarifa_reperibilita} onChange={(e) => setTarifas({ ...tarifas, tarifa_reperibilita: e.target.value })}
+                                    className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100" />
+                            </label>
+                            <label className="block">
+                                <span className="text-xs font-bold text-slate-500 uppercase">{t('servicios.tarifaAttesa')}</span>
+                                <input type="number" step="0.01" value={tarifas.tarifa_ore_attesa} onChange={(e) => setTarifas({ ...tarifas, tarifa_ore_attesa: e.target.value })}
+                                    className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100" />
+                            </label>
                         </div>
+
+                        <div className="mt-5 pt-4 border-t border-slate-200 dark:border-slate-800">
+                            <h4 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-1">{t('servicios.ingresoTitulo')}</h4>
+                            <p className="text-xs text-slate-400 mb-3">{t('servicios.ingresoSubtitulo')}</p>
+                            <div className="grid grid-cols-2 gap-3">
+                                <label className="block">
+                                    <span className="text-xs font-bold text-slate-500 uppercase">{t('servicios.catAutoFurgoneta')}</span>
+                                    <input type="number" step="0.01" value={tarifas.factor_km_auto_furgoneta} onChange={(e) => setTarifas({ ...tarifas, factor_km_auto_furgoneta: e.target.value })}
+                                        className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100" />
+                                </label>
+                                <label className="block">
+                                    <span className="text-xs font-bold text-slate-500 uppercase">{t('servicios.catH1L1')}</span>
+                                    <input type="number" step="0.01" value={tarifas.factor_km_h1_l1} onChange={(e) => setTarifas({ ...tarifas, factor_km_h1_l1: e.target.value })}
+                                        className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100" />
+                                </label>
+                                <label className="block">
+                                    <span className="text-xs font-bold text-slate-500 uppercase">{t('servicios.catH2L2')}</span>
+                                    <input type="number" step="0.01" value={tarifas.factor_km_h2_l2} onChange={(e) => setTarifas({ ...tarifas, factor_km_h2_l2: e.target.value })}
+                                        className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100" />
+                                </label>
+                                <label className="block">
+                                    <span className="text-xs font-bold text-slate-500 uppercase">{t('servicios.catCassonato')}</span>
+                                    <input type="number" step="0.01" value={tarifas.factor_km_cassonato} onChange={(e) => setTarifas({ ...tarifas, factor_km_cassonato: e.target.value })}
+                                        className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100" />
+                                </label>
+                                <label className="block">
+                                    <span className="text-xs font-bold text-slate-500 uppercase">{t('servicios.ingresoMinimo')}</span>
+                                    <input type="number" step="0.01" value={tarifas.ingreso_km_minimo} onChange={(e) => setTarifas({ ...tarifas, ingreso_km_minimo: e.target.value })}
+                                        className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100" />
+                                </label>
+                                <label className="block">
+                                    <span className="text-xs font-bold text-slate-500 uppercase">{t('servicios.ingresoUmbral')}</span>
+                                    <input type="number" min="0" value={tarifas.ingreso_km_umbral} onChange={(e) => setTarifas({ ...tarifas, ingreso_km_umbral: e.target.value })}
+                                        className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100" />
+                                </label>
+                            </div>
+                        </div>
+
                         <div className="flex justify-end gap-2 mt-5">
                             <button onClick={() => setShowTarifas(false)} className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300">{t('servicios.cancelar')}</button>
                             <button onClick={guardarTarifas} disabled={savingTarifas} className="px-4 py-2 rounded-xl bg-[#1a1a1c] text-white text-sm font-semibold disabled:opacity-50">{t('servicios.guardar')}</button>

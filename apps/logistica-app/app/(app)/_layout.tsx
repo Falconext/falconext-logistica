@@ -45,6 +45,7 @@ export default function AppTabsLayout() {
       <Tabs.Screen name="mi-perfil" options={{ title: 'Mi Perfil', href: chofer ? undefined : null, tabBarIcon: ({ color, size }) => <CircleUser color={color} size={size} /> }} />
       <Tabs.Screen name="parte-diario" options={{ href: null }} />
       <Tabs.Screen name="ganancias-direccion" options={{ href: null }} />
+      <Tabs.Screen name="finanzas" options={{ href: null }} />
       <Tabs.Screen name="historial-mensual" options={{ href: null }} />
       <Tabs.Screen name="vehiculos" options={{ title: 'Vehículos', href: gate('vehiculos'), tabBarIcon: ({ color, size }) => <Truck color={color} size={size} /> }} />
       <Tabs.Screen name="trabajadores" options={{ title: 'Trabajadores', href: gate('trabajadores'), tabBarIcon: ({ color, size }) => <Users color={color} size={size} /> }} />

@@ -17,7 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { formatMoney } from '../constants/currency';
 import { etaInfo } from '../constants/eta';
-import { CONSEGNA_ACTIONS, RETIRO_PRESETS, GASTO_TIPOS, isCoords, isConsegnaRealizada } from '../constants/operaciones';
+import { CONSEGNA_ACTIONS, RETIRO_PRESETS, GASTO_TIPOS, GASTO_TIPOS_CON_PAGADOR, gastoPagadoPorChofer, pagadorLabels, isCoords, isConsegnaRealizada } from '../constants/operaciones';
 import { isChofer } from '../constants/modules';
 import type { Programacion } from '../types';
 
@@ -51,7 +51,7 @@ const fmtFechaHora = (iso?: string | null): string | undefined => {
   return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) + ' ' + d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 };
 
-type GastoRow = { tipo: string; monto: string; descripcion: string; numero_mancato: string; link_peaje: string; comprobantes: string[] };
+type GastoRow = { tipo: string; monto: string; descripcion: string; numero_mancato: string; link_peaje: string; comprobantes: string[]; pagado_por_chofer: boolean };
 interface FormState { estado_consegna: string; foto_bolla: string; anticipo: string; attesa: string; attesa_horas: string; attesa_estado: string; gastos: GastoRow[]; lugar_retiro: string; retiros: string[]; lugar_entrega: string; destinos: string[]; }
 const emptyForm = (): FormState => ({ estado_consegna: '', foto_bolla: '', anticipo: '', attesa: '', attesa_horas: '', attesa_estado: 'PENDIENTE', gastos: [], lugar_retiro: '', retiros: [], lugar_entrega: '', destinos: [] });
 
@@ -92,6 +92,8 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
   const [rendAnticipo, setRendAnticipo] = useState(''); // abono recibido en la parada
   const [rendAbonoDe, setRendAbonoDe] = useState('');   // quién le entregó el dinero
   const [rendGastos, setRendGastos] = useState<GastoRow[]>([]);
+  const [rendEntregado, setRendEntregado] = useState(true); // ¿se entregó la consegna aquí?
+  const [rendFotoBolla, setRendFotoBolla] = useState(''); // foto de la bolla firmada en la parada
   const [fullOp, setFullOp] = useState<Programacion | null>(null);
   const [showRendicion, setShowRendicion] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm());
@@ -134,6 +136,7 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
         tipo: g.tipo || 'OTRO', monto: g.monto != null ? String(g.monto) : '',
         descripcion: g.descripcion || '', numero_mancato: g.numero_mancato || '', link_peaje: g.link_peaje || '',
         comprobantes: Array.isArray(g.comprobantes) ? g.comprobantes : [],
+        pagado_por_chofer: g.pagado_por_chofer !== false,
       })) : [],
       lugar_retiro: src.lugar_retiro || '', lugar_entrega: src.lugar_entrega || '',
       retiros: Array.isArray(src.retiros) ? src.retiros : [],
@@ -171,12 +174,15 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
   }, [step, loaded, phase, operacion?.id]);
 
   // --- Gastos ---
-  const addGasto = () => setForm((f) => ({ ...f, gastos: [...f.gastos, { tipo: 'PEAJE', monto: '', descripcion: '', numero_mancato: '', link_peaje: '', comprobantes: [] }] }));
+  const addGasto = () => setForm((f) => ({ ...f, gastos: [...f.gastos, { tipo: 'PEAJE', monto: '', descripcion: '', numero_mancato: '', link_peaje: '', comprobantes: [], pagado_por_chofer: true }] }));
   const updateGasto = (i: number, patch: Partial<GastoRow>) => setForm((f) => ({ ...f, gastos: f.gastos.map((g, idx) => (idx === i ? { ...g, ...patch } : g)) }));
   const removeGasto = (i: number) => setForm((f) => ({ ...f, gastos: f.gastos.filter((_, idx) => idx !== i) }));
   const totalGastos = form.gastos.reduce((s, g) => s + parseNum(g.monto), 0);
+  // Solo lo que pagó el chofer se descuenta de su anticipo (mancato/código no).
+  const gastadoChofer = form.gastos.reduce((s, g) => s + (gastoPagadoPorChofer(g) ? parseNum(g.monto) : 0), 0);
+  const gastadoEmpresa = totalGastos - gastadoChofer;
   const anticipoNum = parseNum(form.anticipo);
-  const saldo = anticipoNum - totalGastos;
+  const saldo = anticipoNum - gastadoChofer;
 
   // --- Destinos ---
   const addDestino = () => setForm((f) => ({ ...f, destinos: [...f.destinos, ''] }));
@@ -283,10 +289,12 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
     setRendAnticipo('');
     setRendAbonoDe('');
     setRendGastos([]);
+    setRendEntregado(true);
+    setRendFotoBolla('');
     setParadaRend(parada);
   };
 
-  const rendAddGasto = () => setRendGastos((g) => [...g, { tipo: 'PEAJE', monto: '', descripcion: '', numero_mancato: '', link_peaje: '', comprobantes: [] }]);
+  const rendAddGasto = () => setRendGastos((g) => [...g, { tipo: 'PEAJE', monto: '', descripcion: '', numero_mancato: '', link_peaje: '', comprobantes: [], pagado_por_chofer: true }]);
   const rendSetGasto = (i: number, patch: Partial<GastoRow>) =>
     setRendGastos((g) => g.map((x, idx) => (idx === i ? { ...x, ...patch } : x)));
   const rendRmGasto = (i: number) => setRendGastos((g) => g.filter((_, idx) => idx !== i));
@@ -302,6 +310,7 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
         numero_mancato: g.numero_mancato || null,
         link_peaje: g.link_peaje || null,
         comprobantes: g.comprobantes || [],
+        pagado_por_chofer: GASTO_TIPOS_CON_PAGADOR.includes(g.tipo) ? g.pagado_por_chofer : true,
       }));
     const esRetorno = !!paradaRend.es_retorno;
     setBusy(true);
@@ -310,11 +319,16 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
         anticipo: rendAnticipo ? Number(rendAnticipo) : undefined,
         abono_de: rendAbonoDe.trim() || undefined,
         gastos: gastos.length ? gastos : undefined,
+        // Entrega por punto (no aplica a la parada de retorno al origen).
+        entregado: esRetorno ? undefined : rendEntregado,
+        foto_bolla: esRetorno ? undefined : (rendFotoBolla || undefined),
       });
       setParadaRend(null);
       setRendAnticipo('');
       setRendAbonoDe('');
       setRendGastos([]);
+      setRendEntregado(true);
+      setRendFotoBolla('');
       // La parada de retorno (llegar al origen) cierra el recorrido en el backend:
       // detenemos el rastreo y cerramos el wizard, igual que "Finalizar recorrido".
       if (esRetorno) {
@@ -335,8 +349,12 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
   const paradaRetorno = paradas.find((p) => p.es_retorno) || null;
   const proximaParada = paradasEntrega.find((p) => !p.llegada_en) || null;
   const todasLlegadas = paradasEntrega.length > 0 && paradasEntrega.every((p) => p.llegada_en);
+  // Costo total de la parada (todos los gastos, para la rentabilidad de la ruta).
   const gastosDeParada = (p: { gastos?: any }): number =>
     Array.isArray(p?.gastos) ? p.gastos.reduce((s: number, g: any) => s + Number(g?.monto || 0), 0) : 0;
+  // Solo lo que el chofer pagó en esa parada (lo que se le descuenta del saldo).
+  const gastadoChoferDeParada = (p: { gastos?: any }): number =>
+    Array.isArray(p?.gastos) ? p.gastos.reduce((s: number, g: any) => s + (gastoPagadoPorChofer(g) ? Number(g?.monto || 0) : 0), 0) : 0;
 
   const confirmCancelar = () => Alert.alert('Cancelar recorrido', '¿Seguro que quieres cancelar este traslado?', [
     { text: 'No', style: 'cancel' }, { text: 'Sí, cancelar', style: 'destructive', onPress: () => accion('cancelar', { stop: true }).then(() => onSaved()) },
@@ -355,11 +373,12 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
           numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null,
           link_peaje: g.tipo === 'PEAJE' ? (g.link_peaje || null) : null,
           comprobantes: Array.isArray(g.comprobantes) ? g.comprobantes : [],
+          pagado_por_chofer: g.pagado_por_chofer !== false,
           parada: p.label || null,
         })))
         : form.gastos
           .filter((g) => g.tipo && (g.monto !== '' || g.comprobantes.length || g.descripcion || g.numero_mancato || g.link_peaje))
-          .map((g) => ({ tipo: g.tipo, monto: g.monto !== '' ? parseNum(g.monto) : 0, descripcion: g.descripcion || null, numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null, link_peaje: g.tipo === 'PEAJE' ? (g.link_peaje || null) : null, comprobantes: g.comprobantes }));
+          .map((g) => ({ tipo: g.tipo, monto: g.monto !== '' ? parseNum(g.monto) : 0, descripcion: g.descripcion || null, numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null, link_peaje: g.tipo === 'PEAJE' ? (g.link_peaje || null) : null, comprobantes: g.comprobantes, pagado_por_chofer: GASTO_TIPOS_CON_PAGADOR.includes(g.tipo) ? g.pagado_por_chofer : true }));
       await api.patch(`/programacion/${operacion.id}`, {
         estado_consegna: 'CONSEGNATO',
         // El anticipo/bonifico lo fija el supervisor y NO lo escribe el chofer
@@ -483,9 +502,13 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                 const paradas = (op?.destinos || []).map((s) => (s || '').trim()).filter(Boolean);
                 const retiros = (op?.retiros || []).map((s) => (s || '').trim()).filter(Boolean);
                 const totalGastosOp = (op?.gastos || []).reduce((s, g) => s + (Number(g?.monto) || 0), 0);
+                const gastadoChoferOp = (op?.gastos || []).reduce((s, g) => s + (gastoPagadoPorChofer(g) ? Number(g?.monto) || 0 : 0), 0);
+                const gastadoEmpresaOp = totalGastosOp - gastadoChoferOp;
                 const anticipoOp = Number(op?.anticipo) || 0;
-                const saldoOp = anticipoOp - totalGastosOp;
-                const hayRendicion = anticipoOp > 0 || (op?.gastos && op.gastos.length > 0);
+                const abonosOp = Number((op as any)?.abonos_ruta) || 0;
+                const recibidoOp = anticipoOp + abonosOp;
+                const saldoOp = recibidoOp - gastadoChoferOp;
+                const hayRendicion = anticipoOp > 0 || abonosOp > 0 || (op?.gastos && op.gastos.length > 0);
                 return (
                 <View>
                   <View style={styles.lockCard}>
@@ -533,7 +556,13 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                       <Text style={styles.stepHeading}>Rendición del trayecto</Text>
                       <View style={styles.saldoBox}>
                         <View style={styles.saldoRow}><Text style={styles.saldoLabel}>Bonifico</Text><Text style={styles.saldoVal}>{formatMoney(anticipoOp, moneda)}</Text></View>
-                        <View style={styles.saldoRow}><Text style={styles.saldoLabel}>Total gastado</Text><Text style={styles.saldoVal}>− {formatMoney(totalGastosOp, moneda)}</Text></View>
+                        {abonosOp > 0 && (
+                          <View style={styles.saldoRow}><Text style={styles.saldoLabel}>+ Abonos en ruta</Text><Text style={styles.saldoVal}>{formatMoney(abonosOp, moneda)}</Text></View>
+                        )}
+                        <View style={styles.saldoRow}><Text style={styles.saldoLabel}>Pagado por el chofer</Text><Text style={styles.saldoVal}>− {formatMoney(gastadoChoferOp, moneda)}</Text></View>
+                        {gastadoEmpresaOp > 0 && (
+                          <View style={styles.saldoRow}><Text style={[styles.saldoLabel, { color: C.textMuted }]}>Pagado por la empresa (no descuenta)</Text><Text style={[styles.saldoVal, { color: C.textMuted }]}>{formatMoney(gastadoEmpresaOp, moneda)}</Text></View>
+                        )}
                         <View style={[styles.saldoRow, styles.saldoTotal]}>
                           <Text style={[styles.saldoLabel, { fontWeight: '700', color: saldoOp < 0 ? C.danger : C.success }]}>{saldoOp < 0 ? 'Excedido (falta)' : 'A devolver'}</Text>
                           <Text style={[styles.saldoVal, { fontWeight: '700', color: saldoOp < 0 ? C.danger : C.success }]}>{formatMoney(Math.abs(saldoOp), moneda)}</Text>
@@ -804,14 +833,18 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                         const anticipoInicial = Number(fullOp?.anticipo || form.anticipo || 0);
                         const abonos = paradas.reduce((s, p) => s + Number(p.anticipo || 0), 0);
                         const recibido = anticipoInicial + abonos;
-                        const gastado = paradas.reduce((s, p) => s + gastosDeParada(p), 0);
-                        const saldo = recibido - gastado;
+                        const gastadoCh = paradas.reduce((s, p) => s + gastadoChoferDeParada(p), 0);
+                        const gastadoEmp = paradas.reduce((s, p) => s + gastosDeParada(p), 0) - gastadoCh;
+                        const saldo = recibido - gastadoCh;
                         return (
                           <View style={styles.paradaResumen}>
                             <Text style={styles.paradaResumenTitle}>✓ Todas las paradas · Control del dinero</Text>
                             <View style={styles.saldoRow}><Text style={styles.saldoLabel}>Anticipo inicial</Text><Text style={styles.saldoVal}>{formatMoney(anticipoInicial, moneda)}</Text></View>
                             <View style={styles.saldoRow}><Text style={styles.saldoLabel}>+ Abonos en ruta</Text><Text style={styles.saldoVal}>{formatMoney(abonos, moneda)}</Text></View>
-                            <View style={styles.saldoRow}><Text style={styles.saldoLabel}>− Gastos</Text><Text style={styles.saldoVal}>{formatMoney(gastado, moneda)}</Text></View>
+                            <View style={styles.saldoRow}><Text style={styles.saldoLabel}>− Gastos pagados por ti</Text><Text style={styles.saldoVal}>{formatMoney(gastadoCh, moneda)}</Text></View>
+                            {gastadoEmp > 0 && (
+                              <View style={styles.saldoRow}><Text style={[styles.saldoLabel, { color: C.textMuted }]}>Pagado por la empresa (no descuenta)</Text><Text style={[styles.saldoVal, { color: C.textMuted }]}>{formatMoney(gastadoEmp, moneda)}</Text></View>
+                            )}
                             <View style={[styles.saldoRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border, paddingTop: 4, marginTop: 2 }]}>
                               <Text style={[styles.saldoLabel, { fontWeight: '800', color: saldo < 0 ? C.danger : C.success }]}>{saldo < 0 ? 'Falta rendir' : 'Saldo a devolver'}</Text>
                               <Text style={[styles.saldoVal, { fontWeight: '800', color: saldo < 0 ? C.danger : C.success }]}>{formatMoney(Math.abs(saldo), moneda)}</Text>
@@ -902,15 +935,19 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                     const anticipoInicial = Number(fullOp?.anticipo || form.anticipo || 0);
                     const abonos = paradas.reduce((s, p) => s + Number(p.anticipo || 0), 0);
                     const recibido = anticipoInicial + abonos;
-                    const gastado = paradas.reduce((s, p) => s + gastosDeParada(p), 0);
-                    const saldoFinal = recibido - gastado;
+                    const gastadoCh = paradas.reduce((s, p) => s + gastadoChoferDeParada(p), 0);
+                    const gastadoEmp = paradas.reduce((s, p) => s + gastosDeParada(p), 0) - gastadoCh;
+                    const saldoFinal = recibido - gastadoCh;
                     return (
                       <>
                         <Text style={styles.hint}>Ya registraste los gastos y abonos en cada parada. Este es el resumen final.</Text>
                         <View style={styles.saldoBox}>
                           <View style={styles.saldoRow}><Text style={styles.saldoLabel}>Anticipo inicial</Text><Text style={styles.saldoVal}>{formatMoney(anticipoInicial, moneda)}</Text></View>
                           <View style={styles.saldoRow}><Text style={styles.saldoLabel}>+ Abonos en ruta</Text><Text style={styles.saldoVal}>{formatMoney(abonos, moneda)}</Text></View>
-                          <View style={styles.saldoRow}><Text style={styles.saldoLabel}>− Gastos</Text><Text style={styles.saldoVal}>{formatMoney(gastado, moneda)}</Text></View>
+                          <View style={styles.saldoRow}><Text style={styles.saldoLabel}>− Gastos pagados por ti</Text><Text style={styles.saldoVal}>{formatMoney(gastadoCh, moneda)}</Text></View>
+                          {gastadoEmp > 0 && (
+                            <View style={styles.saldoRow}><Text style={[styles.saldoLabel, { color: C.textMuted }]}>Pagado por la empresa (no descuenta)</Text><Text style={[styles.saldoVal, { color: C.textMuted }]}>{formatMoney(gastadoEmp, moneda)}</Text></View>
+                          )}
                           <View style={[styles.saldoRow, styles.saldoTotal]}>
                             <Text style={[styles.saldoLabel, { fontWeight: '700', color: saldoFinal < 0 ? C.danger : C.success }]}>{saldoFinal < 0 ? 'Falta rendir' : 'Saldo a devolver'}</Text>
                             <Text style={[styles.saldoVal, { fontWeight: '700', color: saldoFinal < 0 ? C.danger : C.success }]}>{formatMoney(Math.abs(saldoFinal), moneda)}</Text>
@@ -930,8 +967,14 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                           <Text style={styles.fieldLabel}>Monto ({moneda || 'EUR'})</Text>
                           <TextField value={g.monto} onChangeText={(t) => updateGasto(i, { monto: t })} placeholder="0.00" keyboardType="numeric" styles={styles} />
                           {g.tipo === 'OTRO' && (<><Text style={styles.fieldLabel}>Descripción</Text><TextField value={g.descripcion} onChangeText={(t) => updateGasto(i, { descripcion: t })} placeholder="¿En qué se gastó?" styles={styles} /></>)}
-                          {g.tipo === 'PEAJE' && (<><Text style={styles.fieldLabel}>Nº de mancato</Text><TextField value={g.numero_mancato} onChangeText={(t) => updateGasto(i, { numero_mancato: t })} placeholder="Número de mancato" styles={styles} /></>)}
-                          {g.tipo === 'PEAJE' && (<><Text style={styles.fieldLabel}>Link de peaje</Text><TextField value={g.link_peaje} onChangeText={(t) => updateGasto(i, { link_peaje: t })} placeholder="https://…" keyboardType="url" styles={styles} /></>)}
+                          {GASTO_TIPOS_CON_PAGADOR.includes(g.tipo) && (
+                            <>
+                              <Text style={styles.fieldLabel}>¿Quién lo pagó?</Text>
+                              <PagadorToggle value={g.pagado_por_chofer} tipo={g.tipo} onChange={(v) => updateGasto(i, { pagado_por_chofer: v })} C={C} styles={styles} />
+                            </>
+                          )}
+                          {g.tipo === 'PEAJE' && !g.pagado_por_chofer && (<><Text style={styles.fieldLabel}>Nº de mancato</Text><TextField value={g.numero_mancato} onChangeText={(t) => updateGasto(i, { numero_mancato: t })} placeholder="Número de mancato" styles={styles} /></>)}
+                          {g.tipo === 'PEAJE' && !g.pagado_por_chofer && (<><Text style={styles.fieldLabel}>Link de peaje</Text><TextField value={g.link_peaje} onChangeText={(t) => updateGasto(i, { link_peaje: t })} placeholder="https://…" keyboardType="url" styles={styles} /></>)}
                           <Text style={styles.fieldLabel}>Comprobante(s)</Text>
                           <MultiFileUpload value={g.comprobantes} onChange={(urls) => updateGasto(i, { comprobantes: urls })} />
                           <TouchableOpacity style={styles.removeRow} onPress={() => removeGasto(i)}><Trash2 size={14} color={C.danger} /><Text style={styles.removeText}>Quitar gasto</Text></TouchableOpacity>
@@ -940,7 +983,10 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                       <TouchableOpacity style={styles.addBtn} onPress={addGasto} activeOpacity={0.7}><Plus size={16} color={C.textMuted} /><Text style={styles.addText}>Agregar gasto</Text></TouchableOpacity>
                       <View style={styles.saldoBox}>
                         <View style={styles.saldoRow}><Text style={styles.saldoLabel}>Bonifico</Text><Text style={styles.saldoVal}>{formatMoney(anticipoNum, moneda)}</Text></View>
-                        <View style={styles.saldoRow}><Text style={styles.saldoLabel}>Total gastado</Text><Text style={styles.saldoVal}>− {formatMoney(totalGastos, moneda)}</Text></View>
+                        <View style={styles.saldoRow}><Text style={styles.saldoLabel}>Pagado por el chofer</Text><Text style={styles.saldoVal}>− {formatMoney(gastadoChofer, moneda)}</Text></View>
+                        {gastadoEmpresa > 0 && (
+                          <View style={styles.saldoRow}><Text style={[styles.saldoLabel, { color: C.textMuted }]}>Pagado por la empresa (no descuenta)</Text><Text style={[styles.saldoVal, { color: C.textMuted }]}>{formatMoney(gastadoEmpresa, moneda)}</Text></View>
+                        )}
                         <View style={[styles.saldoRow, styles.saldoTotal]}>
                           <Text style={[styles.saldoLabel, { fontWeight: '700', color: saldo < 0 ? C.danger : C.success }]}>{saldo < 0 ? 'Excedido (falta)' : 'A devolver'}</Text>
                           <Text style={[styles.saldoVal, { fontWeight: '700', color: saldo < 0 ? C.danger : C.success }]}>{formatMoney(Math.abs(saldo), moneda)}</Text>
@@ -994,6 +1040,39 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
             <ScrollView contentContainerStyle={{ padding: S.lg, gap: S.md }} keyboardShouldPersistTaps="handled">
               <Text style={styles.rendHint}>Si te ENTREGARON dinero en esta parada, regístralo. También los gastos. Es opcional, pero importante para el control del dinero.</Text>
 
+              {!paradaRend?.es_retorno && (
+                <View style={{ gap: S.sm }}>
+                  <Text style={styles.rendLabel}>¿Se entregó la consegna aquí?</Text>
+                  <View style={{ flexDirection: 'row', gap: S.sm }}>
+                    <TouchableOpacity
+                      style={[styles.entregaBtn, rendEntregado && styles.entregaBtnYesOn]}
+                      onPress={() => setRendEntregado(true)}
+                      activeOpacity={0.85}
+                    >
+                      <Check size={18} color={rendEntregado ? '#fff' : C.textMuted} />
+                      <Text style={[styles.entregaBtnTxt, rendEntregado && { color: '#fff' }]}>Sí, entregada</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.entregaBtn, !rendEntregado && styles.entregaBtnNoOn]}
+                      onPress={() => setRendEntregado(false)}
+                      activeOpacity={0.85}
+                    >
+                      <X size={18} color={!rendEntregado ? '#fff' : C.textMuted} />
+                      <Text style={[styles.entregaBtnTxt, !rendEntregado && { color: '#fff' }]}>No entregada</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={[styles.rendLabel, { marginTop: S.xs }]}>Foto de la bolla firmada</Text>
+                  <ImageUpload
+                    value={rendFotoBolla}
+                    onChange={setRendFotoBolla}
+                    onClear={() => setRendFotoBolla('')}
+                    label="Subir foto de la bolla firmada"
+                    variant="wide"
+                  />
+                </View>
+              )}
+
               <View>
                 <Text style={styles.rendLabel}>Abono recibido aquí (dinero que te dieron)</Text>
                 <TextInput style={styles.input} value={rendAnticipo} onChangeText={setRendAnticipo} placeholder="0.00" placeholderTextColor={C.textFaint} keyboardType="decimal-pad" />
@@ -1021,7 +1100,11 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                       <Text style={styles.rendLabel}>Descripción</Text>
                       <TextInput style={styles.input} value={g.descripcion} onChangeText={(v) => rendSetGasto(i, { descripcion: v })} placeholder="¿En qué se gastó?" placeholderTextColor={C.textFaint} />
                     </>)}
-                    {g.tipo === 'PEAJE' && (<>
+                    {GASTO_TIPOS_CON_PAGADOR.includes(g.tipo) && (<>
+                      <Text style={styles.rendLabel}>¿Quién lo pagó?</Text>
+                      <PagadorToggle value={g.pagado_por_chofer} tipo={g.tipo} onChange={(v) => rendSetGasto(i, { pagado_por_chofer: v })} C={C} styles={styles} />
+                    </>)}
+                    {g.tipo === 'PEAJE' && !g.pagado_por_chofer && (<>
                       <Text style={styles.rendLabel}>Nº de mancato</Text>
                       <TextInput style={styles.input} value={g.numero_mancato} onChangeText={(v) => rendSetGasto(i, { numero_mancato: v })} placeholder="Número de mancato" placeholderTextColor={C.textFaint} />
                       <Text style={styles.rendLabel}>Link de peaje</Text>
@@ -1055,6 +1138,25 @@ function Row({ icon: Icon, label, value }: { icon: any; label: string; value?: s
 
 function TextField({ value, onChangeText, placeholder, keyboardType, editable = true, styles }: { value: string; onChangeText: (t: string) => void; placeholder?: string; keyboardType?: 'default' | 'numeric' | 'url'; editable?: boolean; styles: any }) {
   return (<TextInput style={[styles.input, !editable && { opacity: 0.6 }]} value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={C.textFaint} keyboardType={keyboardType} editable={editable} autoCapitalize={keyboardType === 'url' ? 'none' : undefined} autoCorrect={keyboardType === 'url' ? false : undefined} />);
+}
+
+// Toggle "¿quién lo pagó?": etiquetas según el tipo de gasto (peaje/combustible/otro).
+function PagadorToggle({ value, tipo, onChange, C, styles }: { value: boolean; tipo: string; onChange: (v: boolean) => void; C: any; styles: any }) {
+  const labels = pagadorLabels(tipo);
+  const hint = value ? labels.hintYes : labels.hintNo;
+  return (
+    <View>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <TouchableOpacity style={[styles.pagadorBtn, value && styles.pagadorBtnYesOn]} onPress={() => onChange(true)} activeOpacity={0.8}>
+          <Text style={[styles.pagadorBtnTxt, value && { color: '#fff' }]}>{labels.yes}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.pagadorBtn, !value && styles.pagadorBtnNoOn]} onPress={() => onChange(false)} activeOpacity={0.8}>
+          <Text style={[styles.pagadorBtnTxt, !value && { color: '#fff' }]}>{labels.no}</Text>
+        </TouchableOpacity>
+      </View>
+      <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 5, lineHeight: 15 }}>{hint}</Text>
+    </View>
+  );
 }
 
 // Botón grande de acción de ruta.
@@ -1164,6 +1266,14 @@ const makeStyles = () => StyleSheet.create({
   rendLabel: { fontSize: 12, fontWeight: '700', color: C.textMuted, textTransform: 'uppercase', marginBottom: 4 },
   rendAdd: { fontSize: 13, color: C.primary, fontWeight: '700' },
   rendFooter: { padding: S.lg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border },
+  entregaBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 46, borderRadius: Theme.radius.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.surfaceAlt },
+  entregaBtnYesOn: { backgroundColor: C.success, borderColor: C.success },
+  entregaBtnNoOn: { backgroundColor: C.danger, borderColor: C.danger },
+  entregaBtnTxt: { fontSize: 14, fontWeight: '700', color: C.textMuted },
+  pagadorBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', height: 42, borderRadius: Theme.radius.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.surfaceAlt },
+  pagadorBtnYesOn: { backgroundColor: '#334155', borderColor: '#334155' },
+  pagadorBtnNoOn: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
+  pagadorBtnTxt: { fontSize: 13, fontWeight: '700', color: C.textMuted },
   rendConfirmBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 52, borderRadius: Theme.radius.lg, backgroundColor: C.success },
   rendConfirmTxt: { fontSize: 16, fontWeight: '800', color: '#fff' },
   attesaLabel: { fontSize: 13, fontWeight: '600', color: C.textMuted, marginBottom: 6 },

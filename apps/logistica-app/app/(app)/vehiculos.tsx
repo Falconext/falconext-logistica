@@ -20,7 +20,7 @@ import {
 import ImageUpload from '../../components/ImageUpload';
 import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
-import { AREAS_TRABAJO } from '../../constants/operaciones';
+import { AREAS_TRABAJO, CATEGORIA_VEHICULO_OPTIONS, categoriaVehiculoLabel } from '../../constants/operaciones';
 import DocumentosPanel from '../../components/DocumentosPanel';
 import { VEHICULO_DOCS } from '../../components/documentTypes';
 import api from '../../services/api';
@@ -35,6 +35,7 @@ const empty: Partial<Vehiculo> = {
   marca_modelo: '',
   tipo_unidad: '',
   area: '',
+  categoria: '',
   anio_fabricacion: undefined,
   estado_vehiculo: 'DISPONIBLE',
   poliza_seguro: '',
@@ -240,6 +241,7 @@ export default function VehiculosScreen() {
             <InfoRow label="Marca / Modelo" value={detail.marca_modelo} />
             <InfoRow label="Tipo de unidad" value={detail.tipo_unidad} />
             {detail.area ? <InfoRow label="Área" value={detail.area} /> : null}
+            <InfoRow label="Categoría (pago DHL)" value={categoriaVehiculoLabel(detail.categoria)} />
             <InfoRow label="Año" value={detail.anio_fabricacion} />
             <InfoRow label="Estado" value={detail.estado_vehiculo} />
             <InfoRow label="Póliza de seguro" value={detail.poliza_seguro} />
@@ -290,6 +292,15 @@ export default function VehiculosScreen() {
           options={AREAS_TRABAJO}
         />
         <FormField label="Tipo de unidad" value={form.tipo_unidad || ''} onChangeText={(t) => setForm({ ...form, tipo_unidad: t })} placeholder="Furgón / Tracto" />
+        <Select
+          label="Categoría (pago DHL por km)"
+          value={form.categoria || ''}
+          onChange={(v) => setForm({ ...form, categoria: v })}
+          placeholder="Sin categoría"
+          searchable={false}
+          clearable
+          options={CATEGORIA_VEHICULO_OPTIONS}
+        />
         <FormField label="Año de fabricación" value={form.anio_fabricacion ? String(form.anio_fabricacion) : ''} onChangeText={(t) => setForm({ ...form, anio_fabricacion: t as any })} placeholder="2022" keyboardType="numeric" />
         <Select
           label="Estado"

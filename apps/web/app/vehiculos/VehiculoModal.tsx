@@ -31,6 +31,7 @@ const EMPTY = {
     permisos_especiales: '',
     fecha_vencimiento_deroghe: '',
     area: '',
+    categoria: '',
     kilometraje_actual: '',
     url_foto: '',
 };
@@ -40,6 +41,16 @@ const inputCls =
 import { AREA_OPTIONS } from '../../lib/areas';
 
 const labelCls = 'text-xs font-bold text-slate-500 uppercase';
+
+// Categoría del vehículo: define el factor €/km del ingreso por km facturable
+// (DHL/AB Servis). Configurable en Servicios → Tarifas.
+const CATEGORIA_OPTIONS = [
+    { value: '', label: 'Sin categoría' },
+    { value: 'AUTO_FURGONETA', label: 'Auto / Furgoneta' },
+    { value: 'H1_L1', label: 'Furgón H1 L1' },
+    { value: 'H2_L2', label: 'Furgón H2 L2' },
+    { value: 'CASSONATO', label: 'Cassonato' },
+];
 
 export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData }: VehiculoModalProps) {
     const [form, setForm] = useState<Record<string, string>>(EMPTY);
@@ -71,6 +82,7 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                     ? initialData.fecha_vencimiento_deroghe.split('T')[0]
                     : '',
                 area: initialData.area || '',
+                categoria: initialData.categoria || '',
                 kilometraje_actual: initialData.kilometraje_actual?.toString() || '',
                 url_foto: initialData.url_foto || '',
             });
@@ -106,6 +118,7 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                     ? new Date(form.fecha_vencimiento_deroghe).toISOString()
                     : null,
                 area: form.area || null,
+                categoria: form.categoria || null,
                 url_foto: form.url_foto || null,
                 anio_fabricacion: form.anio_fabricacion ? parseInt(form.anio_fabricacion, 10) : null,
                 kilometraje_actual: form.kilometraje_actual ? parseInt(form.kilometraje_actual, 10) : null,
@@ -229,6 +242,12 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                                 value={form.area}
                                 onChange={(v) => set('area', v)}
                                 options={AREA_OPTIONS}
+                            />
+                            <Select
+                                label="Categoría (pago DHL por km)"
+                                value={form.categoria}
+                                onChange={(v) => set('categoria', v)}
+                                options={CATEGORIA_OPTIONS}
                             />
                             <div className="space-y-1.5">
                                 <label className={labelCls}>Kilometraje actual</label>

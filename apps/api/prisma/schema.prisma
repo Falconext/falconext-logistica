@@ -100,6 +100,9 @@ model Vehiculo {
   estado_vehiculo     String? // 'Activo', 'Mantenimiento'
   aislamiento_termico String? // 'COIBENTAZI'
   area                String? // Área operativa: MILANO NORD | MILANO SUD | PERSONAL | ROMA
+  // Categoría del vehículo para el pago por km de DHL/AB Servis (factor €/km
+  // distinto por categoría). AUTO_FURGONETA | H1_L1 | H2_L2 | CASSONATO.
+  categoria           String?
 
   // Panel DHL: disponibilidad operativa del vehículo (DISPONIBLE / NO DISPONIBLE). Toggle manual.
   disponible          Boolean @default(true)
@@ -204,10 +207,17 @@ model Programacion {
 
   estado           String   @default("PENDING") // PENDING, IN_TRANSIT, COMPLETED, FAILED
   ingreso_estimado Float?   @default(0)
+  // Km de IDA que el cliente (DHL/AB Servis) informa por mensaje — es el km que
+  // FACTURA, distinto del km real recorrido (GPS, en el campo `km`). El supervisor
+  // lo escribe a mano. Con la categoría del vehículo se sugiere el ingreso.
+  km_facturable    Float?
 
-  // Rendición del chofer: anticipo recibido y gastos del trayecto.
-  // Saldo a devolver = anticipo - suma(gastos.monto).
+  // Rendición del chofer: bonifico inicial + abonos recibidos en ruta y gastos.
+  // Recibido = anticipo + abonos_ruta. Saldo a devolver = recibido - gastos pagados por el chofer.
   anticipo         Float?   @default(0)
+  // Suma de abonos que el chofer recibió EN CADA PARADA (dinero extra en ruta).
+  // Se consolida desde las paradas del recorrido al finalizar (fuente de verdad).
+  abonos_ruta      Float?   @default(0)
   gastos           GastoOperacion[]
 
   creado_en        DateTime @default(now())
@@ -235,6 +245,10 @@ model GastoOperacion {
   numero_mancato  String?  // Nº de mancato pagamento (solo PEAJE)
   link_peaje      String?  // Link/URL del peaje (solo PEAJE)
   comprobantes    String[] // URLs (S3) del/los comprobante(s)
+  // ¿Lo pagó el CHOFER de su bolsillo? true → se descuenta de su anticipo (saldo).
+  // false → lo paga la EMPRESA (peaje mancato / combustible con código): NO descuenta
+  // al chofer, pero SÍ cuenta en el costo total de la ruta.
+  pagado_por_chofer Boolean @default(true)
 
   // Denormalizados de la operación para reportes/módulos (chofer y vehículo).
   trabajador_id   String?
@@ -262,6 +276,21 @@ model Tenant {
   tarifa_ore_giorno Decimal @default(10) // €/h de manejo diurno
   tarifa_ore_notte  Decimal @default(12) // €/h de manejo nocturno (desde hora_corte_notte)
   hora_corte_notte  Int     @default(19) // hora (0-23) a partir de la cual aplica la tarifa nocturna
+  // Bono fijo por reperibilità (entrega fuera de horario: madrugada, fin de
+  // semana) y €/hora de ATTESA autorizada por el supervisor. Se suman al pago
+  // por horas para formar el costo total del chofer en cada operación.
+  tarifa_reperibilita Decimal @default(10) // € fijos por reperibilità
+  tarifa_ore_attesa   Decimal @default(10) // €/h de attesa AUTORIZADA
+
+  // Ingreso por km de IDA que factura el cliente (DHL/AB Servis), según la
+  // categoría del vehículo que hizo la entrega. Sugerencia editable por el
+  // supervisor en cada operación (Programacion.ingreso_estimado).
+  factor_km_auto_furgoneta Decimal @default(0.86) // €/km — Auto / Furgoneta
+  factor_km_h1_l1          Decimal @default(0.90) // €/km — Furgón H1 L1
+  factor_km_h2_l2          Decimal @default(1.00) // €/km — Furgón H2 L2
+  factor_km_cassonato      Decimal @default(1.00) // €/km — Cassonato
+  ingreso_km_minimo Decimal @default(15) // € fijo si el km facturable es corto
+  ingreso_km_umbral Int     @default(35) // km bajo el cual aplica el fijo (todas las categorías)
 
   creado_en      DateTime @default(now())
   actualizado_en DateTime @updatedAt
@@ -315,6 +344,9 @@ model Documento {
   url         String? // URL de Cloudinary (imagen o PDF). Opcional: se puede
                       // registrar solo la fecha de vencimiento antes de subir el escaneo.
   fecha_vencimiento DateTime?
+  // Candado del auto-servicio del chofer: cuando el chofer sube/confirma su
+  // documento, queda BLOQUEADO y solo el supervisor puede renovarlo/editarlo.
+  bloqueado   Boolean @default(false)
 
   creado_en      DateTime @default(now())
   actualizado_en DateTime @updatedAt
@@ -575,6 +607,11 @@ model RecorridoParada {
   // la base: es la última parada del recorrido y cierra la trazabilidad (ida+vuelta).
   es_retorno     Boolean   @default(false)
   llegada_en     DateTime? // cuándo el chofer marcó la llegada a esta parada
+  // ¿Se entregó la consegna en esta parada? El chofer lo confirma al marcar la
+  // llegada (una entrega puede fallar → mancata consegna).
+  entregado      Boolean   @default(false)
+  // Foto de la bolla/DDT FIRMADA en esta parada (prueba de entrega por punto).
+  foto_bolla     String?
   // "Abono recibido aquí": dinero EXTRA que le entregaron al chofer en esta parada
   // (además del anticipo inicial de la operación). Sirve para el control del saldo.
   anticipo       Float?    // monto del abono recibido en esta parada (opcional)

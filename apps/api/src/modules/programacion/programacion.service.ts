@@ -2,6 +2,8 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
+import { num, horasDeRecorrido, tarifasFromTenant, TARIFAS_TENANT_SELECT, TarifasChofer } from '../../common/tarifas-chofer.util';
+import { ingresoSugerido, tarifasIngresoFromTenant, TARIFAS_INGRESO_TENANT_SELECT } from '../../common/ingreso-vehiculo.util';
 
 @Injectable()
 export class ProgramacionService {
@@ -122,10 +124,224 @@ export class ProgramacionService {
     }
 
     async findOne(id: string) {
-        return this.prisma.programacion.findUnique({
+        const op = await this.prisma.programacion.findUnique({
             where: { id },
             include: { gastos: { orderBy: { creado_en: 'asc' } } },
         });
+        if (!op) return op;
+        const [costo_chofer, ingreso_sugerido] = await Promise.all([
+            this.costoChofer(op),
+            this.ingresoSugerido(op),
+        ]);
+        return { ...op, costo_chofer, ingreso_sugerido };
+    }
+
+    // Panel financiero (Fase C): rentabilidad por operación en un período —
+    // ingreso REAL (ingreso_estimado guardado, sin fallback al sugerido) menos
+    // costo_chofer(). Solo operaciones con mercancía entregada. El controller
+    // ya valida req.user.veFinanzas antes de llamar a este método.
+    async financiero(
+        tenantId: string,
+        opts: { from?: string; to?: string; cliente?: string; spedizione?: string; trabajadorId?: string } = {},
+    ) {
+        const ahora = new Date();
+        const desde = opts.from ? new Date(opts.from) : new Date(Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), 1));
+        const hasta = opts.to ? new Date(opts.to) : ahora;
+
+        const where: Prisma.ProgramacionWhereInput = {
+            tenant_id: tenantId,
+            fecha: { gte: desde, lte: hasta },
+            // Consegnato y Entregado son el mismo hecho (ver syncEstadosEntrega):
+            // solo entra al panel financiero lo que YA se entregó.
+            OR: [{ estado_consegna: 'CONSEGNATO' }, { estado: { in: ['ENTREGADO', 'COMPLETED'] } }],
+        };
+        if (opts.cliente) where.cliente = { contains: opts.cliente, mode: 'insensitive' };
+        if (opts.spedizione) where.spedizione = opts.spedizione;
+        if (opts.trabajadorId) where.trabajador_id = opts.trabajadorId;
+
+        const round2 = (n: number) => Math.round(n * 100) / 100;
+
+        const [tenant, ops] = await Promise.all([
+            this.prisma.tenant.findUnique({ where: { id: tenantId }, select: TARIFAS_TENANT_SELECT }),
+            this.prisma.programacion.findMany({
+                where,
+                orderBy: { fecha: 'desc' },
+                select: {
+                    id: true, fecha: true, cliente: true, spedizione: true, lugar_entrega: true,
+                    vehiculo_id: true, trabajador_id: true, km_facturable: true, ingreso_estimado: true,
+                    reperibilita: true, attesa_estado: true, attesa_horas: true, tenant_id: true,
+                    gastos: { select: { monto: true, pagado_por_chofer: true } },
+                },
+            }),
+        ]);
+        const tar = tarifasFromTenant(tenant);
+
+        if (!ops.length) {
+            return {
+                desde, hasta, moneda: tar.moneda,
+                resumen: { operaciones: 0, operaciones_con_ingreso: 0, ingreso: 0, costo: 0, rentabilidad: 0, rentabilidad_pct: null as number | null },
+                porDia: [] as Array<{ fecha: string; ingreso: number; costo: number; rentabilidad: number; operaciones: number }>,
+                items: [] as any[],
+            };
+        }
+
+        // Resuelve trabajador/vehículo en batch (código o UUID, igual que findAll)
+        // para no hacer una consulta por operación.
+        const trabajadorCodes = Array.from(new Set(ops.map((o) => o.trabajador_id).filter((c): c is string => !!c)));
+        const vehiculoCodes = Array.from(new Set(ops.map((o) => o.vehiculo_id).filter((c): c is string => !!c)));
+        const [trabajadores, vehiculos, costos] = await Promise.all([
+            trabajadorCodes.length
+                ? this.prisma.trabajador.findMany({
+                    where: { tenant_id: tenantId, OR: [{ id: { in: trabajadorCodes } }, { id_trabajador: { in: trabajadorCodes } }] },
+                    select: { id: true, id_trabajador: true, nombre_completo: true },
+                })
+                : Promise.resolve([] as { id: string; id_trabajador: string | null; nombre_completo: string }[]),
+            vehiculoCodes.length
+                ? this.prisma.vehiculo.findMany({
+                    where: { OR: [{ id: { in: vehiculoCodes } }, { placa: { in: vehiculoCodes } }] },
+                    select: { id: true, placa: true, categoria: true },
+                })
+                : Promise.resolve([] as { id: string; placa: string; categoria: string | null }[]),
+            // costoChofer() sigue haciendo 1 query de Recorrido por operación (no evitable
+            // sin rehacer el modelo de datos), pero comparte la misma lectura de Tenant.
+            Promise.all(ops.map((op) => this.costoChofer(op, tar))),
+        ]);
+
+        const nombreByCode = new Map<string, string>();
+        trabajadores.forEach((t) => {
+            nombreByCode.set(t.id, t.nombre_completo);
+            if (t.id_trabajador) nombreByCode.set(t.id_trabajador, t.nombre_completo);
+        });
+        const vehiculoByCode = new Map<string, { placa: string; categoria: string | null }>();
+        vehiculos.forEach((v) => {
+            vehiculoByCode.set(v.id, { placa: v.placa, categoria: v.categoria });
+            vehiculoByCode.set(v.placa, { placa: v.placa, categoria: v.categoria });
+        });
+
+        const items = ops.map((op, i) => {
+            const costoTotal = costos[i].total;
+            // Ingreso REAL guardado por el supervisor. null = aún no lo llenó (no se
+            // rellena con el sugerido: eso es una decisión manual de la operación).
+            const ingreso = op.ingreso_estimado != null ? op.ingreso_estimado : null;
+            const rentabilidad = ingreso != null ? round2(ingreso - costoTotal) : null;
+            const rentabilidad_pct = ingreso ? round2(((rentabilidad as number) / ingreso) * 100) : null;
+            const veh = op.vehiculo_id ? vehiculoByCode.get(op.vehiculo_id) : undefined;
+            return {
+                id: op.id,
+                fecha: op.fecha,
+                cliente: op.cliente,
+                spedizione: op.spedizione,
+                lugar_entrega: op.lugar_entrega,
+                vehiculo_placa: veh?.placa ?? op.vehiculo_id ?? null,
+                vehiculo_categoria: veh?.categoria ?? null,
+                trabajador_nombre: (op.trabajador_id && nombreByCode.get(op.trabajador_id)) || null,
+                km_facturable: op.km_facturable ?? null,
+                ingreso,
+                costo_chofer: costoTotal,
+                rentabilidad,
+                rentabilidad_pct,
+            };
+        });
+
+        let sumIngreso = 0, sumCosto = 0, sumRentabilidad = 0, conIngreso = 0;
+        const porDiaMap = new Map<string, { fecha: string; ingreso: number; costo: number; rentabilidad: number; operaciones: number }>();
+        for (const it of items) {
+            sumCosto += it.costo_chofer;
+            const key = new Date(it.fecha).toISOString().slice(0, 10);
+            if (!porDiaMap.has(key)) porDiaMap.set(key, { fecha: key, ingreso: 0, costo: 0, rentabilidad: 0, operaciones: 0 });
+            const d = porDiaMap.get(key)!;
+            d.operaciones += 1;
+            d.costo += it.costo_chofer;
+            if (it.ingreso != null) {
+                sumIngreso += it.ingreso;
+                sumRentabilidad += it.rentabilidad ?? 0;
+                conIngreso += 1;
+                d.ingreso += it.ingreso;
+                d.rentabilidad += it.rentabilidad ?? 0;
+            }
+        }
+
+        const porDia = [...porDiaMap.values()]
+            .map((d) => ({ ...d, ingreso: round2(d.ingreso), costo: round2(d.costo), rentabilidad: round2(d.rentabilidad) }))
+            .sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+        return {
+            desde, hasta, moneda: tar.moneda,
+            resumen: {
+                operaciones: items.length,
+                operaciones_con_ingreso: conIngreso,
+                ingreso: round2(sumIngreso),
+                costo: round2(sumCosto),
+                rentabilidad: round2(sumRentabilidad),
+                rentabilidad_pct: sumIngreso > 0 ? round2((sumRentabilidad / sumIngreso) * 100) : null,
+            },
+            porDia,
+            items,
+        };
+    }
+
+    // Ingreso SUGERIDO (no se guarda): km_facturable × factor de la categoría del
+    // vehículo asignado. El supervisor lo usa o edita `ingreso_estimado` a mano.
+    private async ingresoSugerido(op: { vehiculo_id?: string | null; km_facturable?: number | null; spedizione?: string | null; tenant_id: string }) {
+        if (!op.vehiculo_id) return null;
+        // El picker de vehículo guarda la PLACA (no el UUID) en `Programacion.vehiculo_id`
+        // — igual que `trabajador_id` acepta código o UUID. Toleramos ambos formatos.
+        const [vehiculo, tenant] = await Promise.all([
+            this.prisma.vehiculo.findFirst({
+                where: { tenant_id: op.tenant_id, OR: [{ id: op.vehiculo_id }, { placa: op.vehiculo_id }] },
+                select: { categoria: true },
+            }),
+            this.prisma.tenant.findUnique({ where: { id: op.tenant_id }, select: TARIFAS_INGRESO_TENANT_SELECT }),
+        ]);
+        return ingresoSugerido(op, vehiculo?.categoria, tarifasIngresoFromTenant(tenant));
+    }
+
+    // Costo del chofer de ESTA operación: pago por horas de manejo (día/noche,
+    // del recorrido GPS ligado a la operación) + reperibilità (fijo) + attesa
+    // AUTORIZADA (€/h, solo si es ≥1h, misma regla que el resumen mensual) +
+    // gastos de ruta que pagó el chofer de su bolsillo. Es el lado "Gastado" de
+    // la rentabilidad (contraparte del "Ingreso" por km facturado al cliente).
+    // `tarPrecalculada` permite a `financiero()` reusar UNA lectura de Tenant
+    // para muchas operaciones en vez de repetirla por cada una (evita N+1).
+    private async costoChofer(
+        op: { id: string; tenant_id: string; reperibilita?: boolean | null; attesa_estado?: string | null; attesa_horas?: any; gastos?: Array<{ monto: any; pagado_por_chofer?: boolean | null }> },
+        tarPrecalculada?: TarifasChofer,
+    ) {
+        const [tenant, recorrido] = await Promise.all([
+            tarPrecalculada ? Promise.resolve(null) : this.prisma.tenant.findUnique({ where: { id: op.tenant_id }, select: TARIFAS_TENANT_SELECT }),
+            this.prisma.recorrido.findFirst({
+                where: { tenant_id: op.tenant_id, programacion_id: op.id },
+                orderBy: { iniciado_en: 'desc' },
+                select: { iniciado_en: true, llegada_en: true, retorno_en: true, finalizado_en: true, descanso_min: true },
+            }),
+        ]);
+        const tar = tarPrecalculada ?? tarifasFromTenant(tenant);
+
+        const { horasDia, horasNoche } = recorrido
+            ? horasDeRecorrido(recorrido, tar.corte)
+            : { horasDia: 0, horasNoche: 0 };
+        const pagoHoras = Math.round((horasDia * tar.giorno + horasNoche * tar.notte) * 100) / 100;
+
+        const reperibilita = !!op.reperibilita;
+        const pagoReperibilita = reperibilita ? tar.reperibilita : 0;
+
+        const attesaHoras = num(op.attesa_horas);
+        const attesaAutorizada = op.attesa_estado === 'AUTORIZADO' && attesaHoras >= 1;
+        const pagoAttesa = attesaAutorizada ? Math.round(attesaHoras * tar.attesaHora * 100) / 100 : 0;
+
+        const gastosChofer = Math.round(
+            (op.gastos || []).reduce((s, g) => s + (g.pagado_por_chofer !== false ? num(g.monto) : 0), 0) * 100,
+        ) / 100;
+
+        const total = Math.round((pagoHoras + pagoReperibilita + pagoAttesa + gastosChofer) * 100) / 100;
+
+        return {
+            horas_dia: horasDia, horas_noche: horasNoche, pago_horas: pagoHoras,
+            reperibilita, pago_reperibilita: pagoReperibilita,
+            attesa_horas: attesaHoras, attesa_autorizada: attesaAutorizada, pago_attesa: pagoAttesa,
+            gastos_chofer: gastosChofer,
+            total, moneda: tar.moneda,
+        };
     }
 
     // Normaliza un gasto del frontend a la forma de la BD, denormalizando chofer/vehículo
@@ -141,6 +357,9 @@ export class ProgramacionService {
             numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null,
             link_peaje: g.tipo === 'PEAJE' ? (g.link_peaje || null) : null,
             comprobantes: Array.isArray(g.comprobantes) ? g.comprobantes.filter(Boolean) : [],
+            // Por defecto lo paga el chofer (comportamiento histórico). Solo es false
+            // cuando se marca explícitamente como pagado por la empresa (mancato/código).
+            pagado_por_chofer: g.pagado_por_chofer !== false,
             trabajador_id: op.trabajador_id || null,
             targa: op.vehiculo_id || null,
             tenant_id: tenantId,

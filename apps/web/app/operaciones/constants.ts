@@ -54,3 +54,41 @@ export const ESTADO_CONSEGNA_META: Record<string, { label: string; badge: string
 
 export const estadoConsegnaMeta = (e?: string | null) =>
     (e && ESTADO_CONSEGNA_META[e]) || null;
+
+// Todo gasto puede pagarlo el chofer (se descuenta de su anticipo) o la empresa
+// (peaje MANCATO / combustible con TARJETA-CÓDIGO / otro gasto pendiente: no
+// descuenta al chofer pero sí cuenta en el costo de la ruta). Mismo criterio que
+// apps/logistica-app/constants/operaciones.ts.
+export const GASTO_TIPOS_CON_PAGADOR = ['PEAJE', 'COMBUSTIBLE', 'OTRO'];
+
+export function pagadorLabels(tipo: string): { yes: string; no: string; hintYes: string; hintNo: string } {
+    if (tipo === 'PEAJE') {
+        return {
+            yes: 'Pagado', no: 'Falta pagar',
+            hintYes: 'Pagó en la garita (efectivo/tarjeta). Se le descuenta.',
+            hintNo: 'Peaje mancato: falta pagarlo (lo paga la empresa). NO se descuenta al chofer.',
+        };
+    }
+    if (tipo === 'COMBUSTIBLE') {
+        return {
+            yes: 'Pagado', no: 'Tarjeta - Código',
+            hintYes: 'Pagó el combustible de su bolsillo. Se le descuenta.',
+            hintNo: 'Combustible con tarjeta o código de la empresa. NO se descuenta al chofer.',
+        };
+    }
+    return {
+        yes: 'Pagado', no: 'Falta pagar',
+        hintYes: 'Lo pagó el chofer de su bolsillo. Se le descuenta.',
+        hintNo: 'Falta pagarlo (lo paga la empresa). NO se descuenta al chofer.',
+    };
+}
+
+// Categoría del vehículo: define el factor €/km del ingreso por km facturable
+// (DHL/AB Servis). Debe coincidir con las opciones del app.
+export const CATEGORIA_VEHICULO_LABEL: Record<string, string> = {
+    AUTO_FURGONETA: 'Auto / Furgoneta',
+    H1_L1: 'Furgón H1 L1',
+    H2_L2: 'Furgón H2 L2',
+    CASSONATO: 'Cassonato',
+};
+export const categoriaVehiculoLabel = (v?: string | null): string => (v && CATEGORIA_VEHICULO_LABEL[v]) || v || '—';

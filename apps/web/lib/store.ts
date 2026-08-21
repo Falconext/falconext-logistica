@@ -10,6 +10,7 @@ interface User {
     tenant_id?: string;
     moneda?: string; // PEN | USD | EUR (moneda base de la empresa)
     es_admin?: boolean; // ve todos los módulos y administra
+    ve_finanzas?: boolean; // ve montos/pagos/ganancias (finanzas, rentabilidad)
     modulos?: string[]; // claves de módulos permitidos (efectivos del rol)
     rol_id?: string | null;
     rol_nombre?: string | null;

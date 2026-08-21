@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Truck, Map, Wrench, ShieldCheck, LogOut, Bell, CalendarDays, BarChart3, FileSpreadsheet, MessageSquare, PlayCircle, HelpCircle, Briefcase, ChevronsLeft, Receipt, Fuel, UserCog, KeyRound, Radio, Navigation, Sun, Moon, Boxes, Route, CalendarClock, Package } from 'lucide-react';
+import { LayoutDashboard, Users, Truck, Map, Wrench, ShieldCheck, LogOut, Bell, CalendarDays, BarChart3, FileSpreadsheet, MessageSquare, PlayCircle, HelpCircle, Briefcase, ChevronsLeft, Receipt, Fuel, UserCog, KeyRound, Radio, Navigation, Sun, Moon, Boxes, Route, CalendarClock, Package, TrendingUp } from 'lucide-react';
 import clsx from 'clsx';
 import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
@@ -55,6 +55,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
 
     const isAdmin = user?.role === 'SUPERADMIN';
     const isManager = isAdminUser(user); // rol con es_admin o SUPERADMIN
+    // Finanzas no es un módulo asignable (no vive en MODULES): se gatea directo
+    // por el flag ve_finanzas del rol (supervisor general, dirección...).
+    const veFinanzas = !!(user as any)?.ve_finanzas;
     const visiblePrimary = primaryItems.filter((i) => canAccessModule(user, i.key));
     const visibleTracking = trackingItems.filter((i) => canAccessModule(user, (i as any).gateKey ?? i.key));
 
@@ -103,11 +106,14 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
 
             {/* Nav */}
             <nav className="flex-1 overflow-y-auto px-3 pb-3">
-                {visiblePrimary.length > 0 && (
+                {(visiblePrimary.length > 0 || veFinanzas) && (
                     <div className="space-y-1">
                         {visiblePrimary.map((item) => (
                             <NavLink key={item.href} href={item.href} name={t(`nav.${item.key}`)} Icon={item.icon} />
                         ))}
+                        {veFinanzas && (
+                            <NavLink href="/finanzas" name={t('nav.finanzas')} Icon={TrendingUp} />
+                        )}
                     </div>
                 )}
 

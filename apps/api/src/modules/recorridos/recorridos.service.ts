@@ -192,7 +192,7 @@ export class RecorridosService {
         recorridoId: string,
         paradaId: string,
         trabajadorId: string,
-        body: { anticipo?: number; abono_de?: string; gastos?: any; nota?: string },
+        body: { anticipo?: number; abono_de?: string; gastos?: any; nota?: string; entregado?: boolean; foto_bolla?: string },
     ) {
         const r = await this.getOwned(tenantId, recorridoId, trabajadorId);
         const parada = await this.prisma.recorridoParada.findFirst({
@@ -214,6 +214,8 @@ export class RecorridosService {
                 abono_de: body?.abono_de ?? parada.abono_de,
                 gastos: body?.gastos ?? parada.gastos ?? undefined,
                 nota: body?.nota ?? parada.nota,
+                entregado: body?.entregado ?? parada.entregado,
+                foto_bolla: body?.foto_bolla ?? parada.foto_bolla,
             },
         });
 
@@ -430,10 +432,46 @@ export class RecorridosService {
         const updated = await this.prisma.recorrido.update({ where: { id: r.id }, data });
 
         if (r.programacion_id) {
-            // Estampa el km/tiempo FIEL en la operación (fuente de verdad para su detalle).
+            const progId = r.programacion_id;
+            // ----- Consolidación FIEL desde las paradas (fuente de verdad) -----
+            // Los abonos en ruta y el gasto del RETORNO ocurren DESPUÉS del CONSEGNATO,
+            // así que la operación solo queda consistente si reconsolidamos aquí, al
+            // cierre. Reemplaza la lista de gastos de la operación con la de todas las
+            // paradas (entrega + retorno) y suma los abonos recibidos en ruta.
+            const paradas = await this.prisma.recorridoParada.findMany({
+                where: { recorrido_id: r.id, tenant_id: tenantId },
+                orderBy: { orden: 'asc' },
+            });
+            const abonosRuta = paradas.reduce((s, p) => s + (Number(p.anticipo) || 0), 0);
+            if (paradas.length > 0) {
+                // Solo cuando el recorrido tuvo paradas (multi-destino / con retorno); un
+                // recorrido legacy sin paradas conserva los gastos que rindió el chofer.
+                const gastosConsolidados = paradas.flatMap((p) =>
+                    (Array.isArray(p.gastos) ? (p.gastos as any[]) : []).map((g: any) => ({
+                        programacion_id: progId,
+                        tipo: String(g.tipo || 'OTRO'),
+                        monto: Number(g.monto) || 0,
+                        fecha: now,
+                        descripcion: g.descripcion || (p.label ? `Parada · ${p.label}` : null),
+                        numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null,
+                        link_peaje: g.tipo === 'PEAJE' ? (g.link_peaje || null) : null,
+                        comprobantes: Array.isArray(g.comprobantes) ? g.comprobantes.filter(Boolean) : [],
+                        pagado_por_chofer: g.pagado_por_chofer !== false,
+                        trabajador_id: r.trabajador_id || null,
+                        targa: r.vehiculo_id || null,
+                        tenant_id: tenantId,
+                    })));
+                await this.prisma.$transaction([
+                    this.prisma.gastoOperacion.deleteMany({ where: { programacion_id: progId } }),
+                    ...(gastosConsolidados.length
+                        ? [this.prisma.gastoOperacion.createMany({ data: gastosConsolidados })]
+                        : []),
+                ]);
+            }
+            // Estampa el km/tiempo FIEL + los abonos de ruta en la operación (su detalle).
             await this.prisma.programacion.updateMany({
-                where: { id: r.programacion_id, tenant_id: tenantId },
-                data: { estado: 'ENTREGADO', km: finalKm, tiempo_min: finalMin },
+                where: { id: progId, tenant_id: tenantId },
+                data: { estado: 'ENTREGADO', km: finalKm, tiempo_min: finalMin, abonos_ruta: abonosRuta },
             });
         }
         await this.prisma.trabajador.updateMany({ where: { id: r.trabajador_id, tenant_id: tenantId }, data: { disponible: true } });

@@ -76,6 +76,8 @@ export class CombustibleService {
             fecha: g.fecha,
             monto: g.monto,
             targa: g.targa,
+            // false = combustible con CÓDIGO (lo paga la empresa, no se descuenta al chofer).
+            pagado_por_chofer: g.pagado_por_chofer !== false,
             metodo: g.programacion?.cliente ? `Operación · ${g.programacion.cliente}` : 'Gasto de operación',
             area: null,
             archivo: (g.comprobantes && g.comprobantes[0]) || null,

@@ -37,6 +37,20 @@ export class ProgramacionController {
         return this.programacionService.findGastosByTipo(req.user.tenantId, tipo);
     }
 
+    // Panel financiero (Fase C): rentabilidad por operación. Solo roles con
+    // ve_finanzas — mismo patrón que /registros/direccion/resumen.
+    @Get('financiero')
+    financiero(@Req() req, @Query() query: any) {
+        if (!req.user.veFinanzas) throw new ForbiddenException('No autorizado a ver finanzas.');
+        return this.programacionService.financiero(req.user.tenantId, {
+            from: query.from,
+            to: query.to,
+            cliente: query.cliente,
+            spedizione: query.spedizione,
+            trabajadorId: query.trabajadorId,
+        });
+    }
+
     @Get(':id')
     findOne(@Param('id') id: string) {
         return this.programacionService.findOne(id);

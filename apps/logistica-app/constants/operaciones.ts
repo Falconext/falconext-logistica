@@ -43,6 +43,56 @@ export const GASTO_TIPOS: { value: string; label: string }[] = [
     { value: 'OTRO', label: 'Otro' },
 ];
 
+// Categoría del vehículo: define el factor €/km del ingreso por km facturable
+// (DHL/AB Servis). Se elige en la ficha del vehículo (Vehículos).
+export const CATEGORIA_VEHICULO_OPTIONS: { value: string; label: string }[] = [
+    { value: 'AUTO_FURGONETA', label: 'Auto / Furgoneta' },
+    { value: 'H1_L1', label: 'Furgón H1 L1' },
+    { value: 'H2_L2', label: 'Furgón H2 L2' },
+    { value: 'CASSONATO', label: 'Cassonato' },
+];
+export const categoriaVehiculoLabel = (v?: string | null): string =>
+    CATEGORIA_VEHICULO_OPTIONS.find((o) => o.value === v)?.label || v || '—';
+
+// Todo gasto puede pagarse de dos formas: por el chofer (se descuenta de su
+// anticipo) o por la empresa (peaje MANCATO / combustible con TARJETA-CÓDIGO /
+// otro gasto que falta pagar: no descuenta al chofer pero sí cuenta en el costo
+// de la ruta). Los 3 tipos ofrecen la opción.
+export const GASTO_TIPOS_CON_PAGADOR = ['PEAJE', 'COMBUSTIBLE', 'OTRO'];
+
+// ¿El gasto lo pagó el chofer de su bolsillo? Default true (comportamiento histórico).
+// Si es false, lo paga la empresa y NO se descuenta del saldo del chofer.
+export const gastoPagadoPorChofer = (g: any): boolean => g?.pagado_por_chofer !== false;
+
+// Etiquetas del toggle "¿quién lo pagó?" según el tipo de gasto: la opción "no
+// pagado por el chofer" cambia de nombre porque el flujo real es distinto en
+// cada caso (mancato de peaje vs. tarjeta/código de combustible vs. gasto pendiente).
+export function pagadorLabels(tipo: string): { yes: string; no: string; hintYes: string; hintNo: string } {
+    if (tipo === 'PEAJE') {
+        return {
+            yes: 'Pagado', no: 'Falta pagar',
+            hintYes: 'Pagó en la garita (efectivo/tarjeta). Se le descuenta.',
+            hintNo: 'Peaje mancato: falta pagarlo (lo paga la empresa). NO se descuenta al chofer.',
+        };
+    }
+    if (tipo === 'COMBUSTIBLE') {
+        return {
+            yes: 'Pagado', no: 'Tarjeta - Código',
+            hintYes: 'Pagó el combustible de su bolsillo. Se le descuenta.',
+            hintNo: 'Combustible con tarjeta o código de la empresa. NO se descuenta al chofer.',
+        };
+    }
+    return {
+        yes: 'Pagado', no: 'Falta pagar',
+        hintYes: 'Lo pagó el chofer de su bolsillo. Se le descuenta.',
+        hintNo: 'Falta pagarlo (lo paga la empresa). NO se descuenta al chofer.',
+    };
+}
+
+// Suma de gastos que SÍ descuentan al chofer (los que él pagó).
+export const totalPagadoPorChofer = (gastos: any[]): number =>
+    (gastos || []).reduce((s, g) => s + (gastoPagadoPorChofer(g) ? Number(g?.monto || 0) : 0), 0);
+
 type BadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
 // Estado de consegna → etiqueta + variante de Badge móvil.

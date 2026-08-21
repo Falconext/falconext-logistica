@@ -1,44 +1,13 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
-
-// Un parte cruza el corte 19:00 (p. ej. 14:00→02:00): por eso las horas se
-// registran en DOS campos y la ganancia SUMA ambos tramos con su tarifa.
-function num(v: any): number {
-    if (v === null || v === undefined || v === '') return 0;
-    // Number() maneja number, string numérico y Prisma.Decimal (que es un objeto).
-    const n = Number(v);
-    return Number.isFinite(n) ? n : 0;
-}
+import { num, minutosDiaNoche, tarifasFromTenant, TARIFAS_TENANT_SELECT } from '../../common/tarifas-chofer.util';
+import { tarifasIngresoFromTenant, TARIFAS_INGRESO_TENANT_SELECT } from '../../common/ingreso-vehiculo.util';
 
 // Los partes son "de un día": se guardan como medianoche UTC. Las ventanas de
 // mes se construyen en UTC para no perder registros por el desfase horario.
 function inicioMesUTC(anio: number, mes1a12: number): Date {
     return new Date(Date.UTC(anio, mes1a12 - 1, 1));
-}
-
-// Offset (min) que hay que sumar a un instante UTC para obtener la hora de pared
-// en Italia (Europe/Rome). Maneja horario de verano (DST) automáticamente.
-function offsetRomaMin(d: Date): number {
-    const p = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-    }).formatToParts(d).reduce((a: any, x) => { a[x.type] = x.value; return a; }, {});
-    const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +(p.hour === '24' ? 0 : p.hour), +p.minute, +p.second);
-    return Math.round((asUTC - d.getTime()) / 60000);
-}
-
-// Reparte el tramo [start, end] en minutos de DÍA (06:00–19:00) y NOCHE (resto),
-// en hora italiana. El pago diurno/nocturno depende de esto.
-function minutosDiaNoche(start?: Date | null, end?: Date | null): { dia: number; noche: number } {
-    if (!start || !end || end.getTime() <= start.getTime()) return { dia: 0, noche: 0 };
-    const off = offsetRomaMin(start) * 60000; // offset ~constante en el tramo (DST a mitad de ruta: despreciable)
-    let dia = 0, noche = 0;
-    for (let t = start.getTime(); t < end.getTime(); t += 60000) {
-        const h = new Date(t + off).getUTCHours();
-        if (h >= 6 && h < 19) dia += 1; else noche += 1;
-    }
-    return { dia, noche };
 }
 
 @Injectable()
@@ -50,18 +19,11 @@ export class RegistrosService {
         return s === 'FARMACIA' ? 'FARMACIA' : 'DHL';
     }
 
-    // Tarifas de la empresa (diurna/nocturna). Con defaults por si el registro es viejo.
+    // Tarifas de la empresa (diurna/nocturna/reperibilità/attesa). Con defaults
+    // por si el tenant es viejo (columnas agregadas después).
     private async tarifas(tenantId: string) {
-        const t = await this.prisma.tenant.findUnique({
-            where: { id: tenantId },
-            select: { tarifa_ore_giorno: true, tarifa_ore_notte: true, hora_corte_notte: true, moneda: true },
-        });
-        return {
-            giorno: num(t?.tarifa_ore_giorno ?? 10),
-            notte: num(t?.tarifa_ore_notte ?? 12),
-            corte: t?.hora_corte_notte ?? 19,
-            moneda: t?.moneda ?? 'EUR',
-        };
+        const t = await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: TARIFAS_TENANT_SELECT });
+        return tarifasFromTenant(t);
     }
 
     // Ganancia de un parte = horas diurnas × tarifa diurna + horas nocturnas × tarifa nocturna.
@@ -162,7 +124,7 @@ export class RegistrosService {
     // si se muestran según el rol (ve_finanzas).
     private async calcularMetricas(
         tenantId: string, trabajadorId: string, desde: Date, hasta: Date,
-        tar: { giorno: number; notte: number },
+        tar: { giorno: number; notte: number; corte: number; reperibilita: number; attesaHora: number },
     ) {
         const [recorridos, reperibilita, attesaAgg] = await Promise.all([
             this.prisma.recorrido.findMany({
@@ -172,7 +134,7 @@ export class RegistrosService {
             this.prisma.programacion.count({
                 where: { tenant_id: tenantId, trabajador_id: trabajadorId, reperibilita: true, fecha: { gte: desde, lte: hasta } },
             }),
-            // Solo la attesa AUTORIZADA y de 1 HORA A MÁS se paga (€10/h). Menos de
+            // Solo la attesa AUTORIZADA y de 1 HORA A MÁS se paga. Menos de
             // 1 hora no cuenta ni suma (regla del empresario).
             this.prisma.programacion.aggregate({
                 _sum: { attesa_horas: true },
@@ -196,8 +158,8 @@ export class RegistrosService {
             km += (r as any).total_km != null
                 ? num((r as any).total_km)
                 : capKm(r.ida_km as any, r.ida_min as any) + capKm(r.vuelta_km as any, r.vuelta_min as any);
-            const ida = minutosDiaNoche(r.iniciado_en, r.llegada_en);
-            const vuelta = minutosDiaNoche(r.retorno_en, r.finalizado_en);
+            const ida = minutosDiaNoche(r.iniciado_en, r.llegada_en, tar.corte);
+            const vuelta = minutosDiaNoche(r.retorno_en, r.finalizado_en, tar.corte);
             const diaEl = ida.dia + vuelta.dia;
             const nocheEl = ida.noche + vuelta.noche;
             const elapsed = diaEl + nocheEl;
@@ -210,9 +172,9 @@ export class RegistrosService {
         const oreDia = Math.round((diaMin / 60) * 100) / 100;
         const oreNoche = Math.round((nocheMin / 60) * 100) / 100;
         const pagoHoras = Math.round((oreDia * tar.giorno + oreNoche * tar.notte) * 100) / 100;
-        const pagoReperibilita = reperibilita * 10; // €10 fijo por cada reperibilità
+        const pagoReperibilita = Math.round(reperibilita * tar.reperibilita * 100) / 100; // fijo por cada reperibilità
         const attesaHoras = Math.round(num(attesaAgg._sum.attesa_horas) * 100) / 100;
-        const pagoAttesa = Math.round(attesaHoras * 10 * 100) / 100; // €10/h autorizada
+        const pagoAttesa = Math.round(attesaHoras * tar.attesaHora * 100) / 100; // €/h autorizada
         return {
             km: Math.round(km * 10) / 10,
             oreDia, oreNoche,
@@ -305,6 +267,7 @@ export class RegistrosService {
     // chofer entienda de dónde sale el total del mes.
     async mesDetalleChofer(tenantId: string, trabajadorId: string | null, anio: number, mes: number) {
         if (!trabajadorId) throw new BadRequestException('Tu usuario no está vinculado a un trabajador.');
+        const tar = await this.tarifas(tenantId);
         const desde = new Date(Date.UTC(anio, mes - 1, 1));
         const hasta = new Date(Date.UTC(anio, mes, 0, 23, 59, 59));
         const recorridos = await this.prisma.recorrido.findMany({
@@ -328,8 +291,8 @@ export class RegistrosService {
         };
         const items = recorridos.map((r) => {
             const km = Math.round((capKm(r.ida_km, r.ida_min) + capKm(r.vuelta_km, r.vuelta_min)) * 10) / 10;
-            const ida = minutosDiaNoche(r.iniciado_en, r.llegada_en);
-            const vuelta = minutosDiaNoche(r.retorno_en, r.finalizado_en);
+            const ida = minutosDiaNoche(r.iniciado_en, r.llegada_en, tar.corte);
+            const vuelta = minutosDiaNoche(r.retorno_en, r.finalizado_en, tar.corte);
             const diaEl = ida.dia + vuelta.dia, nocheEl = ida.noche + vuelta.noche, elapsed = diaEl + nocheEl;
             const factor = elapsed > 0 ? Math.max(0, elapsed - num(r.descanso_min)) / elapsed : 0;
             return {
@@ -450,8 +413,19 @@ export class RegistrosService {
     }
 
     async getConfig(tenantId: string) {
-        const tar = await this.tarifas(tenantId);
-        return { tarifa_ore_giorno: tar.giorno, tarifa_ore_notte: tar.notte, hora_corte_notte: tar.corte, moneda: tar.moneda };
+        const t = await this.prisma.tenant.findUnique({
+            where: { id: tenantId },
+            select: { ...TARIFAS_TENANT_SELECT, ...TARIFAS_INGRESO_TENANT_SELECT },
+        });
+        const tar = tarifasFromTenant(t);
+        const ing = tarifasIngresoFromTenant(t);
+        return {
+            tarifa_ore_giorno: tar.giorno, tarifa_ore_notte: tar.notte, hora_corte_notte: tar.corte,
+            tarifa_reperibilita: tar.reperibilita, tarifa_ore_attesa: tar.attesaHora, moneda: tar.moneda,
+            factor_km_auto_furgoneta: ing.factores.AUTO_FURGONETA, factor_km_h1_l1: ing.factores.H1_L1,
+            factor_km_h2_l2: ing.factores.H2_L2, factor_km_cassonato: ing.factores.CASSONATO,
+            ingreso_km_minimo: ing.minimo, ingreso_km_umbral: ing.umbralKm,
+        };
     }
 
     async updateConfig(tenantId: string, body: any) {
@@ -462,6 +436,14 @@ export class RegistrosService {
             const h = Math.max(0, Math.min(23, Math.round(num(body.hora_corte_notte))));
             data.hora_corte_notte = h;
         }
+        if (body.tarifa_reperibilita !== undefined && body.tarifa_reperibilita !== '') data.tarifa_reperibilita = num(body.tarifa_reperibilita);
+        if (body.tarifa_ore_attesa !== undefined && body.tarifa_ore_attesa !== '') data.tarifa_ore_attesa = num(body.tarifa_ore_attesa);
+        if (body.factor_km_auto_furgoneta !== undefined && body.factor_km_auto_furgoneta !== '') data.factor_km_auto_furgoneta = num(body.factor_km_auto_furgoneta);
+        if (body.factor_km_h1_l1 !== undefined && body.factor_km_h1_l1 !== '') data.factor_km_h1_l1 = num(body.factor_km_h1_l1);
+        if (body.factor_km_h2_l2 !== undefined && body.factor_km_h2_l2 !== '') data.factor_km_h2_l2 = num(body.factor_km_h2_l2);
+        if (body.factor_km_cassonato !== undefined && body.factor_km_cassonato !== '') data.factor_km_cassonato = num(body.factor_km_cassonato);
+        if (body.ingreso_km_minimo !== undefined && body.ingreso_km_minimo !== '') data.ingreso_km_minimo = num(body.ingreso_km_minimo);
+        if (body.ingreso_km_umbral !== undefined && body.ingreso_km_umbral !== '') data.ingreso_km_umbral = Math.max(0, Math.round(num(body.ingreso_km_umbral)));
         await this.prisma.tenant.update({ where: { id: tenantId }, data });
         return this.getConfig(tenantId);
     }

@@ -24,6 +24,7 @@ import * as flota from './dicts/flota';
 import * as rastreo from './dicts/rastreo';
 import * as admin from './dicts/admin';
 import * as componentes from './dicts/componentes';
+import * as finanzas from './dicts/finanzas';
 
 type NsModule = { es: Record<string, any>; it: Record<string, any> };
 
@@ -47,6 +48,7 @@ const NAMESPACES: Record<string, NsModule> = {
     rastreo,
     admin,
     componentes,
+    finanzas,
 };
 
 function assemble(base: Record<string, any>, pick: (m: NsModule) => Record<string, any>) {

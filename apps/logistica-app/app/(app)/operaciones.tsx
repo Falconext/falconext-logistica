@@ -29,6 +29,9 @@ import {
   Lock,
   Ban,
   Gauge,
+  SlidersHorizontal,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react-native';
 import {
   Screen,
@@ -58,7 +61,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatMoney } from '../../constants/currency';
 import { isChofer } from '../../constants/modules';
-import { APP_OPTIONS, SPEDIZIONE_OPTIONS, GASTO_TIPOS, CONSEGNA_ACTIONS, estadoConsegnaMeta, RETIRO_PRESETS, isCoords, isConsegnaRealizada } from '../../constants/operaciones';
+import { APP_OPTIONS, SPEDIZIONE_OPTIONS, GASTO_TIPOS, GASTO_TIPOS_CON_PAGADOR, totalPagadoPorChofer, pagadorLabels, categoriaVehiculoLabel, CONSEGNA_ACTIONS, estadoConsegnaMeta, RETIRO_PRESETS, isCoords, isConsegnaRealizada } from '../../constants/operaciones';
 import type { Programacion, Vehiculo, Trabajador } from '../../types';
 
 const C = Theme.colors;
@@ -109,7 +112,19 @@ const fmtDate = (d?: string) => {
 
 const todayISO = () => new Date().toISOString().split('T')[0];
 
-type GastoRow = { tipo: string; monto: string; descripcion: string; numero_mancato: string; comprobantes: string[] };
+// Rango del mes en curso (primer y último día), en formato YYYY-MM-DD.
+// Es el valor por defecto del filtro de fechas del supervisor.
+const monthRangeISO = () => {
+  const now = new Date();
+  const iso = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return {
+    from: iso(new Date(now.getFullYear(), now.getMonth(), 1)),
+    to: iso(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+  };
+};
+
+type GastoRow = { tipo: string; monto: string; descripcion: string; numero_mancato: string; comprobantes: string[]; pagado_por_chofer: boolean };
 
 interface FormState {
   vehiculo_id: string;
@@ -128,6 +143,10 @@ interface FormState {
   estado: string;
   // Datos de consegna
   km: string;
+  // Ingreso por km facturable (DHL/AB Servis): el km_ida que informa el cliente
+  // (no el km real GPS) + el monto a cobrar (sugerido por categoría, editable).
+  km_facturable: string;
+  ingreso_estimado: string;
   ciudad: string;
   app: string;
   reperibilita: boolean;
@@ -138,6 +157,7 @@ interface FormState {
   foto_bolla: string;
   // Rendición
   anticipo: string;
+  abonos_ruta: number; // solo lectura: abonos que el chofer recibió en ruta (backend)
   gastos: GastoRow[];
 }
 
@@ -157,6 +177,8 @@ const emptyForm = (): FormState => ({
   nota: '',
   estado: 'PENDIENTE',
   km: '',
+  km_facturable: '',
+  ingreso_estimado: '',
   ciudad: '',
   app: '',
   reperibilita: false,
@@ -166,6 +188,7 @@ const emptyForm = (): FormState => ({
   otros_datos: '',
   foto_bolla: '',
   anticipo: '',
+  abonos_ruta: 0,
   gastos: [],
 });
 
@@ -195,12 +218,31 @@ export default function OperacionesScreen() {
   const [selectedEstado, setSelectedEstado] = useState<string | null>(null);
   const [soloSupervisores, setSoloSupervisores] = useState(false); // filtro: consegnas de supervisores
   const [soloMias, setSoloMias] = useState(false); // filtro: mis consegnas (del usuario logueado)
+  // Filtros del supervisor: por rango de fechas, trabajador y spedizione (cada supervisor
+  // suele estar asignado a una spedizione: Extras Alfredo / DHL / AB…).
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  // Por defecto el supervisor ve el mes en curso (1° → último día). El chofer sin filtro.
+  const [fFrom, setFFrom] = useState(() => (canEditAll ? monthRangeISO().from : '')); // fecha desde (YYYY-MM-DD)
+  const [fTo, setFTo] = useState(() => (canEditAll ? monthRangeISO().to : ''));       // fecha hasta (YYYY-MM-DD)
+  const [fTrabajador, setFTrabajador] = useState(''); // id del trabajador
+  const [fSpedizione, setFSpedizione] = useState('');  // valor de spedizione
   // Resumen personal (igual que el chofer): entregadas/canceladas + km del mes.
   const [miResumen, setMiResumen] = useState<{ total: number; entregadas: number; canceladas: number; km: number } | null>(null);
   // Recorridos activos indexados por operación → ETA de Maps en vivo en las tarjetas.
   const [activosById, setActivosById] = useState<Record<string, any>>({});
 
   const [detail, setDetail] = useState<Programacion | null>(null);
+  // Hint "Sugerido" del formulario de edición: vive aparte de `detail` porque
+  // openEdit() anula `detail` (es del modal read-only) mientras edita en `form`.
+  const [ingresoSugerido, setIngresoSugerido] = useState<Programacion['ingreso_sugerido']>(null);
+  // Abre el detalle con el item de la lista (rápido) y lo enriquece con el registro
+  // completo (la lista no trae anticipo/abonos_ruta/gastos, necesarios para el Control del dinero).
+  const openDetail = (r: Programacion) => {
+    setDetail(r);
+    api.get(`/programacion/${r.id}`).then((res) => {
+      if (res.data) setDetail((cur) => (cur && cur.id === r.id ? { ...cur, ...res.data } : cur));
+    }).catch(() => {});
+  };
   const [attesaHorasEdit, setAttesaHorasEdit] = useState<string>(''); // supervisor: corregir horas de attesa
   const [attesaBusy, setAttesaBusy] = useState(false);
   const [wizardOp, setWizardOp] = useState<Programacion | null>(null); // chofer: flujo por pasos
@@ -346,6 +388,12 @@ export default function OperacionesScreen() {
     }
   }, []);
 
+  // El supervisor necesita el catálogo de trabajadores/vehículos para el FILTRO
+  // por trabajador (no solo al abrir el formulario). Se carga una vez al entrar.
+  useEffect(() => {
+    if (canEditAll) loadResources();
+  }, [canEditAll, loadResources]);
+
   // El trabajador_id de una operación puede venir como UUID o como código
   // (id_trabajador); mapeamos ambos al nombre para mostrarlo en vez del id.
   const trabajadorNombre = useCallback(
@@ -382,6 +430,42 @@ export default function OperacionesScreen() {
   // aparecen en "Mi Ruta". Aquí se ven las que ya están EN RUTA (recorrido activo)
   // o ENTREGADAS. Pedido del empresario.
   const ocultarPendientes = isChofer(user) || soloMias;
+
+  // Opciones de spedizione para el filtro: las fijas del negocio + las que existan
+  // realmente en los datos (por si aparece una nueva, ej. "Roma").
+  const spedizioneOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    SPEDIZIONE_OPTIONS.forEach((o) => seen.set(o.value, o.label));
+    items.forEach((r) => {
+      const s = (r.spedizione || '').trim();
+      if (s && !seen.has(s)) seen.set(s, s);
+    });
+    return Array.from(seen, ([value, label]) => ({ value, label }));
+  }, [items]);
+
+  // ¿La operación pertenece al trabajador filtrado? (acepta UUID o código legacy).
+  const matchTrabajador = useCallback((tid?: string | null) => {
+    if (!fTrabajador) return true;
+    if (tid === fTrabajador) return true;
+    const w = trabajadores.find((t) => t.id === fTrabajador);
+    return !!(w && tid && (tid === (w as any).id_trabajador));
+  }, [fTrabajador, trabajadores]);
+
+  // Fecha de la operación (retiro) en formato YYYY-MM-DD, para el filtro por rango.
+  const opDateISO = (r: Programacion) => {
+    const d = (r as any).fecha_retiro || r.fecha;
+    if (!d) return '';
+    try { return new Date(d).toISOString().slice(0, 10); } catch { return ''; }
+  };
+
+  // El rango del mes por defecto no cuenta como "filtro activo" (es la vista base):
+  // solo marcamos activos las fechas si difieren del mes en curso.
+  const mr = canEditAll ? monthRangeISO() : { from: '', to: '' };
+  const fechaCustom = fFrom !== mr.from || fTo !== mr.to; // ≠ mes en curso = filtro de fecha activo
+  const activeFilterCount = (fechaCustom ? 1 : 0) + (fTrabajador ? 1 : 0) + (fSpedizione ? 1 : 0);
+  // "Limpiar" vuelve a la vista base: mes en curso (supervisor) + sin trabajador/spedizione.
+  const clearFilters = () => { setFFrom(mr.from); setFTo(mr.to); setFTrabajador(''); setFSpedizione(''); };
+
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
     const data = items.filter(
@@ -393,6 +477,10 @@ export default function OperacionesScreen() {
           (r.id_programacion?.toLowerCase() || '').includes(q)) &&
         (!soloSupervisores || esSupervisorId(r.trabajador_id)) &&
         (!soloMias || esMiaId(r.trabajador_id)) &&
+        matchTrabajador(r.trabajador_id) &&
+        (!fSpedizione || (r.spedizione || '').trim() === fSpedizione) &&
+        (!fFrom || opDateISO(r) >= fFrom) &&
+        (!fTo || opDateISO(r) <= fTo) &&
         (!ocultarPendientes || isConsegnaRealizada(r) || !!activosById[r.id])
     );
     return data.sort(
@@ -400,7 +488,7 @@ export default function OperacionesScreen() {
         new Date(b.fecha_entrega || b.fecha).getTime() -
         new Date(a.fecha_entrega || a.fecha).getTime()
     );
-  }, [items, query, soloSupervisores, esSupervisorId, soloMias, esMiaId, ocultarPendientes, activosById]);
+  }, [items, query, soloSupervisores, esSupervisorId, soloMias, esMiaId, ocultarPendientes, activosById, matchTrabajador, fSpedizione, fFrom, fTo]);
 
   const stats = useMemo(() => {
     // Los totales vienen del servidor (counts/total), no solo de la página cargada.
@@ -425,6 +513,7 @@ export default function OperacionesScreen() {
     setEditing(null);
     setForm(emptyForm());
     setDetail(null);
+    setIngresoSugerido(null);
     setFormVisible(true);
     loadResources();
   };
@@ -445,6 +534,8 @@ export default function OperacionesScreen() {
     nota: src.nota || '',
     estado: src.estado || 'PENDIENTE',
     km: src.km != null ? String(src.km) : '',
+    km_facturable: src.km_facturable != null ? String(src.km_facturable) : '',
+    ingreso_estimado: src.ingreso_estimado != null ? String(src.ingreso_estimado) : '',
     ciudad: src.ciudad || '',
     app: src.app || '',
     reperibilita: !!src.reperibilita,
@@ -454,12 +545,14 @@ export default function OperacionesScreen() {
     otros_datos: src.otros_datos || '',
     foto_bolla: src.foto_bolla || '',
     anticipo: src.anticipo != null ? String(src.anticipo) : '',
+    abonos_ruta: Number(src.abonos_ruta) || 0,
     gastos: Array.isArray(src.gastos) ? src.gastos.map((g: any) => ({
       tipo: g.tipo || 'OTRO',
       monto: g.monto != null ? String(g.monto) : '',
       descripcion: g.descripcion || '',
       numero_mancato: g.numero_mancato || '',
       comprobantes: Array.isArray(g.comprobantes) ? g.comprobantes : [],
+      pagado_por_chofer: g.pagado_por_chofer !== false,
     })) : [],
   });
 
@@ -473,11 +566,15 @@ export default function OperacionesScreen() {
     setEditing(r);
     populate(r); // precarga rápida con lo que trae la lista
     setDetail(null);
+    setIngresoSugerido(null);
     setFormVisible(true);
     loadResources();
     // Registro COMPLETO: la lista no trae nota/otros_datos/foto_bolla/gastos, y guardar
-    // sin ellos los borraría. GET /programacion/:id trae todos los campos.
-    api.get(`/programacion/${r.id}`).then((res) => { if (res.data) populate({ ...r, ...res.data }); }).catch(() => {});
+    // sin ellos los borraría. GET /programacion/:id trae todos los campos (incluye
+    // ingreso_sugerido, que no vive en `form` porque no se guarda, solo se sugiere).
+    api.get(`/programacion/${r.id}`).then((res) => {
+      if (res.data) { populate({ ...r, ...res.data }); setIngresoSugerido(res.data.ingreso_sugerido ?? null); }
+    }).catch(() => {});
   };
 
   // Eliminar operación (solo responsables/admins). Corrige entregas hechas por error.
@@ -526,12 +623,18 @@ export default function OperacionesScreen() {
   const removeRetiro = (i: number) => setForm((f) => ({ ...f, retiros: f.retiros.filter((_, idx) => idx !== i) }));
 
   // --- Gastos (rendición) ---
-  const addGasto = () => setForm((f) => ({ ...f, gastos: [...f.gastos, { tipo: 'PEAJE', monto: '', descripcion: '', numero_mancato: '', comprobantes: [] }] }));
+  const addGasto = () => setForm((f) => ({ ...f, gastos: [...f.gastos, { tipo: 'PEAJE', monto: '', descripcion: '', numero_mancato: '', comprobantes: [], pagado_por_chofer: true }] }));
   const updateGasto = (i: number, patch: Partial<GastoRow>) => setForm((f) => ({ ...f, gastos: f.gastos.map((g, idx) => (idx === i ? { ...g, ...patch } : g)) }));
   const removeGasto = (i: number) => setForm((f) => ({ ...f, gastos: f.gastos.filter((_, idx) => idx !== i) }));
+  // Costo total de la ruta (todos los gastos, los pague quien los pague).
   const totalGastos = form.gastos.reduce((s, g) => s + (g.monto !== '' ? Number(g.monto) || 0 : 0), 0);
+  // Lo que el chofer pagó de su bolsillo (lo único que se le descuenta del anticipo).
+  const gastadoChofer = totalPagadoPorChofer(form.gastos.map((g) => ({ ...g, monto: Number(g.monto) || 0 })));
+  const gastadoEmpresa = totalGastos - gastadoChofer;
   const anticipoNum = form.anticipo !== '' ? Number(form.anticipo) || 0 : 0;
-  const saldo = anticipoNum - totalGastos;
+  const recibidoNum = anticipoNum + (form.abonos_ruta || 0);
+  // "A devolver" = (bonifico + abonos en ruta) − solo lo que pagó el chofer (mancato/código no descuentan).
+  const saldo = recibidoNum - gastadoChofer;
 
   const save = async () => {
     // Defensa: no permitir guardar cambios sobre una consegna ya realizada.
@@ -565,6 +668,8 @@ export default function OperacionesScreen() {
         destinos: form.destinos.map((s) => s.trim()).filter(Boolean),
         nota: form.nota,
         km: form.km !== '' ? Number(form.km) : null,
+        km_facturable: form.km_facturable !== '' ? Number(form.km_facturable) : null,
+        ingreso_estimado: form.ingreso_estimado !== '' ? Number(form.ingreso_estimado) : null,
         ciudad: form.ciudad || null,
         app: form.app || null,
         reperibilita: form.reperibilita,
@@ -582,6 +687,8 @@ export default function OperacionesScreen() {
             descripcion: g.descripcion || null,
             numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null,
             comprobantes: g.comprobantes,
+            // Solo peaje/combustible ofrecen la opción; el resto siempre lo paga el chofer.
+            pagado_por_chofer: GASTO_TIPOS_CON_PAGADOR.includes(g.tipo) ? g.pagado_por_chofer : true,
           })),
       };
       if (editing) {
@@ -602,7 +709,7 @@ export default function OperacionesScreen() {
   const renderCard = ({ item: r }: { item: Programacion }) => {
     const meta = estadoMeta(estadoEfectivo(r));
     return (
-      <TouchableOpacity activeOpacity={0.7} style={styles.card} onPress={() => (canEditAll ? setDetail(r) : setWizardOp(r))}>
+      <TouchableOpacity activeOpacity={0.7} style={styles.card} onPress={() => (canEditAll ? openDetail(r) : setWizardOp(r))}>
         <View style={styles.cardTop}>
           <View style={styles.cardIcon}>
             <Package size={18} color={C.primary} />
@@ -798,6 +905,56 @@ export default function OperacionesScreen() {
           })()}
         </ScrollView>
 
+        {canEditAll && (
+          <View style={{ marginBottom: S.sm }}>
+            <View style={styles.filtrosBar}>
+              <TouchableOpacity style={styles.filtrosToggle} onPress={() => setFiltersOpen((v) => !v)} activeOpacity={0.7}>
+                <SlidersHorizontal size={16} color={C.text} />
+                <Text style={styles.filtrosToggleText}>Filtros{activeFilterCount ? ` · ${activeFilterCount}` : ''}</Text>
+                {filtersOpen ? <ChevronUp size={16} color={C.textMuted} /> : <ChevronDown size={16} color={C.textMuted} />}
+              </TouchableOpacity>
+              {activeFilterCount > 0 && (
+                <TouchableOpacity onPress={clearFilters} activeOpacity={0.7} style={styles.filtrosClearBtn}>
+                  <Text style={styles.filtrosClearText}>Limpiar</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            {filtersOpen && (
+              <View style={styles.filtrosPanel}>
+                <View style={{ flexDirection: 'row', gap: S.sm }}>
+                  <View style={{ flex: 1 }}>
+                    <DatePicker label="Desde" value={fFrom} onChange={setFFrom} placeholder="AAAA-MM-DD" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <DatePicker label="Hasta" value={fTo} onChange={setFTo} placeholder="AAAA-MM-DD" />
+                  </View>
+                </View>
+                <Select
+                  label="Trabajador"
+                  value={fTrabajador}
+                  onChange={setFTrabajador}
+                  placeholder="Todos"
+                  searchable
+                  options={[
+                    { value: '', label: 'Todos' },
+                    ...[...trabajadores]
+                      .sort((a, b) => (a.nombre_completo || '').localeCompare(b.nombre_completo || ''))
+                      .map((w) => ({ value: w.id, label: w.nombre_completo || '(sin nombre)' })),
+                  ]}
+                />
+                <Select
+                  label="Spedizione"
+                  value={fSpedizione}
+                  onChange={setFSpedizione}
+                  placeholder="Todas"
+                  searchable={false}
+                  options={[{ value: '', label: 'Todas' }, ...spedizioneOptions]}
+                />
+              </View>
+            )}
+          </View>
+        )}
+
         {loading ? (
           <LoadingState text="Cargando operaciones..." />
         ) : (
@@ -908,7 +1065,9 @@ export default function OperacionesScreen() {
             })()}
             <InfoRow label="Vehículo" value={detail.vehiculo_id} />
             <InfoRow label="Conductor" value={detail.trabajador_nombre || trabajadorNombre(detail.trabajador_id) || 'Sin asignar'} />
-            {detail.km != null && detail.km !== 0 ? <InfoRow label="KM" value={`${detail.km} km`} /> : null}
+            {detail.km != null && detail.km !== 0 ? <InfoRow label="KM (real, GPS)" value={`${detail.km} km`} /> : null}
+            {detail.km_facturable != null ? <InfoRow label="Km facturable (ida)" value={`${detail.km_facturable} km`} /> : null}
+            {detail.ingreso_estimado != null && detail.ingreso_estimado !== 0 ? <InfoRow label="Ingreso" value={formatMoney(detail.ingreso_estimado, moneda)} /> : null}
             {detail.ciudad ? <InfoRow label="Ciudad" value={detail.ciudad} /> : null}
             {detail.app ? <InfoRow label="App" value={detail.app} /> : null}
             {/* Attesa con autorización: el supervisor ve las horas declaradas, puede
@@ -958,15 +1117,63 @@ export default function OperacionesScreen() {
             })()}
             {detail.compactado ? <InfoRow label="Compactado" value="Sí" /> : null}
             {detail.otros_datos ? <InfoRow label="Otros datos" value={detail.otros_datos} /> : null}
-            {detail.anticipo != null && detail.anticipo !== 0 ? (
-              <InfoRow label="Bonifico" value={formatMoney(detail.anticipo, moneda)} />
-            ) : null}
-            {detail.gastos && detail.gastos.length > 0 ? (
-              <InfoRow
-                label="Gastos"
-                value={`${detail.gastos.length} · ${formatMoney(detail.gastos.reduce((s, g) => s + (g.monto || 0), 0), moneda)}`}
-              />
-            ) : null}
+            {(() => {
+              const anticipoD = Number(detail.anticipo) || 0;
+              const abonosD = Number((detail as any).abonos_ruta) || 0;
+              const gastosD = (detail.gastos || []) as any[];
+              const totalD = gastosD.reduce((s, g) => s + (Number(g?.monto) || 0), 0);
+              const choferD = totalPagadoPorChofer(gastosD);
+              const empresaD = totalD - choferD;
+              const recibidoD = anticipoD + abonosD;
+              const saldoD = recibidoD - choferD;
+              if (anticipoD === 0 && abonosD === 0 && gastosD.length === 0) return null;
+              return (
+                <View style={styles.saldoBox}>
+                  <View style={styles.saldoRow}><Text style={styles.saldoLabel}>Bonifico</Text><Text style={styles.saldoVal}>{formatMoney(anticipoD, moneda)}</Text></View>
+                  {abonosD > 0 ? (
+                    <View style={styles.saldoRow}><Text style={styles.saldoLabel}>+ Abonos en ruta</Text><Text style={styles.saldoVal}>{formatMoney(abonosD, moneda)}</Text></View>
+                  ) : null}
+                  <View style={styles.saldoRow}><Text style={styles.saldoLabel}>Pagado por el chofer</Text><Text style={styles.saldoVal}>− {formatMoney(choferD, moneda)}</Text></View>
+                  {empresaD > 0 ? (
+                    <View style={styles.saldoRow}><Text style={[styles.saldoLabel, { color: C.textMuted }]}>Pagado por la empresa (no descuenta)</Text><Text style={[styles.saldoVal, { color: C.textMuted }]}>{formatMoney(empresaD, moneda)}</Text></View>
+                  ) : null}
+                  <View style={[styles.saldoRow, styles.saldoTotal]}>
+                    <Text style={[styles.saldoLabel, { fontWeight: '700', color: saldoD < 0 ? C.danger : C.success }]}>{saldoD < 0 ? 'Excedido (falta)' : 'A devolver'}</Text>
+                    <Text style={[styles.saldoVal, { fontWeight: '700', color: saldoD < 0 ? C.danger : C.success }]}>{formatMoney(Math.abs(saldoD), moneda)}</Text>
+                  </View>
+                  <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 6 }}>Costo total de la ruta: {formatMoney(totalD, moneda)}</Text>
+                </View>
+              );
+            })()}
+            {/* Costo del chofer (pago por horas + reperibilità + attesa): dato de
+                compensación, visible solo con ve_finanzas (igual que Ganancias Dirección). */}
+            {(user as any)?.ve_finanzas && detail.costo_chofer ? (() => {
+              const cc = detail.costo_chofer!;
+              return (
+                <View style={styles.saldoBox}>
+                  <Text style={[styles.saldoLabel, { fontWeight: '700', color: C.text, marginBottom: 4 }]}>Costo del chofer</Text>
+                  {(cc.horas_dia > 0 || cc.horas_noche > 0) && (
+                    <View style={styles.saldoRow}>
+                      <Text style={styles.saldoLabel}>Horas ({cc.horas_dia}d + {cc.horas_noche}n)</Text>
+                      <Text style={styles.saldoVal}>{formatMoney(cc.pago_horas, cc.moneda)}</Text>
+                    </View>
+                  )}
+                  {cc.reperibilita && (
+                    <View style={styles.saldoRow}><Text style={styles.saldoLabel}>Reperibilità</Text><Text style={styles.saldoVal}>{formatMoney(cc.pago_reperibilita, cc.moneda)}</Text></View>
+                  )}
+                  {cc.attesa_autorizada && (
+                    <View style={styles.saldoRow}><Text style={styles.saldoLabel}>Attesa autorizada ({cc.attesa_horas}h)</Text><Text style={styles.saldoVal}>{formatMoney(cc.pago_attesa, cc.moneda)}</Text></View>
+                  )}
+                  {cc.gastos_chofer > 0 && (
+                    <View style={styles.saldoRow}><Text style={styles.saldoLabel}>Gastos pagados por él</Text><Text style={styles.saldoVal}>{formatMoney(cc.gastos_chofer, cc.moneda)}</Text></View>
+                  )}
+                  <View style={[styles.saldoRow, styles.saldoTotal]}>
+                    <Text style={[styles.saldoLabel, { fontWeight: '700' }]}>Total</Text>
+                    <Text style={[styles.saldoVal, { fontWeight: '700' }]}>{formatMoney(cc.total, cc.moneda)}</Text>
+                  </View>
+                </View>
+              );
+            })() : null}
             <InfoRow label="Nota" value={detail.nota} />
 
             {detailActivo && (
@@ -1217,6 +1424,42 @@ export default function OperacionesScreen() {
             editable={!lockOthers}
           />
         </View>
+
+        {!lockOthers && (
+          <View>
+            <View style={styles.dateRow}>
+              <FormField
+                label="Km facturable (ida)"
+                value={form.km_facturable}
+                onChangeText={(t) => setForm({ ...form, km_facturable: t })}
+                placeholder="Km que informa el cliente"
+                keyboardType="numeric"
+                style={{ flex: 1 }}
+              />
+              <FormField
+                label={`Ingreso (${moneda || 'EUR'})`}
+                value={form.ingreso_estimado}
+                onChangeText={(t) => setForm({ ...form, ingreso_estimado: t })}
+                placeholder="0.00"
+                keyboardType="numeric"
+                style={{ flex: 1 }}
+              />
+            </View>
+            {ingresoSugerido ? (
+              <TouchableOpacity
+                onPress={() => setForm((f) => ({ ...f, ingreso_estimado: String(ingresoSugerido!.monto) }))}
+                style={styles.sugeridoRow}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.sugeridoText}>
+                  Sugerido: {formatMoney(ingresoSugerido.monto, moneda)} ({categoriaVehiculoLabel(ingresoSugerido.categoria)}
+                  {ingresoSugerido.aplicaMinimo ? ', mínimo' : ` · ${ingresoSugerido.factor}€/km`}) · Usar
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        )}
+
         <Select
           label="App"
           value={form.app}
@@ -1343,7 +1586,32 @@ export default function OperacionesScreen() {
                 placeholder="¿En qué se gastó?"
               />
             )}
-            {g.tipo === 'PEAJE' && (
+            {GASTO_TIPOS_CON_PAGADOR.includes(g.tipo) && (() => {
+              const labels = pagadorLabels(g.tipo);
+              return (
+                <View>
+                  <Text style={styles.fieldLabelSm}>¿Quién lo pagó?</Text>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity
+                      style={[styles.toggleBtn, g.pagado_por_chofer && styles.toggleBtnActiveDark]}
+                      onPress={() => updateGasto(i, { pagado_por_chofer: true })}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.toggleBtnText, g.pagado_por_chofer && { color: '#fff' }]}>{labels.yes}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.toggleBtn, !g.pagado_por_chofer && styles.toggleBtnActiveBlue]}
+                      onPress={() => updateGasto(i, { pagado_por_chofer: false })}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.toggleBtnText, !g.pagado_por_chofer && { color: '#fff' }]}>{labels.no}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.pagadorHint}>{g.pagado_por_chofer ? labels.hintYes : labels.hintNo}</Text>
+                </View>
+              );
+            })()}
+            {g.tipo === 'PEAJE' && !g.pagado_por_chofer && (
               <FormField
                 label="Nº de mancato"
                 value={g.numero_mancato}
@@ -1373,10 +1641,22 @@ export default function OperacionesScreen() {
             <Text style={styles.saldoLabel}>Bonifico</Text>
             <Text style={styles.saldoVal}>{formatMoney(anticipoNum, moneda)}</Text>
           </View>
+          {form.abonos_ruta > 0 && (
+            <View style={styles.saldoRow}>
+              <Text style={styles.saldoLabel}>+ Abonos en ruta</Text>
+              <Text style={styles.saldoVal}>{formatMoney(form.abonos_ruta, moneda)}</Text>
+            </View>
+          )}
           <View style={styles.saldoRow}>
-            <Text style={styles.saldoLabel}>Total gastado</Text>
-            <Text style={styles.saldoVal}>− {formatMoney(totalGastos, moneda)}</Text>
+            <Text style={styles.saldoLabel}>Pagado por el chofer</Text>
+            <Text style={styles.saldoVal}>− {formatMoney(gastadoChofer, moneda)}</Text>
           </View>
+          {gastadoEmpresa > 0 && (
+            <View style={styles.saldoRow}>
+              <Text style={styles.saldoLabel}>Pagado por la empresa (no descuenta)</Text>
+              <Text style={[styles.saldoVal, { color: C.textMuted }]}>{formatMoney(gastadoEmpresa, moneda)}</Text>
+            </View>
+          )}
           <View style={[styles.saldoRow, styles.saldoTotal]}>
             <Text style={[styles.saldoLabel, { fontWeight: '700', color: saldo < 0 ? C.danger : C.success }]}>
               {saldo < 0 ? 'Excedido (falta)' : 'A devolver'}
@@ -1504,6 +1784,15 @@ const makeStyles = () => StyleSheet.create({
   sectionRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: S.lg, marginBottom: S.sm },
   formSectionInline: { fontSize: 13, fontWeight: '700', color: C.text, textTransform: 'uppercase' },
   fieldLabelSm: { fontSize: 13, fontWeight: '500', color: C.textMuted, marginBottom: 6 },
+  pagadorHint: { fontSize: 11, color: C.textMuted, marginTop: 6, lineHeight: 15 },
+  sugeridoRow: { marginTop: -S.sm, marginBottom: S.md, paddingHorizontal: 4 },
+  sugeridoText: { fontSize: 12, color: C.primary, fontWeight: '600' },
+  filtrosBar: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
+  filtrosToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 14, borderRadius: Theme.radius.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface },
+  filtrosToggleText: { fontSize: 14, fontWeight: '600', color: C.text },
+  filtrosClearBtn: { paddingVertical: 8, paddingHorizontal: 12 },
+  filtrosClearText: { fontSize: 13, fontWeight: '600', color: C.danger },
+  filtrosPanel: { marginTop: S.sm, padding: S.md, borderRadius: Theme.radius.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, gap: S.sm },
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: S.sm },
   gpsHint: { fontSize: 12, color: C.info, fontWeight: '600', marginTop: 4 },
   destinoRow: { flexDirection: 'row', alignItems: 'flex-end', gap: S.sm, marginBottom: S.sm },

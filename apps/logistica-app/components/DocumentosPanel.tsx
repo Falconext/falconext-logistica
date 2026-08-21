@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, Alert, Modal, Pressable, ScrollView,
+  View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, Alert, Modal, Pressable, ScrollView, Platform,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as WebBrowser from 'expo-web-browser';
 import {
-  UploadCloud, FileText, Eye, Trash2, X, ExternalLink,
+  UploadCloud, FileText, Eye, Trash2, X, ExternalLink, Lock,
   type LucideIcon,
 } from 'lucide-react-native';
 import { FormModal, Badge, LoadingState } from './ui';
@@ -25,12 +26,37 @@ export interface DocType { key: string; label: string; sub: string; icon: Lucide
 
 // --- Previsualización -------------------------------------------------------
 const isPdf = (url?: string | null) => !!url && /\.pdf(\?|$)/i.test(url);
+// El almacenamiento es AWS S3 (no Cloudinary): las transformaciones de página de
+// PDF (`pg_N,f_jpg`) SOLO funcionan en URLs de Cloudinary. Para S3 los PDF no se
+// pueden renderizar como imagen: se abren directamente en el navegador.
+const isCloudinary = (url?: string | null) => !!url && /res\.cloudinary\.com/i.test(url) && url.includes('/upload/');
 // Renderiza una página de un PDF de Cloudinary como JPG (sin visor PDF nativo).
-// Cloudinary bloquea la entrega del PDF crudo (401) pero sí permite transformarlo
-// a imagen, así que previsualizamos página por página con `pg_N,f_jpg`.
 const pdfPage = (url: string, page = 1, w = 600) =>
   url.replace('/upload/', `/upload/pg_${page},f_jpg,q_auto,w_${w}/`).replace(/\.pdf(\?|$)/i, '.jpg$1');
 const pdfThumb = (url: string, w = 600) => pdfPage(url, 1, w);
+// PDF de S3: iOS (WKWebView) lo renderiza directo; Android necesita el visor de Google Docs.
+const pdfViewerUri = (url: string) =>
+  Platform.OS === 'android'
+    ? `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(url)}`
+    : url;
+
+// Miniatura del PDF (primera página) dentro del cuadrito, vía WebView. No interactiva:
+// el tap lo captura el TouchableOpacity padre para abrir la previsualización completa.
+function PdfThumbView({ url, styles }: { url: string; styles: ReturnType<typeof makeStyles> }) {
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <WebView
+        source={{ uri: pdfViewerUri(url) }}
+        style={{ flex: 1, backgroundColor: C.surfaceAlt }}
+        scrollEnabled={false}
+        startInLoadingState
+        renderLoading={() => (
+          <View style={styles.thumbFallback}><ActivityIndicator size="small" color={C.textFaint} /></View>
+        )}
+      />
+    </View>
+  );
+}
 
 const toDateInput = (v?: string | null) => (v ? new Date(v).toISOString().split('T')[0] : '');
 
@@ -62,9 +88,12 @@ interface Props {
   entidadId: string;
   docTypes: DocType[];
   nombre?: string;
+  // Modo auto-servicio del chofer: puede subir y confirmar (bloquear) sus documentos,
+  // pero una vez bloqueados quedan de solo lectura (solo el supervisor los renueva).
+  chofer?: boolean;
 }
 
-export default function DocumentosPanel({ visible, onClose, entidad, entidadId, docTypes, nombre }: Props) {
+export default function DocumentosPanel({ visible, onClose, entidad, entidadId, docTypes, nombre, chofer = false }: Props) {
   const { themeKey } = useTheme();
   const styles = useMemo(() => makeStyles(), [themeKey]);
   const [docsByTipo, setDocsByTipo] = useState<Record<string, Documento>>({});
@@ -89,17 +118,20 @@ export default function DocumentosPanel({ visible, onClose, entidad, entidadId, 
     if (visible) { setLoading(true); fetchDocs(); }
   }, [visible, fetchDocs]);
 
-  const saveSlot = async (dt: DocType, patch: { url?: string | null; fecha?: string | null }) => {
+  const saveSlot = async (dt: DocType, patch: { url?: string | null; fecha?: string | null; bloqueado?: boolean }) => {
     const existing = docsByTipo[dt.key];
     const nextUrl = patch.url !== undefined ? patch.url : existing?.url ?? null;
     const nextFecha = patch.fecha !== undefined ? patch.fecha : (existing ? toDateInput(existing.fecha_vencimiento) : null);
     setBusy((b) => ({ ...b, [dt.key]: true }));
     try {
       if (existing) {
-        if (!nextUrl && !nextFecha) {
+        if (!nextUrl && !nextFecha && patch.bloqueado === undefined) {
           await api.delete(`/documentos/${existing.id}`);
         } else {
-          await api.patch(`/documentos/${existing.id}`, { url: nextUrl, fecha_vencimiento: nextFecha || null });
+          await api.patch(`/documentos/${existing.id}`, {
+            url: nextUrl, fecha_vencimiento: nextFecha || null,
+            ...(patch.bloqueado !== undefined ? { bloqueado: patch.bloqueado } : {}),
+          });
         }
       } else {
         if (!nextUrl && !nextFecha) return;
@@ -109,8 +141,8 @@ export default function DocumentosPanel({ visible, onClose, entidad, entidadId, 
         });
       }
       await fetchDocs();
-    } catch {
-      Alert.alert('Error', 'No se pudo guardar el documento.');
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.message || 'No se pudo guardar el documento.');
     } finally {
       setBusy((b) => ({ ...b, [dt.key]: false }));
     }
@@ -128,6 +160,7 @@ export default function DocumentosPanel({ visible, onClose, entidad, entidadId, 
               dt={dt}
               doc={docsByTipo[dt.key]}
               busy={!!busy[dt.key]}
+              chofer={chofer}
               styles={styles}
               onSave={(patch) => saveSlot(dt, patch)}
               onPreview={(url) => setPreview({ url, label: dt.label })}
@@ -144,13 +177,14 @@ export default function DocumentosPanel({ visible, onClose, entidad, entidadId, 
 }
 
 function DocCard({
-  dt, doc, busy, styles, onSave, onPreview,
+  dt, doc, busy, chofer, styles, onSave, onPreview,
 }: {
   dt: DocType;
   doc?: Documento;
   busy: boolean;
+  chofer?: boolean;
   styles: ReturnType<typeof makeStyles>;
-  onSave: (patch: { url?: string | null; fecha?: string | null }) => void | Promise<void>;
+  onSave: (patch: { url?: string | null; fecha?: string | null; bloqueado?: boolean }) => void | Promise<void>;
   onPreview: (url: string) => void;
 }) {
   const Icon = dt.icon;
@@ -159,8 +193,25 @@ function DocCard({
   const status = checkExpiration(doc?.fecha_vencimiento);
   const fileUrl = doc?.url || '';
   const hasFile = !!fileUrl;
-  const thumbSrc = isPdf(fileUrl) ? pdfThumb(fileUrl) : fileUrl;
+  // PDF en S3 (no Cloudinary): se previsualiza con WebView (iOS nativo / Android Google Docs).
+  const pdfS3 = isPdf(fileUrl) && !isCloudinary(fileUrl);
+  const thumbSrc = isPdf(fileUrl) ? pdfThumb(fileUrl) : fileUrl; // solo para imágenes / PDF de Cloudinary
   useEffect(() => { setThumbError(false); }, [fileUrl]);
+
+  // Candado del chofer: si el documento está bloqueado, es de solo lectura para él.
+  const locked = !!chofer && !!doc?.bloqueado;
+  // El chofer puede "Confirmar y bloquear" cuando ya subió archivo Y puso fecha.
+  const canConfirm = !!chofer && !doc?.bloqueado && hasFile && !!doc?.fecha_vencimiento;
+  const confirmar = () => {
+    Alert.alert(
+      'Confirmar documento',
+      `Al confirmar "${dt.label}" quedará bloqueado y solo el supervisor podrá renovarlo. ¿Continuar?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Confirmar', onPress: () => onSave({ bloqueado: true }) },
+      ],
+    );
+  };
 
   const doUpload = async (asset: { uri: string; name: string; type: string }) => {
     setUploading(true);
@@ -225,13 +276,20 @@ function DocCard({
         <Badge label={status.label} variant={status.variant} />
       </View>
 
-      {/* Vencimiento */}
-      <DatePicker
-        label="Vencimiento"
-        value={toDateInput(doc?.fecha_vencimiento)}
-        onChange={(v) => onSave({ fecha: v || null })}
-        placeholder="Sin fecha"
-      />
+      {/* Vencimiento: editable o solo lectura si está bloqueado */}
+      {locked ? (
+        <View style={styles.lockedVenc}>
+          <Text style={styles.lockedVencLabel}>Vencimiento</Text>
+          <Text style={styles.lockedVencValue}>{doc?.fecha_vencimiento ? toDateInput(doc.fecha_vencimiento) : 'Sin fecha'}</Text>
+        </View>
+      ) : (
+        <DatePicker
+          label="Vencimiento"
+          value={toDateInput(doc?.fecha_vencimiento)}
+          onChange={(v) => onSave({ fecha: v || null })}
+          placeholder="Sin fecha"
+        />
+      )}
 
       {/* Archivo */}
       {hasFile ? (
@@ -239,9 +297,11 @@ function DocCard({
           <TouchableOpacity activeOpacity={0.85} onPress={() => onPreview(fileUrl)} style={styles.thumbWrap}>
             {thumbError ? (
               <View style={styles.thumbFallback}>
-                <FileText size={28} color={C.textFaint} />
-                <Text style={styles.thumbFallbackText}>Documento</Text>
+                <FileText size={28} color={isPdf(fileUrl) ? C.danger : C.textFaint} />
+                <Text style={styles.thumbFallbackText}>{isPdf(fileUrl) ? 'PDF adjuntado ✓' : 'Documento'}</Text>
               </View>
+            ) : pdfS3 ? (
+              <PdfThumbView url={fileUrl} styles={styles} />
             ) : (
               <Image source={{ uri: thumbSrc }} style={styles.thumb} contentFit="cover" onError={() => setThumbError(true)} />
             )}
@@ -251,23 +311,43 @@ function DocCard({
               <Text style={styles.thumbOverlayText}>Previsualizar</Text>
             </View>
           </TouchableOpacity>
-          <View style={{ flexDirection: 'row', gap: S.sm }}>
-            <TouchableOpacity onPress={pick} disabled={uploading || busy} style={[styles.smallBtn, { flex: 1 }]}>
-              {uploading ? <ActivityIndicator size="small" color={C.textMuted} /> : <UploadCloud size={15} color={C.textMuted} />}
-              <Text style={styles.smallBtnText}>Cambiar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => onSave({ url: null })} disabled={busy} style={styles.smallBtn}>
-              <Trash2 size={15} color={C.danger} />
-              <Text style={[styles.smallBtnText, { color: C.danger }]}>Quitar</Text>
-            </TouchableOpacity>
-          </View>
+          {!locked && (
+            <View style={{ flexDirection: 'row', gap: S.sm }}>
+              <TouchableOpacity onPress={pick} disabled={uploading || busy} style={[styles.smallBtn, { flex: 1 }]}>
+                {uploading ? <ActivityIndicator size="small" color={C.textMuted} /> : <UploadCloud size={15} color={C.textMuted} />}
+                <Text style={styles.smallBtnText}>Cambiar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => onSave({ url: null })} disabled={busy} style={styles.smallBtn}>
+                <Trash2 size={15} color={C.danger} />
+                <Text style={[styles.smallBtnText, { color: C.danger }]}>Quitar</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
-      ) : (
+      ) : !locked ? (
         <TouchableOpacity onPress={pick} disabled={uploading || busy} style={styles.dropzone} activeOpacity={0.7}>
           {uploading ? <ActivityIndicator color={C.primary} /> : <UploadCloud size={20} color={C.textFaint} />}
           <Text style={styles.dropText}>{uploading ? 'Subiendo...' : 'Subir PDF o foto'}</Text>
         </TouchableOpacity>
+      ) : null}
+
+      {/* Nota de candado / botón de confirmar (modo chofer) */}
+      {locked && (
+        <View style={styles.lockedNote}>
+          <Lock size={13} color={C.textMuted} />
+          <Text style={styles.lockedNoteText}>Bloqueado · solo el supervisor puede renovarlo</Text>
+        </View>
       )}
+      {canConfirm && (
+        <TouchableOpacity onPress={confirmar} disabled={busy} style={styles.confirmBtn} activeOpacity={0.85}>
+          <Lock size={15} color={C.textOnPrimary} />
+          <Text style={styles.confirmBtnText}>Confirmar y bloquear</Text>
+        </TouchableOpacity>
+      )}
+      {!!chofer && !locked && !canConfirm && (hasFile || !!doc?.fecha_vencimiento) && (
+        <Text style={styles.confirmHint}>Sube el archivo y pon la fecha para poder confirmar.</Text>
+      )}
+
       {busy && !uploading && (
         <View style={styles.savingRow}>
           <ActivityIndicator size="small" color={C.textFaint} />
@@ -302,7 +382,9 @@ function PreviewModal({
         </View>
 
         {pdf ? (
-          <PdfPagesMobile url={url} label={label} styles={styles} />
+          isCloudinary(url)
+            ? <PdfPagesMobile url={url} label={label} styles={styles} />
+            : <PdfFullWebView url={url} styles={styles} />
         ) : (
           <ImagePreview url={url} styles={styles} onClose={onClose} />
         )}
@@ -313,6 +395,20 @@ function PreviewModal({
         </TouchableOpacity>
       </View>
     </Modal>
+  );
+}
+
+// Visor de PDF completo (S3): WebView nativo en iOS / Google Docs en Android.
+function PdfFullWebView({ url, styles }: { url: string; styles: ReturnType<typeof makeStyles> }) {
+  return (
+    <WebView
+      source={{ uri: pdfViewerUri(url) }}
+      style={{ flex: 1, backgroundColor: '#fff' }}
+      startInLoadingState
+      renderLoading={() => (
+        <View style={styles.previewBody}><ActivityIndicator color="#fff" /></View>
+      )}
+    />
   );
 }
 
@@ -405,6 +501,14 @@ const makeStyles = () => StyleSheet.create({
   dropText: { fontSize: 13, fontWeight: '600', color: C.textMuted },
   savingRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: S.sm },
   savingText: { fontSize: 12, color: C.textFaint },
+  lockedVenc: { paddingVertical: S.sm, paddingHorizontal: S.md, borderRadius: Theme.radius.md, backgroundColor: C.surfaceAlt, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border },
+  lockedVencLabel: { fontSize: 12, fontWeight: '600', color: C.textMuted },
+  lockedVencValue: { fontSize: 15, fontWeight: '700', color: C.text, marginTop: 2 },
+  lockedNote: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: S.sm },
+  lockedNoteText: { fontSize: 12, color: C.textMuted, fontWeight: '600' },
+  confirmBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: S.sm, height: 46, borderRadius: Theme.radius.md, backgroundColor: C.primary },
+  confirmBtnText: { color: C.textOnPrimary, fontSize: 14, fontWeight: '700' },
+  confirmHint: { fontSize: 11, color: C.textFaint, marginTop: S.sm },
   // Preview modal
   previewRoot: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)' },
   previewHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 52, paddingHorizontal: S.lg, paddingBottom: S.md },

@@ -47,6 +47,7 @@ export interface Vehiculo {
     permisos_especiales?: string;
     fecha_vencimiento_deroghe?: string;
     area?: string;
+    categoria?: string | null; // AUTO_FURGONETA | H1_L1 | H2_L2 | CASSONATO — factor €/km de ingreso
     id_interno_furgon?: string;
     kilometraje_actual?: number;
     url_foto?: string;
@@ -96,6 +97,12 @@ export interface Programacion {
 
     estado?: string; // Added for sync status
     ingreso_estimado?: number; // Added
+    // Km de IDA que el cliente (DHL/AB Servis) informa por mensaje — distinto del
+    // km real GPS (`km`). Con la categoría del vehículo arma el ingreso.
+    km_facturable?: number | null;
+    // Sugerencia calculada por el backend (GET /programacion/:id): null si falta
+    // km_facturable/categoría o si la spedizione se cobra manual (Extras).
+    ingreso_sugerido?: { monto: number; factor: number; categoria: string; aplicaMinimo: boolean } | null;
 
     anticipo?: number; // Monto entregado al chofer para gastos del trayecto
     gastos?: GastoOperacion[]; // Gastos del chofer (rendición) contra el anticipo
@@ -110,5 +117,6 @@ export interface GastoOperacion {
     descripcion?: string | null;
     numero_mancato?: string | null; // Nº de mancato pagamento (solo PEAJE)
     link_peaje?: string | null; // Link/URL del peaje (solo PEAJE)
+    pagado_por_chofer?: boolean; // false = mancato/código/pendiente: lo paga la empresa, no descuenta al chofer
     comprobantes: string[]; // URLs de los comprobantes (uno o varios)
 }

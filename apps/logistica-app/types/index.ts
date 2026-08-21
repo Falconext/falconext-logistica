@@ -49,6 +49,7 @@ export interface Vehiculo {
   anio_fabricacion?: number;
   tipo_unidad?: string;
   area?: string; // Área operativa del vehículo (Milano Farmacia/Piazza/DHL/Management)
+  categoria?: string | null; // AUTO_FURGONETA | H1_L1 | H2_L2 | CASSONATO — factor €/km de ingreso
   estado_vehiculo?: string;
   aislamiento_termico?: string;
   tarjeta_circulacion?: string;
@@ -68,6 +69,7 @@ export interface Programacion {
   trabajador_id?: string;
   trabajador_nombre?: string | null;
   cliente?: string;
+  spedizione?: string | null; // AB | DHL | EXTRAS ALFREDO | … (cliente/expedición)
   lugar_retiro?: string;
   fecha_retiro?: string;
   retiros?: string[]; // Retiros/orígenes adicionales (almacenes) tras lugar_retiro
@@ -82,6 +84,12 @@ export interface Programacion {
   nota?: string;
   estado?: string;
   ingreso_estimado?: number;
+  // Km de IDA que factura el cliente (DHL/AB Servis, informado por mensaje) —
+  // distinto del `km` real (GPS). Con la categoría del vehículo arma el ingreso.
+  km_facturable?: number | null;
+  // Sugerencia calculada por el backend (GET /programacion/:id): null si falta
+  // km_facturable/categoría o si la spedizione se cobra manual (Extras).
+  ingreso_sugerido?: { monto: number; factor: number; categoria: string; aplicaMinimo: boolean } | null;
 
   // Datos operativos de consegna
   km?: number;
@@ -96,7 +104,26 @@ export interface Programacion {
 
   // Rendición del chofer
   anticipo?: number;
+  abonos_ruta?: number; // abonos recibidos en ruta (consolidados al finalizar)
   gastos?: GastoOperacion[];
+
+  // Costo del chofer en esta operación (horas + reperibilità + attesa + gastos
+  // pagados por él). Lo calcula el backend en GET /programacion/:id.
+  costo_chofer?: CostoChofer;
+}
+
+export interface CostoChofer {
+  horas_dia: number;
+  horas_noche: number;
+  pago_horas: number;
+  reperibilita: boolean;
+  pago_reperibilita: number;
+  attesa_horas: number;
+  attesa_autorizada: boolean;
+  pago_attesa: number;
+  gastos_chofer: number;
+  total: number;
+  moneda: string;
 }
 
 // Gasto del chofer durante el trayecto (peaje, combustible, parking, otro).
@@ -108,6 +135,7 @@ export interface GastoOperacion {
   descripcion?: string | null;
   numero_mancato?: string | null; // solo PEAJE
   link_peaje?: string | null; // solo PEAJE
+  pagado_por_chofer?: boolean; // false = mancato/código: lo paga la empresa, no descuenta al chofer
   comprobantes: string[];
 }
 
@@ -176,4 +204,5 @@ export interface Documento {
   nombre?: string;
   url?: string | null;
   fecha_vencimiento?: string | null;
+  bloqueado?: boolean; // true = subido/confirmado por el chofer; solo el supervisor renueva
 }

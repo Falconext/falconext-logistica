@@ -110,6 +110,8 @@ export class PeajesService {
             ].filter(Boolean).join(' · '),
             numero_mancato: g.numero_mancato || null,
             link_peaje: g.link_peaje || null,
+            // false = peaje MANCATO (lo paga la empresa, no se descuenta al chofer).
+            pagado_por_chofer: g.pagado_por_chofer !== false,
             fecha: g.fecha,
             hora: null,
             tipo: 'PEAJE',
