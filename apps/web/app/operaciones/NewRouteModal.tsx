@@ -785,12 +785,45 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                             </div>
                         </div>
 
+                        {/* COMPACTADA: se decide ANTES de llenar los destinos, para que cada
+                            tarjeta de destino ya muestre sus campos de cliente/km/ingreso propios
+                            mientras se llena, en vez de tener que activarlo y volver a subir. */}
+                        <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800">
+                            <label className="text-xs font-bold text-slate-500 uppercase">¿Es compactada? (2+ entregas de clientes distintos en un solo viaje)</label>
+                            <div className="grid grid-cols-2 gap-2 mt-1.5 max-w-xs">
+                                <button
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, compactado: false })}
+                                    className={`px-4 py-2.5 rounded-xl border text-sm font-bold transition ${!formData.compactado
+                                        ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900'
+                                        : 'bg-slate-50 dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-100'}`}
+                                >
+                                    N
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, compactado: true })}
+                                    className={`px-4 py-2.5 rounded-xl border text-sm font-bold transition ${formData.compactado
+                                        ? 'bg-blue-600 text-white border-blue-600'
+                                        : 'bg-slate-50 dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-100'}`}
+                                >
+                                    Y
+                                </button>
+                            </div>
+                            {formData.compactado && (
+                                <p className="text-xs text-slate-500 mt-2">Cada destino de abajo puede tener su propio Cliente, Spedizione, Km facturable e Ingreso.</p>
+                            )}
+                        </div>
+
                         {/* Destinos adicionales (paradas después del destino principal) */}
                         <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800">
                             <h4 className="flex items-center gap-2 text-slate-700 dark:text-slate-200 font-bold mb-3">
                                 <MapPin size={16} className="text-red-500" />
                                 Destinos adicionales
                             </h4>
+                            {!formData.compactado && formData.destinos.length > 0 && (
+                                <p className="text-xs text-slate-500 -mt-2 mb-3">¿Alguno de estos destinos es otra entrega con cliente distinto? Activa "¿Es compactada?" arriba.</p>
+                            )}
                             <div className="space-y-2">
                                 {formData.destinos.map((dest, i) => {
                                     const det = formData.destinosDetalle[i];
@@ -1037,31 +1070,6 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                     value={formData.attesa}
                                     onChange={(e) => setFormData({ ...formData, attesa: e.target.value })}
                                 />
-                            </div>
-
-                            {/* COMPACTADO */}
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-500 uppercase">¿Compactado?</label>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormData({ ...formData, compactado: false })}
-                                        className={`px-4 py-2.5 rounded-xl border text-sm font-bold transition ${!formData.compactado
-                                            ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900'
-                                            : 'bg-slate-50 dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-100'}`}
-                                    >
-                                        N
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormData({ ...formData, compactado: true })}
-                                        className={`px-4 py-2.5 rounded-xl border text-sm font-bold transition ${formData.compactado
-                                            ? 'bg-blue-600 text-white border-blue-600'
-                                            : 'bg-slate-50 dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-100'}`}
-                                    >
-                                        Y
-                                    </button>
-                                </div>
                             </div>
 
                             {/* NAVETTA: traslado/lanzadera entre almacenes, no una entrega — el ingreso

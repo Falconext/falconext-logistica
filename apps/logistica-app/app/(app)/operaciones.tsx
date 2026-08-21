@@ -1507,7 +1507,35 @@ export default function OperacionesScreen() {
           />
         </View>
 
+        <Text style={styles.fieldLabelSm}>¿Es compactada? (2+ entregas de clientes distintos en un solo viaje)</Text>
+        <View style={styles.dateRow}>
+          <TouchableOpacity
+            style={[styles.toggleBtn, !form.compactado && styles.toggleBtnActiveDark, lockOthers && { opacity: 0.55 }]}
+            onPress={() => !lockOthers && setForm({ ...form, compactado: false })}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.toggleBtnText, !form.compactado && { color: '#fff' }]}>N</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toggleBtn, form.compactado && styles.toggleBtnActiveBlue, lockOthers && { opacity: 0.55 }]}
+            onPress={() => !lockOthers && setForm({ ...form, compactado: true })}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.toggleBtnText, form.compactado && { color: '#fff' }]}>Y</Text>
+          </TouchableOpacity>
+        </View>
+        {form.compactado && (
+          <Text style={styles.compactadaHint}>
+            Cada destino de abajo puede tener su propio Cliente, Spedizione, Km facturable e Ingreso.
+          </Text>
+        )}
+
         <Text style={styles.formSection}>Destinos adicionales</Text>
+        {!form.compactado && form.destinos.length > 0 && (
+          <Text style={styles.compactadaHint}>
+            ¿Alguno de estos destinos es otra entrega con cliente distinto? Activa "¿Es compactada?" arriba.
+          </Text>
+        )}
         {form.destinos.map((d, i) => {
           const det = form.destinosDetalle[i];
           const sugerido = form.compactado
@@ -1689,24 +1717,6 @@ export default function OperacionesScreen() {
             activeOpacity={0.7}
           >
             <Text style={[styles.toggleBtnText, form.reperibilita && { color: '#fff' }]}>Y</Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.fieldLabelSm}>¿Compactado?</Text>
-        <View style={styles.dateRow}>
-          <TouchableOpacity
-            style={[styles.toggleBtn, !form.compactado && styles.toggleBtnActiveDark, lockOthers && { opacity: 0.55 }]}
-            onPress={() => !lockOthers && setForm({ ...form, compactado: false })}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.toggleBtnText, !form.compactado && { color: '#fff' }]}>N</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.toggleBtn, form.compactado && styles.toggleBtnActiveBlue, lockOthers && { opacity: 0.55 }]}
-            onPress={() => !lockOthers && setForm({ ...form, compactado: true })}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.toggleBtnText, form.compactado && { color: '#fff' }]}>Y</Text>
           </TouchableOpacity>
         </View>
 
@@ -2005,6 +2015,7 @@ const makeStyles = () => StyleSheet.create({
   filtrosPanel: { marginTop: S.sm, padding: S.md, borderRadius: Theme.radius.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, gap: S.sm },
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: S.sm },
   gpsHint: { fontSize: 12, color: C.info, fontWeight: '600', marginTop: 4 },
+  compactadaHint: { fontSize: 12, color: C.textMuted, marginTop: -4, marginBottom: S.md, lineHeight: 16 },
   destinoRow: { flexDirection: 'row', alignItems: 'flex-end', gap: S.sm, marginBottom: S.sm },
   destinoRemove: { paddingBottom: 12, paddingHorizontal: 4 },
   destinoCard: { padding: S.md, borderRadius: Theme.radius.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.surfaceAlt, marginBottom: S.sm },
