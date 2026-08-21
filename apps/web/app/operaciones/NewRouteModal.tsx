@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { X, Save, Loader2, MapPin, Calendar, Clock, User, Truck, FileText, Package, Play, CheckCircle2, PauseCircle, Undo2, RefreshCw, Ban, Bell, Flag, Wallet, Plus, Trash2 } from 'lucide-react';
 import { Programacion } from '../../types';
 import api from '../../lib/api';
@@ -9,39 +9,12 @@ import Select from '../../components/Select';
 import FileUpload from '../../components/FileUpload';
 import MultiFileUpload from '../../components/MultiFileUpload';
 import { useCurrency } from '../../lib/useCurrency';
-import { APP_OPTIONS, SPEDIZIONE_OPTIONS, ESTADO_CONSEGNA_META, RETIRO_PRESETS, isCoords, GASTO_TIPOS_CON_PAGADOR, pagadorLabels, categoriaVehiculoLabel } from './constants';
+import { APP_OPTIONS, SPEDIZIONE_OPTIONS, ESTADO_CONSEGNA_META, RETIRO_PRESETS, isCoords, GASTO_TIPOS_CON_PAGADOR, pagadorLabels, categoriaVehiculoLabel, calcularIngresoSugerido, TarifasIngreso } from './constants';
 import { useGoogleMaps } from '../../components/tracking/googleMaps';
 import { fmtMin } from '../../components/tracking/MapboxRouteMap';
 
 // Fila de gasto en el formulario (monto como string para el input).
 type GastoRow = { tipo: string; monto: string; descripcion: string; numero_mancato: string; link_peaje: string; comprobantes: string[]; pagado_por_chofer: boolean };
-
-// Desglose de facturación por destino. Índice 0 = destino principal (entrega_lugar),
-// índice i = destinos[i-1] — mismo orden que el arreglo `destinos`.
-type DestinoFactRow = { km_facturable: string; ingreso: string; referencia_dhl: string };
-const emptyDestinoFact = (): DestinoFactRow => ({ km_facturable: '', ingreso: '', referencia_dhl: '' });
-// Arma destinosFact con largo fijo (1 + destinos extra) a partir de lo guardado. Si no
-// hay desglose previo, la fila del principal (índice 0) se siembra con
-// km_facturable/ingreso_estimado de siempre — así pasar a modo desglose no pierde el
-// dato que ya estaba cargado.
-const buildDestinosFact = (src: any): DestinoFactRow[] => {
-    const destinosArr = Array.isArray(src.destinos) ? src.destinos : [];
-    const fromApi = Array.isArray(src.destinos_facturacion) ? src.destinos_facturacion : [];
-    return Array.from({ length: 1 + destinosArr.length }, (_, i) => {
-        const e = fromApi[i];
-        if (e) return {
-            km_facturable: e.km_facturable != null ? String(e.km_facturable) : '',
-            ingreso: e.ingreso != null ? String(e.ingreso) : '',
-            referencia_dhl: e.referencia_dhl || '',
-        };
-        if (i === 0) return {
-            km_facturable: src.km_facturable != null ? String(src.km_facturable) : '',
-            ingreso: src.ingreso_estimado != null ? String(src.ingreso_estimado) : '',
-            referencia_dhl: '',
-        };
-        return emptyDestinoFact();
-    });
-};
 
 const GASTO_TIPOS = [
     { value: 'PEAJE', label: 'Peaje' },
@@ -110,11 +83,12 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
     const [workers, setWorkers] = useState<any[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const [loading, setLoading] = useState(false); // Added
-    // Hint "Sugerido" del ingreso (km_facturable × factor de la categoría del
-    // vehículo): lo devuelve GET /programacion/:id, no se guarda, solo se sugiere.
-    const [ingresoSugerido, setIngresoSugerido] = useState<Programacion['ingreso_sugerido']>(null);
-    // Una sugerencia por cada fila de destinosFact (mismo índice), cuando hay >1 destino.
-    const [ingresoSugeridoPorDestino, setIngresoSugeridoPorDestino] = useState<Programacion['ingreso_sugerido_por_destino']>(null);
+    // Tarifas de la empresa (factor €/km por categoría, mínimo <35km, navetta) para
+    // autocompletar el ingreso EN VIVO mientras se escribe el km facturable.
+    const [tarifasConfig, setTarifasConfig] = useState<TarifasIngreso | null>(null);
+    useEffect(() => {
+        api.get('/registros/config').then((res) => setTarifasConfig(res.data ?? null)).catch(() => {});
+    }, []);
 
     // Initial state with separate Date/Time for Pickup (Retiro) and Delivery (Entrega)
     const [formData, setFormData] = useState({
@@ -142,8 +116,6 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
         // distinto del `km` real (GPS) + el monto a cobrar (sugerido por categoría, editable).
         km_facturable: '',
         ingreso_estimado: '',
-        // Largo = 1 + destinos.length (índice 0 = principal); ver buildDestinosFact.
-        destinosFact: [emptyDestinoFact()] as DestinoFactRow[],
         ciudad: '',
         app: '',
         spedizione: '',
@@ -160,6 +132,24 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
 
         nota: ''
     });
+
+    // Categoría del vehículo elegido (vehiculo_id guarda la PLACA, no el id).
+    const categoriaDeVehiculo = (vehiculoId: string) =>
+        vehicles.find((v) => v.placa === vehiculoId || v.id === vehiculoId)?.categoria ?? null;
+
+    // Sugerencia EN VIVO (solo para el hint informativo — no muta formData).
+    const ingresoSugerido = useMemo(
+        () => calcularIngresoSugerido(formData.km_facturable, categoriaDeVehiculo(formData.vehiculo_id), formData.es_navetta, formData.spedizione, tarifasConfig),
+        [formData.km_facturable, formData.vehiculo_id, formData.es_navetta, formData.spedizione, vehicles, tarifasConfig],
+    );
+
+    // Aplica la sugerencia al `ingreso_estimado` de un formData ya actualizado (se
+    // llama SOLO desde los handlers de km/vehículo/navetta/spedizione, nunca al
+    // precargar un registro existente — así nunca pisa un ingreso ya guardado).
+    const aplicarIngresoAuto = (f: typeof formData): typeof formData => {
+        const sug = calcularIngresoSugerido(f.km_facturable, categoriaDeVehiculo(f.vehiculo_id), f.es_navetta, f.spedizione, tarifasConfig);
+        return sug ? { ...f, ingreso_estimado: String(sug.monto) } : f;
+    };
 
     // ── ETA por destino ──────────────────────────────────────────────────
     // Calcula el tiempo acumulado (por carretera) del origen a cada parada:
@@ -240,7 +230,6 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 km: src.km != null ? String(src.km) : '',
                 km_facturable: src.km_facturable != null ? String(src.km_facturable) : '',
                 ingreso_estimado: src.ingreso_estimado != null ? String(src.ingreso_estimado) : '',
-                destinosFact: buildDestinosFact(src),
                 ciudad: src.ciudad || '',
                 app: src.app || '',
                 spedizione: src.spedizione || '',
@@ -263,24 +252,18 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 nota: src.nota || '',
             });
             // Precargamos rápido con lo que trae la lista y luego con el registro COMPLETO:
-            // la lista (LIST_SELECT) no incluye nota/otros_datos/foto_bolla/ingreso_sugerido,
-            // y guardar sin ellos los borraría. GET /programacion/:id trae todos los campos.
+            // la lista (LIST_SELECT) no incluye nota/otros_datos/foto_bolla, y guardar sin
+            // ellos los borraría. GET /programacion/:id trae todos los campos.
             let cancelled = false;
-            setIngresoSugerido(null);
-            setIngresoSugeridoPorDestino(null);
             populate(initialData);
             api.get(`/programacion/${initialData.id}`)
                 .then((res) => {
                     if (cancelled || !res.data) return;
                     populate({ ...initialData, ...res.data });
-                    setIngresoSugerido(res.data.ingreso_sugerido ?? null);
-                    setIngresoSugeridoPorDestino(res.data.ingreso_sugerido_por_destino ?? null);
                 })
                 .catch(() => { /* se queda con los datos de la lista */ });
             return () => { cancelled = true; };
         } else {
-            setIngresoSugerido(null);
-            setIngresoSugeridoPorDestino(null);
             setFormData({
                 vehiculo_id: '',
                 trabajador_id: '',
@@ -295,7 +278,6 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 km: '',
                 km_facturable: '',
                 ingreso_estimado: '',
-                destinosFact: [emptyDestinoFact()],
                 ciudad: '',
                 app: '',
                 spedizione: '',
@@ -358,16 +340,6 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 km: formData.km !== '' ? Number(formData.km) : null,
                 km_facturable: formData.km_facturable !== '' ? Number(formData.km_facturable) : null,
                 ingreso_estimado: formData.ingreso_estimado !== '' ? Number(formData.ingreso_estimado) : null,
-                // Con >1 destino, el desglose manda: el backend suma sus km/ingreso y
-                // sobrescribe km_facturable/ingreso_estimado de arriba. Con 1 solo
-                // destino no se manda nada y el comportamiento es el de siempre.
-                ...(formData.destinos.length > 0 ? {
-                    destinos_facturacion: formData.destinosFact.map((d) => ({
-                        km_facturable: d.km_facturable !== '' ? Number(d.km_facturable) : null,
-                        ingreso: d.ingreso !== '' ? Number(d.ingreso) : null,
-                        referencia_dhl: d.referencia_dhl || null,
-                    })),
-                } : {}),
                 ciudad: formData.ciudad || null,
                 app: formData.app || null,
                 spedizione: formData.spedizione || null,
@@ -419,7 +391,6 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 km: '',
                 km_facturable: '',
                 ingreso_estimado: '',
-                destinosFact: [emptyDestinoFact()],
                 ciudad: '',
                 app: '',
                 spedizione: '',
@@ -443,17 +414,9 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
     };
 
     // --- Destinos adicionales (paradas) ---
-    // destinosFact tiene 1 fila más que destinos (índice 0 = principal), así que
-    // cada add/remove de un destino agrega/quita también su fila de facturación.
-    const addDestino = () => setFormData((f) => ({ ...f, destinos: [...f.destinos, ''], destinosFact: [...f.destinosFact, emptyDestinoFact()] }));
+    const addDestino = () => setFormData((f) => ({ ...f, destinos: [...f.destinos, ''] }));
     const updateDestino = (i: number, val: string) => setFormData((f) => ({ ...f, destinos: f.destinos.map((d, idx) => (idx === i ? val : d)) }));
-    const updateDestinoFact = (i: number, patch: Partial<DestinoFactRow>) =>
-        setFormData((f) => ({ ...f, destinosFact: f.destinosFact.map((d, idx) => (idx === i ? { ...d, ...patch } : d)) }));
-    const removeDestino = (i: number) => setFormData((f) => ({
-        ...f,
-        destinos: f.destinos.filter((_, idx) => idx !== i),
-        destinosFact: f.destinosFact.filter((_, idx) => idx !== i + 1),
-    }));
+    const removeDestino = (i: number) => setFormData((f) => ({ ...f, destinos: f.destinos.filter((_, idx) => idx !== i) }));
 
     // --- Posición actual del conductor (usa su última ubicación GPS como origen) ---
     const usarPosicionActual = async () => {
@@ -550,7 +513,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                 label="Vehículo *"
                                 placeholder="-- Seleccionar --"
                                 value={formData.vehiculo_id}
-                                onChange={(v) => setFormData({ ...formData, vehiculo_id: v })}
+                                onChange={(v) => setFormData((f) => aplicarIngresoAuto({ ...f, vehiculo_id: v }))}
                                 options={vehicles.map(v => ({ value: v.placa, label: `${v.placa} (${v.marca_modelo})` }))}
                             />
                             <Select
@@ -798,108 +761,41 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                 />
                             </div>
 
-                            {formData.destinos.length === 0 && (
-                                <>
-                                    {/* KM FACTURABLE (ida) — el que informa el cliente, distinto del KM real GPS */}
-                                    <div className="space-y-1.5">
-                                        <label className="text-xs font-bold text-slate-500 uppercase">Km facturable (ida)</label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            step="any"
-                                            placeholder="Km que informa el cliente"
-                                            className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 outline-none focus:ring-2 focus:ring-blue-500 text-sm text-slate-900 dark:text-white"
-                                            value={formData.km_facturable}
-                                            onChange={(e) => setFormData({ ...formData, km_facturable: e.target.value })}
-                                        />
-                                    </div>
+                            {/* KM FACTURABLE (ida) — el que informa el cliente, distinto del KM real GPS */}
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Km facturable (ida)</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    placeholder="Km que informa el cliente"
+                                    className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 outline-none focus:ring-2 focus:ring-blue-500 text-sm text-slate-900 dark:text-white"
+                                    value={formData.km_facturable}
+                                    onChange={(e) => setFormData((f) => aplicarIngresoAuto({ ...f, km_facturable: e.target.value }))}
+                                />
+                            </div>
 
-                                    {/* INGRESO — editable, con sugerencia (km_facturable × factor de categoría) */}
-                                    <div className="space-y-1.5">
-                                        <label className="text-xs font-bold text-slate-500 uppercase">Ingreso ({currency})</label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            step="any"
-                                            placeholder="0.00"
-                                            className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 outline-none focus:ring-2 focus:ring-blue-500 text-sm text-slate-900 dark:text-white"
-                                            value={formData.ingreso_estimado}
-                                            onChange={(e) => setFormData({ ...formData, ingreso_estimado: e.target.value })}
-                                        />
-                                        {ingresoSugerido && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setFormData((f) => ({ ...f, ingreso_estimado: String(ingresoSugerido!.monto) }))}
-                                                className="text-xs font-semibold text-blue-600 hover:text-blue-700"
-                                            >
-                                                Sugerido: {currency} {ingresoSugerido.monto.toFixed(2)} {ingresoSugerido.esNavetta
-                                                    ? '(navetta, fijo)'
-                                                    : `(${categoriaVehiculoLabel(ingresoSugerido.categoria)}${ingresoSugerido.aplicaMinimo ? ', mínimo' : ` · ${ingresoSugerido.factor}${currency}/km`})`} · Usar
-                                            </button>
-                                        )}
-                                    </div>
-                                </>
-                            )}
-
-                            {/* Con más de 1 destino, el km/ingreso se factura POR DESTINO (así se puede
-                                comparar tramo a tramo contra lo que reporta DHL) en vez de un solo total.
-                                La suma reemplaza a km_facturable/ingreso_estimado. */}
-                            {formData.destinos.length > 0 && (
-                                <div className="col-span-1 md:col-span-2 space-y-3">
-                                    <label className="text-xs font-bold text-slate-500 uppercase">Facturación por destino</label>
-                                    {formData.destinosFact.map((d, i) => {
-                                        const sugerido = ingresoSugeridoPorDestino?.[i];
-                                        const etiqueta = i === 0 ? (formData.entrega_lugar || 'Destino 1') : (formData.destinos[i - 1] || `Destino ${i + 1}`);
-                                        return (
-                                            <div key={i} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-3 space-y-2">
-                                                <div className="text-xs font-bold text-slate-600 dark:text-slate-300 truncate">{i + 1}. {etiqueta}</div>
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        step="any"
-                                                        placeholder="Km facturable"
-                                                        className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-blue-500/50"
-                                                        value={d.km_facturable}
-                                                        onChange={(e) => updateDestinoFact(i, { km_facturable: e.target.value })}
-                                                    />
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        step="any"
-                                                        placeholder={`Ingreso (${currency})`}
-                                                        className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-blue-500/50"
-                                                        value={d.ingreso}
-                                                        onChange={(e) => updateDestinoFact(i, { ingreso: e.target.value })}
-                                                    />
-                                                </div>
-                                                <input
-                                                    type="text"
-                                                    placeholder={formData.spedizione === 'DHL' ? 'Referencia DHL (opcional): tracking/código que reporta' : 'Referencia (opcional): tracking/código que reporta el cliente'}
-                                                    className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-blue-500/50"
-                                                    value={d.referencia_dhl}
-                                                    onChange={(e) => updateDestinoFact(i, { referencia_dhl: e.target.value })}
-                                                />
-                                                {sugerido && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => updateDestinoFact(i, { ingreso: String(sugerido.monto) })}
-                                                        className="text-xs font-semibold text-blue-600 hover:text-blue-700"
-                                                    >
-                                                        Sugerido: {currency} {sugerido.monto.toFixed(2)} {sugerido.esNavetta
-                                                            ? '(navetta, fijo)'
-                                                            : `(${categoriaVehiculoLabel(sugerido.categoria)}${sugerido.aplicaMinimo ? ', mínimo' : ` · ${sugerido.factor}${currency}/km`})`} · Usar
-                                                    </button>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                    <div className="text-sm font-bold text-slate-700 dark:text-slate-200">
-                                        Total: {formData.destinosFact.reduce((s, d) => s + (Number(d.km_facturable) || 0), 0)} km · {currency}{' '}
-                                        {formData.destinosFact.reduce((s, d) => s + (Number(d.ingreso) || 0), 0).toFixed(2)}
-                                    </div>
-                                </div>
-                            )}
+                            {/* INGRESO — se autocompleta al escribir el km facturable (km × factor de la
+                                categoría del vehículo, o el fijo si es navetta / km corto); editable si varía. */}
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Ingreso ({currency})</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    placeholder="0.00"
+                                    className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 outline-none focus:ring-2 focus:ring-blue-500 text-sm text-slate-900 dark:text-white"
+                                    value={formData.ingreso_estimado}
+                                    onChange={(e) => setFormData({ ...formData, ingreso_estimado: e.target.value })}
+                                />
+                                {ingresoSugerido && (
+                                    <p className="text-xs font-semibold text-blue-600">
+                                        {ingresoSugerido.esNavetta
+                                            ? 'Auto: navetta, pago fijo'
+                                            : `Auto: ${categoriaVehiculoLabel(ingresoSugerido.categoria)}${ingresoSugerido.aplicaMinimo ? ', mínimo' : ` · ${ingresoSugerido.factor}${currency}/km`}`} — puedes editarlo si varía
+                                    </p>
+                                )}
+                            </div>
 
                             {/* APP */}
                             <Select
@@ -919,7 +815,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                 searchable
                                 clearable
                                 value={formData.spedizione}
-                                onChange={(v) => setFormData({ ...formData, spedizione: v })}
+                                onChange={(v) => setFormData((f) => aplicarIngresoAuto({ ...f, spedizione: v }))}
                                 options={SPEDIZIONE_OPTIONS}
                             />
 
@@ -969,7 +865,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                 <div className="grid grid-cols-2 gap-2">
                                     <button
                                         type="button"
-                                        onClick={() => setFormData({ ...formData, es_navetta: false })}
+                                        onClick={() => setFormData((f) => aplicarIngresoAuto({ ...f, es_navetta: false }))}
                                         className={`px-4 py-2.5 rounded-xl border text-sm font-bold transition ${!formData.es_navetta
                                             ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900'
                                             : 'bg-slate-50 dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-100'}`}
@@ -978,7 +874,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => setFormData({ ...formData, es_navetta: true })}
+                                        onClick={() => setFormData((f) => aplicarIngresoAuto({ ...f, es_navetta: true }))}
                                         className={`px-4 py-2.5 rounded-xl border text-sm font-bold transition ${formData.es_navetta
                                             ? 'bg-blue-600 text-white border-blue-600'
                                             : 'bg-slate-50 dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-100'}`}

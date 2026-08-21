@@ -127,6 +127,24 @@ function RouteDetailCard({ selected, format, onEdit, onDelete, canDelete = true 
                     {selected.compactado ? <span className="flex items-center gap-1.5 text-blue-600 font-medium"><Boxes size={13} /> Compactado</span> : null}
                 </div>
             )}
+            {Array.isArray(selected.paradas_recorrido) && selected.paradas_recorrido.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-slate-100">
+                    <p className="text-[11px] font-bold text-slate-400 uppercase mb-1">Paradas (km real GPS)</p>
+                    <div className="space-y-1">
+                        {selected.paradas_recorrido.map((p) => (
+                            <div key={p.id} className="flex items-center justify-between gap-2 text-xs">
+                                <span className="text-slate-700 truncate">
+                                    {p.orden}. {p.label}{p.es_retorno ? ' (retorno)' : ''}
+                                </span>
+                                <span className="shrink-0 text-slate-500">
+                                    {p.llegada_en ? new Date(p.llegada_en).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : 'Sin llegar'}
+                                    {p.km_tramo != null ? ` · ${p.km_tramo.toFixed(1)} km` : ''}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -263,7 +281,14 @@ export default function OperacionesPage() {
     };
 
     // Stable callback so memoized cards don't re-render on every parent render
-    const handleSelect = useCallback((r: Programacion) => setSelected(r), []);
+    // Selecciona rápido con el dato de la lista y enriquece con el registro completo
+    // (la lista no trae paradas_recorrido/gastos/nota, necesarios para el detalle).
+    const handleSelect = useCallback((r: Programacion) => {
+        setSelected(r);
+        api.get(`/programacion/${r.id}`)
+            .then((res) => { if (res.data) setSelected((cur) => (cur && cur.id === r.id ? { ...cur, ...res.data } : cur)); })
+            .catch(() => {});
+    }, []);
 
     const handleDelete = async () => {
         if (!deleting) return;

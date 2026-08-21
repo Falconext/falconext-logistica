@@ -129,12 +129,29 @@ export class ProgramacionService {
             include: { gastos: { orderBy: { creado_en: 'asc' } } },
         });
         if (!op) return op;
-        const [costo_chofer, ingreso_sugerido, ingreso_sugerido_por_destino] = await Promise.all([
+        const [costo_chofer, ingreso_sugerido, paradas_recorrido] = await Promise.all([
             this.costoChofer(op),
             this.ingresoSugerido(op),
-            this.ingresoSugeridoPorDestino(op),
+            this.paradasDeRuta(op),
         ]);
-        return { ...op, costo_chofer, ingreso_sugerido, ingreso_sugerido_por_destino };
+        return { ...op, costo_chofer, ingreso_sugerido, paradas_recorrido };
+    }
+
+    // Paradas del recorrido MÁS RECIENTE ligado a esta operación, con su km/min real
+    // de GPS por tramo (RecorridoParada.km_tramo/min_tramo) — para comparar tramo a
+    // tramo contra lo que reporta el cliente. null si el chofer nunca usó "Mi Ruta".
+    private async paradasDeRuta(op: { id: string; tenant_id: string }) {
+        const recorrido = await this.prisma.recorrido.findFirst({
+            where: { tenant_id: op.tenant_id, programacion_id: op.id },
+            orderBy: { iniciado_en: 'desc' },
+            select: {
+                paradas: {
+                    orderBy: { orden: 'asc' },
+                    select: { id: true, orden: true, label: true, es_retorno: true, llegada_en: true, entregado: true, km_tramo: true, min_tramo: true },
+                },
+            },
+        });
+        return recorrido?.paradas ?? null;
     }
 
     // Panel financiero (Fase C): rentabilidad por operación en un período —
@@ -295,30 +312,6 @@ export class ProgramacionService {
             this.prisma.tenant.findUnique({ where: { id: op.tenant_id }, select: TARIFAS_INGRESO_TENANT_SELECT }),
         ]);
         return ingresoSugerido(op, vehiculo?.categoria, tarifasIngresoFromTenant(tenant));
-    }
-
-    // Igual que ingresoSugerido() pero UNA sugerencia por cada entrada de
-    // destinos_facturacion (una operación con 3 destinos DHL puede tener 3 km
-    // facturables distintos). null si la operación no tiene desglose por destino.
-    private async ingresoSugeridoPorDestino(op: {
-        vehiculo_id?: string | null; spedizione?: string | null; es_navetta?: boolean | null; tenant_id: string;
-        destinos_facturacion?: any;
-    }) {
-        const entradas: any[] = Array.isArray(op.destinos_facturacion) ? op.destinos_facturacion : [];
-        if (!entradas.length || !op.vehiculo_id) return null;
-        const [vehiculo, tenant] = await Promise.all([
-            this.prisma.vehiculo.findFirst({
-                where: { tenant_id: op.tenant_id, OR: [{ id: op.vehiculo_id }, { placa: op.vehiculo_id }] },
-                select: { categoria: true },
-            }),
-            this.prisma.tenant.findUnique({ where: { id: op.tenant_id }, select: TARIFAS_INGRESO_TENANT_SELECT }),
-        ]);
-        const tar = tarifasIngresoFromTenant(tenant);
-        return entradas.map((e) =>
-            e && e.km_facturable != null
-                ? ingresoSugerido({ km_facturable: Number(e.km_facturable), spedizione: op.spedizione, es_navetta: op.es_navetta }, vehiculo?.categoria, tar)
-                : null,
-        );
     }
 
     // Costo del chofer de ESTA operación: pago por horas de manejo (día/noche,

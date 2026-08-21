@@ -61,7 +61,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatMoney } from '../../constants/currency';
 import { isChofer } from '../../constants/modules';
-import { APP_OPTIONS, SPEDIZIONE_OPTIONS, GASTO_TIPOS, GASTO_TIPOS_CON_PAGADOR, totalPagadoPorChofer, pagadorLabels, categoriaVehiculoLabel, CONSEGNA_ACTIONS, estadoConsegnaMeta, RETIRO_PRESETS, isCoords, isConsegnaRealizada } from '../../constants/operaciones';
+import { APP_OPTIONS, SPEDIZIONE_OPTIONS, GASTO_TIPOS, GASTO_TIPOS_CON_PAGADOR, totalPagadoPorChofer, pagadorLabels, categoriaVehiculoLabel, CONSEGNA_ACTIONS, estadoConsegnaMeta, RETIRO_PRESETS, isCoords, isConsegnaRealizada, calcularIngresoSugerido, TarifasIngreso } from '../../constants/operaciones';
 import type { Programacion, Vehiculo, Trabajador } from '../../types';
 
 const C = Theme.colors;
@@ -125,32 +125,6 @@ const monthRangeISO = () => {
 };
 
 type GastoRow = { tipo: string; monto: string; descripcion: string; numero_mancato: string; comprobantes: string[]; pagado_por_chofer: boolean };
-// Desglose de facturación por destino. Índice 0 = destino principal (entrega_lugar),
-// índice i = destinos[i-1] — mismo orden que el arreglo `destinos`.
-type DestinoFactRow = { km_facturable: string; ingreso: string; referencia_dhl: string };
-const emptyDestinoFact = (): DestinoFactRow => ({ km_facturable: '', ingreso: '', referencia_dhl: '' });
-// Arma destinosFact con largo fijo (1 + destinos extra) a partir de lo guardado.
-// Si no hay desglose previo, la fila del principal (índice 0) se siembra con
-// km_facturable/ingreso_estimado de siempre — así pasar a modo desglose no pierde
-// el dato que ya estaba cargado.
-const buildDestinosFact = (src: any): DestinoFactRow[] => {
-  const destinosArr = Array.isArray(src.destinos) ? src.destinos : [];
-  const fromApi = Array.isArray(src.destinos_facturacion) ? src.destinos_facturacion : [];
-  return Array.from({ length: 1 + destinosArr.length }, (_, i) => {
-    const e = fromApi[i];
-    if (e) return {
-      km_facturable: e.km_facturable != null ? String(e.km_facturable) : '',
-      ingreso: e.ingreso != null ? String(e.ingreso) : '',
-      referencia_dhl: e.referencia_dhl || '',
-    };
-    if (i === 0) return {
-      km_facturable: src.km_facturable != null ? String(src.km_facturable) : '',
-      ingreso: src.ingreso_estimado != null ? String(src.ingreso_estimado) : '',
-      referencia_dhl: '',
-    };
-    return emptyDestinoFact();
-  });
-};
 
 interface FormState {
   vehiculo_id: string;
@@ -173,9 +147,6 @@ interface FormState {
   // (no el km real GPS) + el monto a cobrar (sugerido por categoría, editable).
   km_facturable: string;
   ingreso_estimado: string;
-  // Desglose por destino cuando hay más de 1 (destinos.length + 1 filas, índice 0 =
-  // principal). Vacío = operación de un solo destino, se usan los campos de arriba.
-  destinosFact: DestinoFactRow[];
   ciudad: string;
   app: string;
   reperibilita: boolean;
@@ -211,8 +182,6 @@ const emptyForm = (): FormState => ({
   km: '',
   km_facturable: '',
   ingreso_estimado: '',
-  // Largo = 1 + destinos.length (índice 0 = principal); ver buildDestinosFact.
-  destinosFact: [emptyDestinoFact()],
   ciudad: '',
   app: '',
   reperibilita: false,
@@ -267,11 +236,6 @@ export default function OperacionesScreen() {
   const [activosById, setActivosById] = useState<Record<string, any>>({});
 
   const [detail, setDetail] = useState<Programacion | null>(null);
-  // Hint "Sugerido" del formulario de edición: vive aparte de `detail` porque
-  // openEdit() anula `detail` (es del modal read-only) mientras edita en `form`.
-  const [ingresoSugerido, setIngresoSugerido] = useState<Programacion['ingreso_sugerido']>(null);
-  // Una sugerencia por cada fila de destinosFact (mismo índice), cuando hay >1 destino.
-  const [ingresoSugeridoPorDestino, setIngresoSugeridoPorDestino] = useState<Programacion['ingreso_sugerido_por_destino']>(null);
   // Abre el detalle con el item de la lista (rápido) y lo enriquece con el registro
   // completo (la lista no trae anticipo/abonos_ruta/gastos, necesarios para el Control del dinero).
   const openDetail = (r: Programacion) => {
@@ -308,6 +272,30 @@ export default function OperacionesScreen() {
 
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
   const [trabajadores, setTrabajadores] = useState<Trabajador[]>([]);
+  // Tarifas de la empresa (factor €/km por categoría, mínimo <35km, navetta) para
+  // autocompletar el ingreso EN VIVO mientras se escribe el km facturable.
+  const [tarifasConfig, setTarifasConfig] = useState<TarifasIngreso | null>(null);
+  useEffect(() => {
+    api.get('/registros/config').then((res) => setTarifasConfig(res.data ?? null)).catch(() => {});
+  }, []);
+
+  // Categoría del vehículo elegido (vehiculo_id guarda la PLACA, no el id).
+  const categoriaDeVehiculo = (vehiculoId: string) =>
+    vehiculos.find((v) => v.placa === vehiculoId || v.id === vehiculoId)?.categoria ?? null;
+
+  // Sugerencia EN VIVO (solo para el hint informativo — no muta el form).
+  const ingresoSugerido = useMemo(
+    () => calcularIngresoSugerido(form.km_facturable, categoriaDeVehiculo(form.vehiculo_id), form.es_navetta, form.spedizione, tarifasConfig),
+    [form.km_facturable, form.vehiculo_id, form.es_navetta, form.spedizione, vehiculos, tarifasConfig],
+  );
+
+  // Aplica la sugerencia al `ingreso_estimado` de un form ya actualizado (se llama
+  // SOLO desde los handlers de km/vehículo/navetta/spedizione, nunca al precargar
+  // un registro existente — así nunca pisa un ingreso ya guardado por el supervisor).
+  const aplicarIngresoAuto = (f: FormState): FormState => {
+    const sug = calcularIngresoSugerido(f.km_facturable, categoriaDeVehiculo(f.vehiculo_id), f.es_navetta, f.spedizione, tarifasConfig);
+    return sug ? { ...f, ingreso_estimado: String(sug.monto) } : f;
+  };
 
   const load = useCallback(async () => {
     try {
@@ -550,8 +538,6 @@ export default function OperacionesScreen() {
     setEditing(null);
     setForm(emptyForm());
     setDetail(null);
-    setIngresoSugerido(null);
-    setIngresoSugeridoPorDestino(null);
     setFormVisible(true);
     loadResources();
   };
@@ -574,7 +560,6 @@ export default function OperacionesScreen() {
     km: src.km != null ? String(src.km) : '',
     km_facturable: src.km_facturable != null ? String(src.km_facturable) : '',
     ingreso_estimado: src.ingreso_estimado != null ? String(src.ingreso_estimado) : '',
-    destinosFact: buildDestinosFact(src),
     ciudad: src.ciudad || '',
     app: src.app || '',
     reperibilita: !!src.reperibilita,
@@ -606,19 +591,12 @@ export default function OperacionesScreen() {
     setEditing(r);
     populate(r); // precarga rápida con lo que trae la lista
     setDetail(null);
-    setIngresoSugerido(null);
-    setIngresoSugeridoPorDestino(null);
     setFormVisible(true);
     loadResources();
     // Registro COMPLETO: la lista no trae nota/otros_datos/foto_bolla/gastos, y guardar
-    // sin ellos los borraría. GET /programacion/:id trae todos los campos (incluye
-    // ingreso_sugerido, que no vive en `form` porque no se guarda, solo se sugiere).
+    // sin ellos los borraría. GET /programacion/:id trae todos los campos.
     api.get(`/programacion/${r.id}`).then((res) => {
-      if (res.data) {
-        populate({ ...r, ...res.data });
-        setIngresoSugerido(res.data.ingreso_sugerido ?? null);
-        setIngresoSugeridoPorDestino(res.data.ingreso_sugerido_por_destino ?? null);
-      }
+      if (res.data) populate({ ...r, ...res.data });
     }).catch(() => {});
   };
 
@@ -657,17 +635,9 @@ export default function OperacionesScreen() {
   };
 
   // --- Destinos adicionales ---
-  // destinosFact tiene 1 fila más que destinos (índice 0 = principal), así que
-  // cada add/remove de un destino agrega/quita también su fila de facturación.
-  const addDestino = () => setForm((f) => ({ ...f, destinos: [...f.destinos, ''], destinosFact: [...f.destinosFact, emptyDestinoFact()] }));
+  const addDestino = () => setForm((f) => ({ ...f, destinos: [...f.destinos, ''] }));
   const updateDestino = (i: number, val: string) => setForm((f) => ({ ...f, destinos: f.destinos.map((d, idx) => (idx === i ? val : d)) }));
-  const removeDestino = (i: number) => setForm((f) => ({
-    ...f,
-    destinos: f.destinos.filter((_, idx) => idx !== i),
-    destinosFact: f.destinosFact.filter((_, idx) => idx !== i + 1),
-  }));
-  const updateDestinoFact = (i: number, patch: Partial<DestinoFactRow>) =>
-    setForm((f) => ({ ...f, destinosFact: f.destinosFact.map((d, idx) => (idx === i ? { ...d, ...patch } : d)) }));
+  const removeDestino = (i: number) => setForm((f) => ({ ...f, destinos: f.destinos.filter((_, idx) => idx !== i) }));
 
   // Orígenes/retiros adicionales: mismo patrón que destinos. El primero es
   // `retiro_lugar`; estos son los almacenes intermedios (ej. B-service).
@@ -723,16 +693,6 @@ export default function OperacionesScreen() {
         km: form.km !== '' ? Number(form.km) : null,
         km_facturable: form.km_facturable !== '' ? Number(form.km_facturable) : null,
         ingreso_estimado: form.ingreso_estimado !== '' ? Number(form.ingreso_estimado) : null,
-        // Con >1 destino, el desglose manda: el backend suma sus km/ingreso y
-        // sobrescribe km_facturable/ingreso_estimado de arriba. Con 1 solo destino
-        // no se manda nada y el comportamiento es exactamente el de siempre.
-        ...(form.destinos.length > 0 ? {
-          destinos_facturacion: form.destinosFact.map((d) => ({
-            km_facturable: d.km_facturable !== '' ? Number(d.km_facturable) : null,
-            ingreso: d.ingreso !== '' ? Number(d.ingreso) : null,
-            referencia_dhl: d.referencia_dhl || null,
-          })),
-        } : {}),
         ciudad: form.ciudad || null,
         app: form.app || null,
         reperibilita: form.reperibilita,
@@ -1132,13 +1092,20 @@ export default function OperacionesScreen() {
             {detail.km != null && detail.km !== 0 ? <InfoRow label="KM (real, GPS)" value={`${detail.km} km`} /> : null}
             {detail.km_facturable != null ? <InfoRow label="Km facturable (ida)" value={`${detail.km_facturable} km`} /> : null}
             {detail.ingreso_estimado != null && detail.ingreso_estimado !== 0 ? <InfoRow label="Ingreso" value={formatMoney(detail.ingreso_estimado, moneda)} /> : null}
-            {Array.isArray(detail.destinos_facturacion) && detail.destinos_facturacion.length > 1 ? (
-              <View style={{ marginTop: -8, marginBottom: S.sm }}>
-                {detail.destinos_facturacion.map((d, i) => (
-                  <Text key={i} style={styles.metaSmall}>
-                    · Destino {i + 1}: {d?.km_facturable != null ? `${d.km_facturable} km` : '—'} · {d?.ingreso != null ? formatMoney(d.ingreso, moneda) : '—'}
-                    {d?.referencia_dhl ? ` · Ref. ${d.referencia_dhl}` : ''}
-                  </Text>
+            {Array.isArray(detail.paradas_recorrido) && detail.paradas_recorrido.length > 0 ? (
+              <View style={{ marginTop: S.sm, marginBottom: S.sm }}>
+                <Text style={styles.formSection}>Paradas (km real GPS)</Text>
+                {detail.paradas_recorrido.map((p) => (
+                  <View key={p.id} style={styles.paradaRow}>
+                    <Text style={styles.paradaLabel} numberOfLines={1}>
+                      {p.orden}. {p.label}{p.es_retorno ? ' (retorno)' : ''}
+                    </Text>
+                    <Text style={styles.paradaMeta}>
+                      {p.llegada_en ? fmtHoraIt(new Date(p.llegada_en)) : 'Sin llegar'}
+                      {p.km_tramo != null ? ` · ${p.km_tramo.toFixed(1)} km` : ''}
+                      {!p.es_retorno ? (p.llegada_en ? (p.entregado ? ' · Entregado' : ' · No entregado') : '') : ''}
+                    </Text>
+                  </View>
                 ))}
               </View>
             ) : null}
@@ -1326,7 +1293,7 @@ export default function OperacionesScreen() {
         <Select
           label="Vehículo *"
           value={form.vehiculo_id}
-          onChange={(v) => setForm({ ...form, vehiculo_id: v })}
+          onChange={(v) => setForm((f) => aplicarIngresoAuto({ ...f, vehiculo_id: v }))}
           options={vehiculos.map((v) => ({ value: v.placa, label: v.marca_modelo ? `${v.placa} (${v.marca_modelo})` : v.placa }))}
           placeholder="Selecciona un vehículo"
           searchable
@@ -1355,7 +1322,7 @@ export default function OperacionesScreen() {
         <Select
           label="Spedizione"
           value={form.spedizione}
-          onChange={(v) => setForm({ ...form, spedizione: v })}
+          onChange={(v) => setForm((f) => aplicarIngresoAuto({ ...f, spedizione: v }))}
           options={SPEDIZIONE_OPTIONS}
           placeholder="Selecciona spedizione"
           clearable
@@ -1499,13 +1466,13 @@ export default function OperacionesScreen() {
           />
         </View>
 
-        {!lockOthers && form.destinos.length === 0 && (
+        {!lockOthers && (
           <View>
             <View style={styles.dateRow}>
               <FormField
                 label="Km facturable (ida)"
                 value={form.km_facturable}
-                onChangeText={(t) => setForm({ ...form, km_facturable: t })}
+                onChangeText={(t) => setForm((f) => aplicarIngresoAuto({ ...f, km_facturable: t }))}
                 placeholder="Km que informa el cliente"
                 keyboardType="numeric"
                 style={{ flex: 1 }}
@@ -1520,79 +1487,12 @@ export default function OperacionesScreen() {
               />
             </View>
             {ingresoSugerido ? (
-              <TouchableOpacity
-                onPress={() => setForm((f) => ({ ...f, ingreso_estimado: String(ingresoSugerido!.monto) }))}
-                style={styles.sugeridoRow}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.sugeridoText}>
-                  Sugerido: {formatMoney(ingresoSugerido.monto, moneda)} {ingresoSugerido.esNavetta
-                    ? '(navetta, fijo)'
-                    : `(${categoriaVehiculoLabel(ingresoSugerido.categoria)}${ingresoSugerido.aplicaMinimo ? ', mínimo' : ` · ${ingresoSugerido.factor}€/km`})`} · Usar
-                </Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
-        )}
-
-        {/* Con más de 1 destino, el km/ingreso se factura POR DESTINO (así se
-            puede comparar tramo a tramo contra lo que reporta DHL) en vez de un
-            solo total. La suma reemplaza a km_facturable/ingreso_estimado. */}
-        {!lockOthers && form.destinos.length > 0 && (
-          <View>
-            <Text style={styles.formSection}>Facturación por destino</Text>
-            {form.destinosFact.map((d, i) => {
-              const sugerido = ingresoSugeridoPorDestino?.[i];
-              const etiqueta = i === 0 ? (form.entrega_lugar || 'Destino 1') : (form.destinos[i - 1] || `Destino ${i + 1}`);
-              return (
-                <View key={i} style={styles.destinoFactCard}>
-                  <Text style={styles.destinoFactLabel} numberOfLines={1}>{i + 1}. {etiqueta}</Text>
-                  <View style={styles.dateRow}>
-                    <FormField
-                      label="Km facturable"
-                      value={d.km_facturable}
-                      onChangeText={(t) => updateDestinoFact(i, { km_facturable: t })}
-                      placeholder="Km"
-                      keyboardType="numeric"
-                      style={{ flex: 1 }}
-                    />
-                    <FormField
-                      label={`Ingreso (${moneda || 'EUR'})`}
-                      value={d.ingreso}
-                      onChangeText={(t) => updateDestinoFact(i, { ingreso: t })}
-                      placeholder="0.00"
-                      keyboardType="numeric"
-                      style={{ flex: 1 }}
-                    />
-                  </View>
-                  <FormField
-                    label={form.spedizione === 'DHL' ? 'Referencia DHL (opcional)' : 'Referencia (opcional)'}
-                    value={d.referencia_dhl}
-                    onChangeText={(t) => updateDestinoFact(i, { referencia_dhl: t })}
-                    placeholder={form.spedizione === 'DHL' ? 'Tracking / código que reporta DHL' : 'Tracking / código que reporta el cliente'}
-                  />
-                  {sugerido ? (
-                    <TouchableOpacity
-                      onPress={() => updateDestinoFact(i, { ingreso: String(sugerido.monto) })}
-                      style={styles.sugeridoRow}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.sugeridoText}>
-                        Sugerido: {formatMoney(sugerido.monto, moneda)} {sugerido.esNavetta
-                          ? '(navetta, fijo)'
-                          : `(${categoriaVehiculoLabel(sugerido.categoria)}${sugerido.aplicaMinimo ? ', mínimo' : ` · ${sugerido.factor}€/km`})`} · Usar
-                      </Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-              );
-            })}
-            <View style={styles.destinoFactTotalRow}>
-              <Text style={styles.destinoFactTotalText}>
-                Total: {form.destinosFact.reduce((s, d) => s + (Number(d.km_facturable) || 0), 0)} km ·{' '}
-                {formatMoney(form.destinosFact.reduce((s, d) => s + (Number(d.ingreso) || 0), 0), moneda)}
+              <Text style={styles.sugeridoText}>
+                {ingresoSugerido.esNavetta
+                  ? 'Auto: navetta, pago fijo'
+                  : `Auto: ${categoriaVehiculoLabel(ingresoSugerido.categoria)}${ingresoSugerido.aplicaMinimo ? ', mínimo' : ` · ${ingresoSugerido.factor}€/km`}`} — puedes editarlo si varía
               </Text>
-            </View>
+            ) : null}
           </View>
         )}
 
@@ -1657,14 +1557,14 @@ export default function OperacionesScreen() {
         <View style={styles.dateRow}>
           <TouchableOpacity
             style={[styles.toggleBtn, !form.es_navetta && styles.toggleBtnActiveDark, lockOthers && { opacity: 0.55 }]}
-            onPress={() => !lockOthers && setForm({ ...form, es_navetta: false })}
+            onPress={() => !lockOthers && setForm((f) => aplicarIngresoAuto({ ...f, es_navetta: false }))}
             activeOpacity={0.7}
           >
             <Text style={[styles.toggleBtnText, !form.es_navetta && { color: '#fff' }]}>N</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.toggleBtn, form.es_navetta && styles.toggleBtnActiveBlue, lockOthers && { opacity: 0.55 }]}
-            onPress={() => !lockOthers && setForm({ ...form, es_navetta: true })}
+            onPress={() => !lockOthers && setForm((f) => aplicarIngresoAuto({ ...f, es_navetta: true }))}
             activeOpacity={0.7}
           >
             <Text style={[styles.toggleBtnText, form.es_navetta && { color: '#fff' }]}>Y</Text>
@@ -1939,8 +1839,7 @@ const makeStyles = () => StyleSheet.create({
   formSectionInline: { fontSize: 13, fontWeight: '700', color: C.text, textTransform: 'uppercase' },
   fieldLabelSm: { fontSize: 13, fontWeight: '500', color: C.textMuted, marginBottom: 6 },
   pagadorHint: { fontSize: 11, color: C.textMuted, marginTop: 6, lineHeight: 15 },
-  sugeridoRow: { marginTop: -S.sm, marginBottom: S.md, paddingHorizontal: 4 },
-  sugeridoText: { fontSize: 12, color: C.primary, fontWeight: '600' },
+  sugeridoText: { fontSize: 12, color: C.primary, fontWeight: '600', marginTop: 4, marginBottom: S.md, paddingHorizontal: 4 },
   filtrosBar: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
   filtrosToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 14, borderRadius: Theme.radius.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface },
   filtrosToggleText: { fontSize: 14, fontWeight: '600', color: C.text },
@@ -1951,11 +1850,9 @@ const makeStyles = () => StyleSheet.create({
   gpsHint: { fontSize: 12, color: C.info, fontWeight: '600', marginTop: 4 },
   destinoRow: { flexDirection: 'row', alignItems: 'flex-end', gap: S.sm, marginBottom: S.sm },
   destinoRemove: { paddingBottom: 12, paddingHorizontal: 4 },
-  destinoFactCard: { padding: S.md, borderRadius: Theme.radius.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.surfaceAlt, marginBottom: S.sm },
-  destinoFactLabel: { fontSize: 13, fontWeight: '700', color: C.text, marginBottom: S.sm },
-  destinoFactTotalRow: { paddingHorizontal: 4, marginBottom: S.md },
-  destinoFactTotalText: { fontSize: 13, fontWeight: '700', color: C.text },
-  metaSmall: { fontSize: 12, color: C.textMuted, marginTop: 2 },
+  paradaRow: { paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
+  paradaLabel: { fontSize: 13, fontWeight: '600', color: C.text },
+  paradaMeta: { fontSize: 12, color: C.textMuted, marginTop: 2 },
   estadoChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: S.md, paddingVertical: 9, borderRadius: Theme.radius.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.surfaceAlt },
   estadoChipActive: { backgroundColor: C.info, borderColor: C.info },
   estadoChipText: { fontSize: 13, fontWeight: '600', color: C.textMuted },

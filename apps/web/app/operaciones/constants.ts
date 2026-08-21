@@ -92,3 +92,59 @@ export const CATEGORIA_VEHICULO_LABEL: Record<string, string> = {
     CASSONATO: 'Cassonato',
 };
 export const categoriaVehiculoLabel = (v?: string | null): string => (v && CATEGORIA_VEHICULO_LABEL[v]) || v || '—';
+
+// Spedizioni cuyo costo lo confirma el cliente DESPUÉS del servicio: no hay
+// tabla de km, se deja en blanco para que el supervisor lo llene a mano.
+export const SPEDIZIONI_SIN_AUTOCALCULO = ['EXTRAS ALFREDO', 'EXTRAS ESTEFANIA'];
+
+// Tarifas de la empresa para el ingreso sugerido (GET /registros/config).
+export interface TarifasIngreso {
+    factor_km_auto_furgoneta: number;
+    factor_km_h1_l1: number;
+    factor_km_h2_l2: number;
+    factor_km_cassonato: number;
+    ingreso_km_minimo: number;
+    ingreso_km_umbral: number;
+    pago_navetta: number;
+}
+
+export interface IngresoSugerido {
+    monto: number;
+    factor: number | null;
+    categoria: string | null;
+    aplicaMinimo: boolean;
+    esNavetta: boolean;
+}
+
+// Réplica en cliente de ingresoSugerido() del backend (apps/api/src/common/
+// ingreso-vehiculo.util.ts) — para autocompletar el ingreso EN VIVO mientras el
+// supervisor escribe el km facturable, sin esperar un viaje al servidor. Misma
+// jerarquía: navetta (fijo) > spedizione sin autocálculo (null) > factor por
+// categoría (o fijo si el km es corto).
+export function calcularIngresoSugerido(
+    kmFacturable: string | number | null | undefined,
+    categoria: string | null | undefined,
+    esNavetta: boolean,
+    spedizione: string | null | undefined,
+    tar: TarifasIngreso | null,
+): IngresoSugerido | null {
+    if (!tar) return null;
+    if (esNavetta) {
+        return { monto: Math.round(tar.pago_navetta * 100) / 100, factor: null, categoria: null, aplicaMinimo: false, esNavetta: true };
+    }
+    const sped = (spedizione || '').trim().toUpperCase();
+    if (SPEDIZIONI_SIN_AUTOCALCULO.includes(sped)) return null;
+    const km = Number(kmFacturable) || 0;
+    if (km <= 0) return null;
+    const factores: Record<string, number> = {
+        AUTO_FURGONETA: tar.factor_km_auto_furgoneta,
+        H1_L1: tar.factor_km_h1_l1,
+        H2_L2: tar.factor_km_h2_l2,
+        CASSONATO: tar.factor_km_cassonato,
+    };
+    if (!categoria || !(categoria in factores)) return null;
+    const factor = factores[categoria];
+    const aplicaMinimo = km < tar.ingreso_km_umbral;
+    const monto = Math.round((aplicaMinimo ? tar.ingreso_km_minimo : km * factor) * 100) / 100;
+    return { monto, factor, categoria, aplicaMinimo, esNavetta: false };
+}
