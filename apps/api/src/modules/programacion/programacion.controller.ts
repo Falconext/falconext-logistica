@@ -15,6 +15,8 @@ export class ProgramacionController {
             to: query.to,
             q: query.q,
             estados: query.estados ? String(query.estados).split(',').filter(Boolean) : undefined,
+            spedizione: query.spedizione || undefined,
+            trabajadorId: query.trabajadorId || undefined,
             skip: query.skip ? parseInt(query.skip, 10) || 0 : 0,
             take: query.take ? Math.min(parseInt(query.take, 10) || 60, 1000) : 60,
             // Owner scoping: restricted users (solo_propios) only see their own rows.

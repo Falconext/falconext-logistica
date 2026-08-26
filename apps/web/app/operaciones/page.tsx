@@ -6,9 +6,9 @@ import { Programacion } from '../../types';
 import { MapboxRouteMap } from '../../components/tracking/MapboxRouteMap';
 import { MapboxLiveMap as LiveMapReal } from '../../components/tracking/MapboxLiveMap';
 import NewRouteModal from './NewRouteModal';
-import { estadoConsegnaMeta } from './constants';
+import { estadoConsegnaMeta, SPEDIZIONE_OPTIONS } from './constants';
 import {
-    Truck, Search, Plus, Package, Layers, FileSpreadsheet, MapPin, User, Navigation, X, Check, Trash2, AlertTriangle, Loader2, Route, MapPinned, Smartphone, Boxes, Clock
+    Truck, Search, Plus, Package, Layers, FileSpreadsheet, MapPin, User, Navigation, X, Check, Trash2, AlertTriangle, Loader2, Route, MapPinned, Smartphone, Boxes, Clock, SlidersHorizontal
 } from 'lucide-react';
 import { toast } from 'sonner';
 import clsx from 'clsx';
@@ -176,6 +176,36 @@ export default function OperacionesPage() {
     const [showLayers, setShowLayers] = useState(false);
     const [visibleEstados, setVisibleEstados] = useState<Set<string>>(new Set(ALL_ESTADOS));
 
+    // Filtros avanzados: mes/fecha exacta, trabajador, spedizione.
+    const [showFiltros, setShowFiltros] = useState(false);
+    const [mes, setMes] = useState('');
+    const [fechaInicio, setFechaInicio] = useState('');
+    const [fechaFin, setFechaFin] = useState('');
+    const [trabajadorFiltro, setTrabajadorFiltro] = useState('');
+    const [spedizioneFiltro, setSpedizioneFiltro] = useState('');
+    const [trabajadores, setTrabajadores] = useState<{ id: string; nombre_completo: string }[]>([]);
+    const filtrosActivosCount = [mes, fechaInicio, fechaFin, trabajadorFiltro, spedizioneFiltro].filter(Boolean).length;
+
+    const limpiarFiltrosAvanzados = () => {
+        setMes(''); setFechaInicio(''); setFechaFin(''); setTrabajadorFiltro(''); setSpedizioneFiltro('');
+    };
+
+    // Aplicar "Mes" completa fecha inicio/fin con el primer/último día de ese mes.
+    const onMesChange = (value: string) => {
+        setMes(value);
+        if (value) {
+            const [y, m] = value.split('-').map(Number);
+            const desde = new Date(y, m - 1, 1);
+            const hasta = new Date(y, m, 0);
+            setFechaInicio(desde.toISOString().slice(0, 10));
+            setFechaFin(hasta.toISOString().slice(0, 10));
+        }
+    };
+
+    useEffect(() => {
+        api.get('/trabajadores').then(res => setTrabajadores(res.data ?? [])).catch(() => { });
+    }, []);
+
     const [isNewRouteModalOpen, setIsNewRouteModalOpen] = useState(false);
     const [editingRuta, setEditingRuta] = useState<Programacion | null>(null);
 
@@ -190,7 +220,11 @@ export default function OperacionesPage() {
     // Build the query params for the current filters (date window, search, estados).
     const buildParams = useCallback((skip: number) => {
         const params: any = { skip, take: PAGE_SIZE };
-        if (windowDays != null) {
+        // Rango exacto (mes o fecha inicio/fin manual) tiene prioridad sobre el preset de ventana.
+        if (fechaInicio || fechaFin) {
+            if (fechaInicio) params.from = new Date(`${fechaInicio}T00:00:00`).toISOString();
+            if (fechaFin) params.to = new Date(`${fechaFin}T23:59:59`).toISOString();
+        } else if (windowDays != null) {
             const from = new Date();
             from.setDate(from.getDate() - windowDays);
             params.from = from.toISOString();
@@ -200,8 +234,10 @@ export default function OperacionesPage() {
         if (visibleEstados.size > 0 && visibleEstados.size < ALL_ESTADOS.length) {
             params.estados = Array.from(visibleEstados).join(',');
         }
+        if (trabajadorFiltro) params.trabajadorId = trabajadorFiltro;
+        if (spedizioneFiltro) params.spedizione = spedizioneFiltro;
         return params;
-    }, [windowDays, debouncedQuery, visibleEstados]);
+    }, [windowDays, debouncedQuery, visibleEstados, fechaInicio, fechaFin, trabajadorFiltro, spedizioneFiltro]);
 
     // (Re)load the first page whenever any filter changes.
     useEffect(() => {
@@ -343,6 +379,7 @@ export default function OperacionesPage() {
                 [t('operaciones.excel.vehiculo')]: r.vehiculo_id,
                 [t('operaciones.excel.conductor')]: r.trabajador_nombre || r.trabajador_id,
                 [t('operaciones.excel.estado')]: r.estado,
+                [t('operaciones.excel.spedizione')]: r.spedizione,
                 [t('operaciones.excel.origen')]: r.lugar_retiro,
                 [t('operaciones.excel.destino')]: r.lugar_entrega,
             })));
@@ -389,15 +426,98 @@ export default function OperacionesPage() {
                         {WINDOW_OPTIONS.map(opt => (
                             <button
                                 key={opt.key}
-                                onClick={() => setWindowDays(opt.days)}
+                                onClick={() => { setWindowDays(opt.days); setFechaInicio(''); setFechaFin(''); setMes(''); }}
                                 className={clsx(
                                     "flex-1 px-2 py-1 rounded-md text-xs font-medium transition",
-                                    windowDays === opt.days ? "bg-[#1a1a1c] text-white" : "text-slate-500 hover:text-slate-900"
+                                    windowDays === opt.days && !fechaInicio && !fechaFin ? "bg-[#1a1a1c] text-white" : "text-slate-500 hover:text-slate-900"
                                 )}
                             >
                                 {opt.label}
                             </button>
                         ))}
+                    </div>
+
+                    {/* Filtros avanzados: mes, fecha exacta, trabajador, spedizione */}
+                    <div className="mt-2">
+                        <button
+                            onClick={() => setShowFiltros(v => !v)}
+                            className={clsx(
+                                "w-full flex items-center justify-between px-3 py-2 rounded-lg border text-xs font-medium transition",
+                                showFiltros || filtrosActivosCount > 0 ? "border-blue-300 text-slate-900 bg-blue-50/40" : "border-slate-200 text-slate-500 hover:text-slate-900"
+                            )}
+                        >
+                            <span className="flex items-center gap-1.5"><SlidersHorizontal size={13} /> {t('operaciones.filtros.titulo')}</span>
+                            {filtrosActivosCount > 0 && (
+                                <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-md bg-[#FFC933] text-[#1a1a1c] text-[10px] font-bold">
+                                    {filtrosActivosCount}
+                                </span>
+                            )}
+                        </button>
+
+                        {showFiltros && (
+                            <div className="mt-2 p-3 rounded-lg border border-slate-200 bg-slate-50/60 space-y-2.5">
+                                <div>
+                                    <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('operaciones.filtros.mes')}</label>
+                                    <input
+                                        type="month"
+                                        value={mes}
+                                        onChange={(e) => onMesChange(e.target.value)}
+                                        className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 focus:border-slate-400 outline-none text-xs text-slate-900"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('operaciones.filtros.fechaInicio')}</label>
+                                        <input
+                                            type="date"
+                                            value={fechaInicio}
+                                            onChange={(e) => { setFechaInicio(e.target.value); setMes(''); }}
+                                            className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 focus:border-slate-400 outline-none text-xs text-slate-900"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('operaciones.filtros.fechaFin')}</label>
+                                        <input
+                                            type="date"
+                                            value={fechaFin}
+                                            onChange={(e) => { setFechaFin(e.target.value); setMes(''); }}
+                                            className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 focus:border-slate-400 outline-none text-xs text-slate-900"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('operaciones.filtros.trabajador')}</label>
+                                    <select
+                                        value={trabajadorFiltro}
+                                        onChange={(e) => setTrabajadorFiltro(e.target.value)}
+                                        className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 focus:border-slate-400 outline-none text-xs text-slate-900"
+                                    >
+                                        <option value="">{t('operaciones.filtros.todos')}</option>
+                                        {trabajadores.map(tr => (
+                                            <option key={tr.id} value={tr.id}>{tr.nombre_completo}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('operaciones.filtros.spedizione')}</label>
+                                    <select
+                                        value={spedizioneFiltro}
+                                        onChange={(e) => setSpedizioneFiltro(e.target.value)}
+                                        className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 focus:border-slate-400 outline-none text-xs text-slate-900"
+                                    >
+                                        <option value="">{t('operaciones.filtros.todos')}</option>
+                                        {SPEDIZIONE_OPTIONS.map(op => (
+                                            <option key={op.value} value={op.value}>{op.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                {filtrosActivosCount > 0 && (
+                                    <button onClick={limpiarFiltrosAvanzados} className="text-[11px] font-medium text-blue-600 hover:underline">
+                                        {t('operaciones.filtros.limpiar')}
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -453,7 +573,7 @@ export default function OperacionesPage() {
                 {/* Map (memoized — no re-render on search/hover/layers) */}
                 <div className="absolute inset-0">
                     {(() => {
-                    const stops = [selected?.lugar_entrega, ...(selected?.destinos || [])].filter(Boolean) as string[];
+                    const stops = [...(selected?.retiros || []), selected?.lugar_entrega, ...(selected?.destinos || [])].filter(Boolean) as string[];
                     return (
                     <MapView
                         deviceId={device?.id || ''}

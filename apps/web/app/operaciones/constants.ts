@@ -22,7 +22,7 @@ export const APP_OPTIONS: { value: string; label: string }[] = [
 // Opciones del campo SPEDIZIONE (expedición/cliente). Debe coincidir con
 // SPEDIZIONE_OPTIONS del app (apps/logistica-app/constants/operaciones.ts).
 export const SPEDIZIONE_OPTIONS: { value: string; label: string }[] = [
-    { value: 'AB', label: 'AB' },
+    { value: 'AB', label: 'Ab Servis' },
     { value: 'DHL', label: 'DHL' },
     { value: 'EXTRAS ALFREDO', label: 'Extras Alfredo' },
     { value: 'EXTRAS ESTEFANIA', label: 'Extras Estefanía' },

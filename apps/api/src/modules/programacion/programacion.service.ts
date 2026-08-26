@@ -42,15 +42,18 @@ export class ProgramacionService {
 
     async findAll(
         tenantId: string,
-        opts: { from?: string; to?: string; q?: string; estados?: string[]; skip?: number; take?: number; ownerIds?: string[] } = {},
+        opts: { from?: string; to?: string; q?: string; estados?: string[]; skip?: number; take?: number; ownerIds?: string[]; spedizione?: string; trabajadorId?: string } = {},
     ) {
-        const { from, to, q, estados, skip = 0, take = 60, ownerIds } = opts;
+        const { from, to, q, estados, skip = 0, take = 60, ownerIds, spedizione, trabajadorId } = opts;
 
         // Base scope: always the caller's tenant, plus optional date window + search.
         const baseWhere: Prisma.ProgramacionWhereInput = { tenant_id: tenantId };
         // Owner scoping: restricted users only see their own trabajador's rows.
         // Aceptamos UUID (nuevo) y código legacy para tolerar data no migrada.
         if (ownerIds?.length) baseWhere.trabajador_id = { in: ownerIds };
+        // Filtro explícito por trabajador (además/en vez del owner scoping de choferes).
+        if (trabajadorId) baseWhere.trabajador_id = trabajadorId;
+        if (spedizione) baseWhere.spedizione = spedizione;
         if (from || to) {
             baseWhere.fecha = {};
             if (from) (baseWhere.fecha as Prisma.DateTimeFilter).gte = new Date(from);
