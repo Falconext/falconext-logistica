@@ -24,6 +24,7 @@ export class PeajesService {
                 fecha_recepcion: data.fecha_recepcion ? new Date(data.fecha_recepcion) : null,
                 peaje_salida: data.peaje_salida || null,
                 nota_autista: data.nota_autista || null,
+                fecha_limite_pago: data.fecha_limite_pago ? new Date(data.fecha_limite_pago) : null,
                 tenant_id: tenantId,
             }
         });
@@ -31,16 +32,25 @@ export class PeajesService {
 
     async findAll(
         tenantId: string,
-        opts: { q?: string; estado?: string; skip?: number; take?: number; ownerIds?: string[] } = {},
+        opts: { q?: string; estado?: string; skip?: number; take?: number; ownerIds?: string[]; from?: string; to?: string; trabajadorId?: string; spedizione?: string } = {},
     ) {
-        const { q, estado, skip = 0, take = 10, ownerIds } = opts;
+        const { q, estado, skip = 0, take = 10, ownerIds, from, to, trabajadorId, spedizione } = opts;
 
-        // Base scope = tenant + optional search. Estado is applied only to the list
-        // (not to the counts) so the tabs keep showing the full per-estado tally.
+        // Base scope = tenant + optional search/fecha/trabajador. Estado is applied
+        // only to the list (not to the counts) so the tabs keep showing the full tally.
         const baseWhere: Prisma.PeajeWhereInput = { tenant_id: tenantId };
         // Owner scoping: restricted users (solo_propios) only see their own peajes.
         // Aceptamos UUID (nuevo) y código legacy para tolerar data no migrada.
         if (ownerIds?.length) baseWhere.trabajador_id = { in: ownerIds };
+        if (trabajadorId) baseWhere.trabajador_id = trabajadorId;
+        if (from || to) {
+            baseWhere.fecha = {};
+            if (from) (baseWhere.fecha as Prisma.DateTimeFilter).gte = new Date(from);
+            if (to) (baseWhere.fecha as Prisma.DateTimeFilter).lte = new Date(to);
+        }
+        // El Peaje nativo (import legacy) no tiene vínculo a Programacion/spedizione:
+        // si se filtra por spedizione, ningún registro nativo puede calzar.
+        if (spedizione) baseWhere.id = '__none__';
         if (q) {
             baseWhere.OR = [
                 { targa: { contains: q } },
@@ -71,31 +81,46 @@ export class PeajesService {
 
         // Gastos de tipo PEAJE registrados por choferes en operaciones. Se fusionan
         // en esta lista (mapeados a la forma de un peaje) para que aparezcan aquí.
-        // No tienen estado propio → cuentan como PENDIENTE. Se excluyen si el filtro
-        // pide sólo PAGADO/ANULADO.
-        const gastoWhere: Prisma.GastoOperacionWhereInput = { tenant_id: tenantId, tipo: 'PEAJE' };
-        if (ownerIds?.length) gastoWhere.trabajador_id = { in: ownerIds };
-        if (q) gastoWhere.OR = [
+        // Desde que un admin puede marcarles estado (PAGADO/ANULADO), se filtran/
+        // bucketizan igual que los Peaje nativos.
+        const gastoBaseWhere: Prisma.GastoOperacionWhereInput = { tenant_id: tenantId, tipo: 'PEAJE' };
+        if (ownerIds?.length) gastoBaseWhere.trabajador_id = { in: ownerIds };
+        if (trabajadorId) gastoBaseWhere.trabajador_id = trabajadorId;
+        if (from || to) {
+            gastoBaseWhere.fecha = {};
+            if (from) (gastoBaseWhere.fecha as Prisma.DateTimeFilter).gte = new Date(from);
+            if (to) (gastoBaseWhere.fecha as Prisma.DateTimeFilter).lte = new Date(to);
+        }
+        if (spedizione) gastoBaseWhere.programacion = { spedizione };
+        if (q) gastoBaseWhere.OR = [
             { targa: { contains: q } },
             { descripcion: { contains: q } },
             { numero_mancato: { contains: q } },
             { programacion: { cliente: { contains: q } } },
         ];
-        const includeGastos = !estado || estado === 'Todos' || estado === 'PENDIENTE';
+        const gastoItemsWhere: Prisma.GastoOperacionWhereInput = { ...gastoBaseWhere };
+        if (estado === 'PAGADO') gastoItemsWhere.estado = { in: PAGADO_VALS };
+        else if (estado === 'ANULADO') gastoItemsWhere.estado = { in: ANULADO_VALS };
+        else if (estado === 'PENDIENTE') {
+            gastoItemsWhere.AND = [{ OR: [{ estado: { notIn: [...PAGADO_VALS, ...ANULADO_VALS] } }, { estado: null }] }];
+        }
 
-        // Traemos los peajes nativos que matchean el filtro (sin paginar) para poder
-        // fusionarlos con los gastos y paginar el conjunto combinado en memoria.
-        const nativeSelect = { id: true, targa: true, estado: true, comentarios: true, fecha: true, hora: true, tipo: true, monto: true, archivo: true } as const;
-        const [nativeItems, gastos, gastoCount] = await this.prisma.$transaction([
+        // Traemos los peajes nativos + gastos que matchean el filtro (sin paginar) para
+        // poder fusionarlos y paginar el conjunto combinado en memoria.
+        const nativeSelect = {
+            id: true, targa: true, estado: true, comentarios: true, fecha: true, hora: true, tipo: true, monto: true,
+            archivo: true, id_multa: true, recibo_pago: true, fecha_recepcion: true, fecha_limite_pago: true,
+        } as const;
+        const [nativeItems, gastos, gastosParaContar] = await this.prisma.$transaction([
             this.prisma.peaje.findMany({ where: itemsWhere, orderBy: { fecha: 'desc' }, select: nativeSelect }),
-            includeGastos
-                ? this.prisma.gastoOperacion.findMany({
-                    where: gastoWhere,
-                    orderBy: { fecha: 'desc' },
-                    include: { programacion: { select: { id: true, cliente: true, id_programacion: true } } },
-                })
-                : this.prisma.gastoOperacion.findMany({ where: { id: '__none__' } }),
-            this.prisma.gastoOperacion.count({ where: gastoWhere }),
+            this.prisma.gastoOperacion.findMany({
+                where: gastoItemsWhere,
+                orderBy: { fecha: 'desc' },
+                include: { programacion: { select: { id: true, cliente: true, id_programacion: true, spedizione: true } } },
+            }),
+            // Para los counts por tab, se necesita el estado de TODOS los gastos (sin
+            // filtrar por tab) — igual que `grouped` hace para Peaje vía `baseWhere`.
+            this.prisma.gastoOperacion.findMany({ where: gastoBaseWhere, select: { estado: true } }),
         ]);
 
         const gastoRows = gastos.map((g: any) => ({
@@ -103,24 +128,30 @@ export class PeajesService {
             _origen: 'operacion',
             programacion_id: g.programacion_id,
             targa: g.targa,
-            estado: null,
+            cliente: g.programacion?.cliente || null,
+            spedizione: g.programacion?.spedizione || null,
+            estado: g.estado || null,
             comentarios: [
                 g.programacion?.cliente ? `Operación · ${g.programacion.cliente}` : 'Gasto de operación',
                 g.numero_mancato ? `Mancato ${g.numero_mancato}` : null,
             ].filter(Boolean).join(' · '),
+            id_multa: g.numero_mancato || null,
             numero_mancato: g.numero_mancato || null,
             link_peaje: g.link_peaje || null,
             // false = peaje MANCATO (lo paga la empresa, no se descuenta al chofer).
             pagado_por_chofer: g.pagado_por_chofer !== false,
             fecha: g.fecha,
+            fecha_recepcion: g.fecha,
+            fecha_limite_pago: g.fecha_limite_pago || null,
             hora: null,
             tipo: 'PEAJE',
             monto: g.monto,
             archivo: (g.comprobantes && g.comprobantes[0]) || null,
             comprobantes: g.comprobantes || [],
+            recibo_pago: null,
         }));
 
-        const merged = [...nativeItems.map((i) => ({ ...i, _origen: 'peaje' })), ...gastoRows]
+        const merged = [...nativeItems.map((i) => ({ ...i, _origen: 'peaje', comprobantes: i.archivo ? [i.archivo] : [] })), ...gastoRows]
             .sort((a, b) => new Date(b.fecha || 0).getTime() - new Date(a.fecha || 0).getTime());
         const total = merged.length;
         const items = merged.slice(skip, skip + take);
@@ -137,14 +168,28 @@ export class PeajesService {
             counts.Todos += g._count._all;
             counts[bucketOf(g.estado)] += g._count._all;
         });
-        // Los gastos de operación cuentan como PENDIENTE (y suman al total).
-        counts.Todos += gastoCount;
-        counts.PENDIENTE += gastoCount;
+        gastosParaContar.forEach((g) => {
+            counts.Todos += 1;
+            counts[bucketOf(g.estado)] += 1;
+        });
 
         return { items, total, counts };
     }
 
     update(id: string, data: any, tenantId?: string) {
+        // Los peajes "mancato" (registrados desde una operación) usan el id prefijado
+        // "gasto:<id>" — viven en GastoOperacion, no en Peaje. Solo se les permite
+        // editar estado de pago y fecha límite (lo que pide el admin al liquidarlos).
+        if (id.startsWith('gasto:')) {
+            const gastoId = id.slice('gasto:'.length);
+            return this.prisma.gastoOperacion.updateMany({
+                where: tenantId ? { id: gastoId, tenant_id: tenantId, tipo: 'PEAJE' } : { id: gastoId, tipo: 'PEAJE' },
+                data: {
+                    estado: data.estado,
+                    fecha_limite_pago: data.fecha_limite_pago ? new Date(data.fecha_limite_pago) : undefined,
+                },
+            });
+        }
         // updateMany permite filtrar por tenant además del id (aislamiento multi-empresa):
         // sólo actualiza si el peaje pertenece al tenant del usuario.
         return this.prisma.peaje.updateMany({
@@ -165,6 +210,7 @@ export class PeajesService {
                 fecha_recepcion: data.fecha_recepcion ? new Date(data.fecha_recepcion) : undefined,
                 peaje_salida: data.peaje_salida,
                 nota_autista: data.nota_autista,
+                fecha_limite_pago: data.fecha_limite_pago ? new Date(data.fecha_limite_pago) : undefined,
             }
         });
     }

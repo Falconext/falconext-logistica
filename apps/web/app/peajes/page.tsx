@@ -2,11 +2,16 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import api from '../../lib/api';
-import { Receipt, Plus, Search, ArrowLeft, ArrowRight, Pencil, Trash2, Paperclip, Loader2 } from 'lucide-react';
+import { Receipt, Plus, Search, ArrowLeft, ArrowRight, Pencil, Trash2, Paperclip, Loader2, SlidersHorizontal, Eye, FileSpreadsheet } from 'lucide-react';
 import PeajeModal from './PeajeModal';
+import PeajeDetailModal from './PeajeDetailModal';
 import Select from '../../components/Select';
 import { useCurrency } from '../../lib/useCurrency';
 import { useT, useDateLocale } from '../../lib/i18n';
+import { useAuthStore } from '../../lib/store';
+import { isAdmin as checkIsAdmin } from '../../lib/modules';
+import { SPEDIZIONE_OPTIONS } from '../operaciones/constants';
+import { toast } from 'sonner';
 
 const ESTADOS = ['Todos', 'PENDIENTE', 'PAGADO', 'ANULADO'] as const;
 
@@ -23,10 +28,23 @@ const ESTADO_BADGE: Record<string, string> = {
     ANULADO: 'text-slate-500 border-slate-200 bg-slate-50',
 };
 
+// Espejo del bucketOf() del backend — solo para decidir si mostrar la fecha
+// límite en rojo (vencida y aún sin resolver).
+const PAGADO_VALS = ['PAGADO', 'PAGADO POR AUTISTA', 'PAGO BONIFICO'];
+const ANULADO_VALS = ['ANULADO'];
+function bucketOfEstado(e?: string | null): 'PAGADO' | 'ANULADO' | 'PENDIENTE' {
+    const v = (e || '').trim().toUpperCase();
+    if (PAGADO_VALS.includes(v)) return 'PAGADO';
+    if (ANULADO_VALS.includes(v)) return 'ANULADO';
+    return 'PENDIENTE';
+}
+
 export default function PeajesPage() {
     const t = useT();
     const dateLocale = useDateLocale();
     const { format } = useCurrency();
+    const user = useAuthStore((s) => s.user);
+    const isAdmin = checkIsAdmin(user);
     const [items, setItems] = useState<any[]>([]);
     const [total, setTotal] = useState(0);
     const [counts, setCounts] = useState<Record<string, number>>({ Todos: 0, PENDIENTE: 0, PAGADO: 0, ANULADO: 0 });
@@ -38,8 +56,24 @@ export default function PeajesPage() {
     const [editing, setEditing] = useState<any | null>(null);
     const [deleting, setDeleting] = useState<any | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
+    const [viewing, setViewing] = useState<any | null>(null);
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
+    const [busyEstado, setBusyEstado] = useState<Set<string>>(new Set());
+
+    // Filtros avanzados: fecha exacta, trabajador, spedizione.
+    const [showFiltros, setShowFiltros] = useState(false);
+    const [fechaInicio, setFechaInicio] = useState('');
+    const [fechaFin, setFechaFin] = useState('');
+    const [trabajadorFiltro, setTrabajadorFiltro] = useState('');
+    const [spedizioneFiltro, setSpedizioneFiltro] = useState('');
+    const [trabajadores, setTrabajadores] = useState<{ id: string; nombre_completo: string }[]>([]);
+    const filtrosActivosCount = [fechaInicio, fechaFin, trabajadorFiltro, spedizioneFiltro].filter(Boolean).length;
+    const limpiarFiltrosAvanzados = () => { setFechaInicio(''); setFechaFin(''); setTrabajadorFiltro(''); setSpedizioneFiltro(''); };
+
+    useEffect(() => {
+        api.get('/trabajadores').then(res => setTrabajadores(res.data ?? [])).catch(() => { });
+    }, []);
 
     const openCreate = () => { setEditing(null); setIsModalOpen(true); };
     const openEdit = (item: any) => { setEditing(item); setIsModalOpen(true); };
@@ -58,6 +92,10 @@ export default function PeajesPage() {
             params: {
                 q: debouncedQuery || undefined,
                 estado: estado !== 'Todos' ? estado : undefined,
+                from: fechaInicio ? new Date(`${fechaInicio}T00:00:00`).toISOString() : undefined,
+                to: fechaFin ? new Date(`${fechaFin}T23:59:59`).toISOString() : undefined,
+                trabajadorId: trabajadorFiltro || undefined,
+                spedizione: spedizioneFiltro || undefined,
                 skip: (page - 1) * pageSize,
                 take: pageSize,
             },
@@ -69,12 +107,62 @@ export default function PeajesPage() {
             })
             .catch(err => console.error(err))
             .finally(() => setLoading(false));
-    }, [debouncedQuery, estado, page, pageSize]);
+    }, [debouncedQuery, estado, page, pageSize, fechaInicio, fechaFin, trabajadorFiltro, spedizioneFiltro]);
 
     useEffect(() => { fetchItems(); }, [fetchItems]);
 
     // Back to page 1 whenever a filter changes.
-    useEffect(() => { setPage(1); }, [debouncedQuery, estado, pageSize]);
+    useEffect(() => { setPage(1); }, [debouncedQuery, estado, pageSize, fechaInicio, fechaFin, trabajadorFiltro, spedizioneFiltro]);
+
+    // Cambio rápido de estado desde la tabla (solo admin — el backend igual lo exige).
+    const patchEstado = async (item: any, nuevoEstado: string) => {
+        setBusyEstado((s) => new Set(s).add(item.id));
+        try {
+            await api.patch(`/peajes/${item.id}`, { estado: nuevoEstado });
+            fetchItems();
+        } catch (err) {
+            console.error(err);
+            toast.error(t('peajes.errorActualizarEstado'));
+        } finally {
+            setBusyEstado((s) => { const n = new Set(s); n.delete(item.id); return n; });
+        }
+    };
+
+    const exportToExcel = async () => {
+        try {
+            const params = {
+                q: debouncedQuery || undefined,
+                estado: estado !== 'Todos' ? estado : undefined,
+                from: fechaInicio ? new Date(`${fechaInicio}T00:00:00`).toISOString() : undefined,
+                to: fechaFin ? new Date(`${fechaFin}T23:59:59`).toISOString() : undefined,
+                trabajadorId: trabajadorFiltro || undefined,
+                spedizione: spedizioneFiltro || undefined,
+                skip: 0,
+                take: 1000,
+            };
+            const res = await api.get('/peajes', { params });
+            const data: any[] = res.data.items ?? [];
+            if (data.length === 0) return toast.error(t('peajes.sinDatosExportar'));
+            const xlsx = await import('xlsx');
+            const ws = xlsx.utils.json_to_sheet(data.map(r => ({
+                [t('peajes.columnas.vehiculo')]: r.targa || 'N/A',
+                [t('peajes.columnas.estado')]: r.estado || '—',
+                Spedizione: r.spedizione || '—',
+                [t('peajes.columnas.comentario')]: r.comentarios || '',
+                [t('peajes.columnas.fecha')]: r.fecha ? new Date(r.fecha).toLocaleDateString() : '',
+                [t('peajes.detalle.fechaLimitePago')]: r.fecha_limite_pago ? new Date(r.fecha_limite_pago).toLocaleDateString() : '',
+                [t('peajes.detalle.numeroMancato')]: r.numero_mancato || r.id_multa || '',
+                [t('peajes.columnas.monto')]: r.monto || 0,
+            })));
+            const wb = xlsx.utils.book_new();
+            xlsx.utils.book_append_sheet(wb, ws, 'Peajes');
+            xlsx.writeFile(wb, 'Reporte_Peajes.xlsx');
+            toast.success(t('peajes.excelGenerado'));
+        } catch (err) {
+            console.error(err);
+            toast.error(t('peajes.errorExportar'));
+        }
+    };
 
     const confirmDelete = async () => {
         if (!deleting) return;
@@ -103,18 +191,28 @@ export default function PeajesPage() {
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">{t('peajes.titulo')}</h1>
-                <button
-                    onClick={openCreate}
-                    className="flex items-center justify-center gap-2 w-full md:w-auto px-4 py-2.5 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition"
-                >
-                    <Plus size={16} /> {t('peajes.registrar')}
-                </button>
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                    <button
+                        onClick={exportToExcel}
+                        title={t('peajes.exportar')}
+                        className="w-11 h-11 shrink-0 rounded-xl border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 transition"
+                    >
+                        <FileSpreadsheet size={17} />
+                    </button>
+                    <button
+                        onClick={openCreate}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition"
+                    >
+                        <Plus size={16} /> {t('peajes.registrar')}
+                    </button>
+                </div>
             </div>
 
             <PeajeModal isOpen={isModalOpen} onClose={closeModal} onSuccess={fetchItems} record={editing} />
+            <PeajeDetailModal item={viewing} onClose={() => setViewing(null)} />
 
             {/* Search */}
-            <div className="relative mb-4">
+            <div className="relative mb-2">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
                 <input
                     value={query}
@@ -122,6 +220,56 @@ export default function PeajesPage() {
                     placeholder={t('peajes.buscarPlaceholder')}
                     className="w-full pl-10 pr-4 py-3 rounded-xl bg-white border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900 placeholder:text-slate-400 transition"
                 />
+            </div>
+
+            {/* Filtros avanzados: fecha exacta, trabajador, spedizione */}
+            <div className="mb-4">
+                <button
+                    onClick={() => setShowFiltros(v => !v)}
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-sm font-medium transition ${showFiltros || filtrosActivosCount > 0 ? 'border-blue-300 text-slate-900 bg-blue-50/40' : 'border-slate-200 text-slate-500 hover:text-slate-900 bg-white'}`}
+                >
+                    <SlidersHorizontal size={14} /> {t('peajes.filtros.titulo')}
+                    {filtrosActivosCount > 0 && (
+                        <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-md bg-[#FFC933] text-[#1a1a1c] text-[10px] font-bold">
+                            {filtrosActivosCount}
+                        </span>
+                    )}
+                </button>
+                {showFiltros && (
+                    <div className="mt-2 p-4 rounded-xl border border-slate-200 bg-white grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div>
+                            <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('peajes.filtros.fechaInicio')}</label>
+                            <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)}
+                                className="w-full px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900" />
+                        </div>
+                        <div>
+                            <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('peajes.filtros.fechaFin')}</label>
+                            <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)}
+                                className="w-full px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900" />
+                        </div>
+                        <div>
+                            <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('peajes.filtros.trabajador')}</label>
+                            <select value={trabajadorFiltro} onChange={(e) => setTrabajadorFiltro(e.target.value)}
+                                className="w-full px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900">
+                                <option value="">{t('peajes.filtros.todos')}</option>
+                                {trabajadores.map(tr => <option key={tr.id} value={tr.id}>{tr.nombre_completo}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('peajes.filtros.spedizione')}</label>
+                            <select value={spedizioneFiltro} onChange={(e) => setSpedizioneFiltro(e.target.value)}
+                                className="w-full px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900">
+                                <option value="">{t('peajes.filtros.todos')}</option>
+                                {SPEDIZIONE_OPTIONS.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
+                            </select>
+                        </div>
+                        {filtrosActivosCount > 0 && (
+                            <button onClick={limpiarFiltrosAvanzados} className="text-xs font-medium text-blue-600 hover:underline text-left sm:col-span-2 lg:col-span-4">
+                                {t('peajes.filtros.limpiar')}
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Tabs */}
@@ -148,21 +296,23 @@ export default function PeajesPage() {
                             <tr className="border-b border-slate-100 text-slate-400">
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('peajes.columnas.vehiculo')}</th>
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('peajes.columnas.estado')}</th>
+                                <th className="px-5 py-3.5 font-medium whitespace-nowrap">Spedizione</th>
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('peajes.columnas.comentario')}</th>
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('peajes.columnas.fecha')}</th>
-                                <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('peajes.columnas.hora')}</th>
-                                <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('peajes.columnas.tipo')}</th>
+                                <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('peajes.detalle.fechaLimitePago')}</th>
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap text-right">{t('peajes.columnas.monto')}</th>
-                                <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('peajes.columnas.archivo')}</th>
                                 <th className="px-5 py-3.5 font-medium text-right whitespace-nowrap">{t('peajes.columnas.acciones')}</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={9} className="text-center py-16 text-slate-400">{t('peajes.cargando')}</td></tr>
+                                <tr><td colSpan={8} className="text-center py-16 text-slate-400">{t('peajes.cargando')}</td></tr>
                             ) : items.length === 0 ? (
-                                <tr><td colSpan={9} className="text-center py-16 text-slate-400">{t('peajes.vacio')}</td></tr>
-                            ) : pageRows.map((item) => (
+                                <tr><td colSpan={8} className="text-center py-16 text-slate-400">{t('peajes.vacio')}</td></tr>
+                            ) : pageRows.map((item) => {
+                                const limite = item.fecha_limite_pago ? new Date(item.fecha_limite_pago) : null;
+                                const vencido = !!limite && limite.getTime() < Date.now() && bucketOfEstado(item.estado) === 'PENDIENTE';
+                                return (
                                 <tr key={item.id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
                                     <td className="px-5 py-3.5">
                                         <div className="flex items-center gap-3">
@@ -173,52 +323,66 @@ export default function PeajesPage() {
                                         </div>
                                     </td>
                                     <td className="px-5 py-3.5">
-                                        {item._origen === 'operacion' ? (
-                                            <span className="px-2.5 py-0.5 rounded-md text-xs font-medium border whitespace-nowrap text-blue-600 border-blue-200 bg-blue-50">Operación</span>
+                                        {isAdmin ? (
+                                            <select
+                                                value={item.estado || ''}
+                                                disabled={busyEstado.has(item.id)}
+                                                onChange={(e) => patchEstado(item, e.target.value)}
+                                                className={`px-2 py-1 rounded-md text-xs font-medium border whitespace-nowrap outline-none disabled:opacity-50 ${ESTADO_BADGE[item.estado] || 'text-slate-500 border-slate-200 bg-white'}`}
+                                            >
+                                                <option value="">{t('peajes.estados.pendiente')}</option>
+                                                <option value="PAGADO">{t('peajes.estados.pagado')}</option>
+                                                <option value="ANULADO">{t('peajes.estados.anulado')}</option>
+                                            </select>
                                         ) : item.estado ? (
                                             <span className={`px-2.5 py-0.5 rounded-md text-xs font-medium border whitespace-nowrap ${ESTADO_BADGE[item.estado] || ESTADO_BADGE.PENDIENTE}`}>
                                                 {item.estado}
                                             </span>
                                         ) : <span className="text-slate-300">—</span>}
                                     </td>
+                                    <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">{item.spedizione || '—'}</td>
                                     <td className="px-5 py-3.5 text-slate-600 max-w-[220px] truncate">{item.comentarios || '—'}</td>
                                     <td className="px-5 py-3.5 text-slate-600 whitespace-nowrap">
                                         {item.fecha ? new Date(item.fecha).toLocaleDateString(dateLocale, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                                     </td>
-                                    <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">{item.hora || '—'}</td>
-                                    <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">{item.tipo || '—'}</td>
+                                    <td className={`px-5 py-3.5 whitespace-nowrap ${vencido ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>
+                                        {limite ? limite.toLocaleDateString(dateLocale, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                                    </td>
                                     <td className="px-5 py-3.5 text-right font-bold text-slate-900 tabular-nums whitespace-nowrap">{format(item.monto || 0)}</td>
                                     <td className="px-5 py-3.5">
-                                        {item.archivo ? (
-                                            <a href={item.archivo} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 whitespace-nowrap">
-                                                <Paperclip size={13} /> {t('peajes.verArchivo')}
-                                            </a>
-                                        ) : <span className="text-slate-300">—</span>}
-                                    </td>
-                                    <td className="px-5 py-3.5">
-                                        {item._origen === 'operacion' ? (
-                                            <span className="block text-right text-xs text-slate-400 italic whitespace-nowrap">Desde operación</span>
-                                        ) : (
-                                            <div className="flex items-center justify-end gap-1.5">
-                                                <button
-                                                    onClick={() => openEdit(item)}
-                                                    title={t('peajes.editar')}
-                                                    className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 hover:text-slate-900 transition"
-                                                >
-                                                    <Pencil size={15} />
-                                                </button>
-                                                <button
-                                                    onClick={() => setDeleting(item)}
-                                                    title={t('peajes.eliminar')}
-                                                    className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-red-50 hover:border-red-200 flex items-center justify-center text-slate-500 hover:text-red-600 transition"
-                                                >
-                                                    <Trash2 size={15} />
-                                                </button>
-                                            </div>
-                                        )}
+                                        <div className="flex items-center justify-end gap-1.5">
+                                            <button
+                                                onClick={() => setViewing(item)}
+                                                title={t('peajes.verDetalle')}
+                                                className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 hover:text-slate-900 transition"
+                                            >
+                                                <Eye size={15} />
+                                            </button>
+                                            {item._origen === 'operacion' ? (
+                                                <span className="text-xs text-slate-400 italic whitespace-nowrap px-1">{t('peajes.desdeOperacion')}</span>
+                                            ) : (
+                                                <>
+                                                    <button
+                                                        onClick={() => openEdit(item)}
+                                                        title={t('peajes.editar')}
+                                                        className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 hover:text-slate-900 transition"
+                                                    >
+                                                        <Pencil size={15} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setDeleting(item)}
+                                                        title={t('peajes.eliminar')}
+                                                        className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-red-50 hover:border-red-200 flex items-center justify-center text-slate-500 hover:text-red-600 transition"
+                                                    >
+                                                        <Trash2 size={15} />
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>

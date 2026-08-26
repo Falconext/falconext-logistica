@@ -26,6 +26,7 @@ const emptyForm = () => ({
     tipo: '',
     mes: '',
     fecha_recepcion: '',
+    fecha_limite_pago: '',
     peaje_salida: '',
     recibo_pago: '',
     comentarios: '',
@@ -65,6 +66,7 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
                 tipo: record.tipo || '',
                 mes: record.mes || '',
                 fecha_recepcion: record.fecha_recepcion ? new Date(record.fecha_recepcion).toISOString().split('T')[0] : '',
+                fecha_limite_pago: record.fecha_limite_pago ? new Date(record.fecha_limite_pago).toISOString().split('T')[0] : '',
                 peaje_salida: record.peaje_salida || '',
                 recibo_pago: record.recibo_pago || '',
                 comentarios: record.comentarios || '',
@@ -91,7 +93,10 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
         setError('');
         try {
             if (isEdit) {
-                await api.patch(`/peajes/${record.id}`, formData);
+                // No-admin: omitimos `estado` del payload — el backend rechaza (403)
+                // cualquier PATCH que incluya ese campo si no es administrador.
+                const payload = isAdmin ? formData : (({ estado, ...rest }) => rest)(formData);
+                await api.patch(`/peajes/${record.id}`, payload);
             } else {
                 await api.post('/peajes', formData);
             }
@@ -125,12 +130,14 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-slate-700">Estado</label>
                             <Select value={formData.estado}
+                                disabled={!isAdmin}
                                 onChange={(v) => setFormData({ ...formData, estado: v })}
                                 options={[
                                     { value: 'PENDIENTE', label: 'PENDIENTE' },
                                     { value: 'PAGADO', label: 'PAGADO' },
                                     { value: 'ANULADO', label: 'ANULADO' },
                                 ]} />
+                            {!isAdmin && <p className="text-xs text-slate-400">Solo un administrador puede cambiar el estado.</p>}
                         </div>
 
                         <div className="space-y-2">
@@ -195,6 +202,12 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
                             <DatePicker label="Fecha recepción"
                                 value={formData.fecha_recepcion}
                                 onChange={(v) => setFormData({ ...formData, fecha_recepcion: v })} />
+                        </div>
+
+                        <div className="space-y-2">
+                            <DatePicker label="Fecha límite de pago"
+                                value={formData.fecha_limite_pago}
+                                onChange={(v) => setFormData({ ...formData, fecha_limite_pago: v })} />
                         </div>
 
                         <div className="space-y-2">

@@ -260,6 +260,11 @@ model GastoOperacion {
   numero_mancato  String?  // Nº de mancato pagamento (solo PEAJE)
   link_peaje      String?  // Link/URL del peaje (solo PEAJE)
   comprobantes    String[] // URLs (S3) del/los comprobante(s)
+  // Estado de pago del peaje MANCATO (solo PEAJE, pagado_por_chofer=false): NO_PAGADO |
+  // PAGADO | PAGO_BONIFICO. Null = pendiente. Solo lo edita un administrador (EsAdminGuard).
+  estado          String?
+  // Plazo para que la empresa pague el peaje (~14 días desde fecha). Editable.
+  fecha_limite_pago DateTime?
   // ¿Lo pagó el CHOFER de su bolsillo? true → se descuenta de su anticipo (saldo).
   // false → lo paga la EMPRESA (peaje mancato / combustible con código): NO descuenta
   // al chofer, pero SÍ cuenta en el costo total de la ruta.
@@ -511,7 +516,10 @@ model Peaje {
   fecha_recepcion DateTime?        // 'FECHA RECEPCIÓN'
   peaje_salida   String?           // 'PEAJE/SALIDA'
   nota_autista   String?           // 'NOTA AUTISTA'
-  
+  // Plazo para que la empresa pague el peaje no cubierto por el chofer (~14 días
+  // desde fecha_recepcion). Editable — no siempre cae exacto por lote de pago.
+  fecha_limite_pago DateTime?
+
   tenant_id      String
   tenant         Tenant   @relation(fields: [tenant_id], references: [id])
   
