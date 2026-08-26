@@ -561,6 +561,21 @@ export class RecorridosService {
         const progMap = new Map(progs.map((p) => [p.id, p]));
         const now = Date.now();
 
+        // Paradas intermedias (orígenes/destinos adicionales), para dibujar la
+        // ruta real en el mapa en vez de una línea recta origen→destino.
+        const recorridoIds = recorridos.map((r) => r.id);
+        const paradas = await this.prisma.recorridoParada.findMany({
+            where: { recorrido_id: { in: recorridoIds } },
+            orderBy: { orden: 'asc' },
+            select: { recorrido_id: true, orden: true, label: true, es_retorno: true, entregado: true },
+        });
+        const paradasMap = new Map<string, typeof paradas>();
+        for (const p of paradas) {
+            const list = paradasMap.get(p.recorrido_id) || [];
+            list.push(p);
+            paradasMap.set(p.recorrido_id, list);
+        }
+
         return Promise.all(
             recorridos.map(async (r) => {
                 const pos = await this.latestPosition(r.device_id);
@@ -620,6 +635,9 @@ export class RecorridosService {
                     // supervisor sabe que no se está compartiendo ubicación (ETA no fiable).
                     sinGps: !pos || (now - new Date(pos.timestamp).getTime() > 5 * 60000),
                     ida_km: r.ida_km, ida_min: r.ida_min,
+                    paradas: (paradasMap.get(r.id) || []).map((p) => ({
+                        orden: p.orden, label: p.label, es_retorno: p.es_retorno, entregado: p.entregado,
+                    })),
                 };
             }),
         );

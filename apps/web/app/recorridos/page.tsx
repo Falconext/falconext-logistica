@@ -33,6 +33,7 @@ interface RecorridoActivo {
     sinGps: boolean;
     ida_km: number | null;
     ida_min: number | null;
+    paradas: Array<{ orden: number; label: string; es_retorno: boolean; entregado: boolean }>;
 }
 
 interface RecorridoHistorial {
@@ -459,18 +460,46 @@ function RecorridoMapModal({ rec, onClose }: { rec: RecorridoActivo; onClose: ()
         const hasD = rec.destino_lat != null && rec.destino_lng != null;
         if (hasO) marker(rec.origen_lat!, rec.origen_lng!, '#16A34A', `Origen: ${rec.origen ?? ''}`);
         if (hasD) marker(rec.destino_lat!, rec.destino_lng!, '#1a1a1c', `Destino: ${rec.destino ?? ''}`);
-        if (hasO && hasD) {
-            new google.maps.Polyline({
-                path: [{ lat: rec.origen_lat!, lng: rec.origen_lng! }, { lat: rec.destino_lat!, lng: rec.destino_lng! }],
-                map, geodesic: true, strokeColor: '#6366F1', strokeOpacity: 0.7, strokeWeight: 3,
-            });
-        }
         if (rec.posicion) marker(rec.posicion.lat, rec.posicion.lng, '#2563EB', 'Posición actual', 9);
+
+        // Ruta real (origen → paradas intermedias → destino) por Directions API.
+        // Cae a línea recta origen→destino solo si la API falla.
+        let cancelled = false;
+        (async () => {
+            if (!hasO || !hasD) return;
+            const wps = (rec.paradas || [])
+                .filter((p) => !p.es_retorno && p.label)
+                .sort((a, b) => a.orden - b.orden)
+                .map((p) => p.label);
+
+            let path: google.maps.LatLng[] | google.maps.LatLngLiteral[] = [
+                { lat: rec.origen_lat!, lng: rec.origen_lng! },
+                { lat: rec.destino_lat!, lng: rec.destino_lng! },
+            ];
+            try {
+                const svc = new google.maps.DirectionsService();
+                const result = await svc.route({
+                    origin: { lat: rec.origen_lat!, lng: rec.origen_lng! },
+                    destination: { lat: rec.destino_lat!, lng: rec.destino_lng! },
+                    waypoints: wps.map((label) => ({ location: label, stopover: true })),
+                    travelMode: google.maps.TravelMode.DRIVING,
+                });
+                const route = result.routes?.[0];
+                if (route) path = route.overview_path;
+            } catch { /* usa línea recta origen→destino */ }
+            if (cancelled) return;
+
+            new google.maps.Polyline({
+                path, map, geodesic: true, strokeColor: '#6366F1', strokeOpacity: 0.7, strokeWeight: 3,
+            });
+        })();
 
         if (!bounds.isEmpty()) {
             map.fitBounds(bounds, 60);
             if (hasO && !hasD && !rec.posicion) map.setZoom(13);
         }
+
+        return () => { cancelled = true; };
     }, [isLoaded, rec]);
 
     return (
