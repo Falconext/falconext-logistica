@@ -17,6 +17,10 @@ export class CombustibleController {
         return this.combustibleService.findAll(req.user.tenantId, {
             q: query.q,
             area: query.area,
+            from: query.from,
+            to: query.to,
+            trabajadorId: query.trabajadorId || undefined,
+            spedizione: query.spedizione || undefined,
             skip: query.skip ? parseInt(query.skip, 10) || 0 : 0,
             take: query.take ? Math.min(parseInt(query.take, 10) || 10, 100) : 10,
             ownerIds: req.user.soloPropios ? [req.user.trabajadorId, req.user.trabajadorCodigo].filter(Boolean) : undefined,
@@ -24,8 +28,8 @@ export class CombustibleController {
     }
 
     @Patch(':id')
-    update(@Param('id') id: string, @Body() data: any) {
-        return this.combustibleService.update(id, data);
+    update(@Param('id') id: string, @Body() data: any, @Req() req) {
+        return this.combustibleService.update(id, data, req.user.tenantId);
     }
 
     @Delete(':id')

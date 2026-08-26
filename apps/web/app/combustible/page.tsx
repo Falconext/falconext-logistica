@@ -2,11 +2,63 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import api from '../../lib/api';
-import { Fuel, Plus, Search, ArrowLeft, ArrowRight, Pencil, Trash2, Paperclip, Loader2 } from 'lucide-react';
+import { Fuel, Plus, Search, ArrowLeft, ArrowRight, Pencil, Trash2, Paperclip, Loader2, SlidersHorizontal, FileSpreadsheet, Check, X } from 'lucide-react';
 import CombustibleModal from './CombustibleModal';
 import Select from '../../components/Select';
 import { useCurrency } from '../../lib/useCurrency';
 import { useT, useDateLocale } from '../../lib/i18n';
+import { SPEDIZIONE_OPTIONS } from '../operaciones/constants';
+import { toast } from 'sonner';
+
+// Placa de un gasto "Desde operación": si falta, se puede corregir inline
+// (es el motivo #1 por el que el reporte muestra "N/A" en vehículo).
+function TargaCell({ item, onSaved }: { item: any; onSaved: () => void }) {
+    const [editing, setEditing] = useState(false);
+    const [value, setValue] = useState(item.targa || '');
+    const [saving, setSaving] = useState(false);
+
+    if (item._origen !== 'operacion') {
+        return <span className="font-semibold text-slate-900 whitespace-nowrap">{item.targa || 'N/A'}</span>;
+    }
+    if (!editing) {
+        return (
+            <button onClick={() => { setValue(item.targa || ''); setEditing(true); }} className="flex items-center gap-1.5 group">
+                <span className="font-semibold text-slate-900 whitespace-nowrap">{item.targa || 'N/A'}</span>
+                <Pencil size={11} className="text-slate-300 group-hover:text-slate-500 transition" />
+            </button>
+        );
+    }
+    const save = async () => {
+        setSaving(true);
+        try {
+            await api.patch(`/combustible/${item.id}`, { targa: value.trim() });
+            setEditing(false);
+            onSaved();
+        } catch (err) {
+            console.error(err);
+            toast.error('No se pudo actualizar la placa');
+        } finally {
+            setSaving(false);
+        }
+    };
+    return (
+        <div className="flex items-center gap-1">
+            <input
+                autoFocus
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+                className="w-24 px-1.5 py-1 rounded-md border border-slate-300 outline-none text-sm"
+            />
+            <button onClick={save} disabled={saving} className="w-6 h-6 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+            </button>
+            <button onClick={() => setEditing(false)} className="w-6 h-6 rounded-md bg-slate-50 text-slate-500 flex items-center justify-center shrink-0">
+                <X size={12} />
+            </button>
+        </div>
+    );
+}
 
 export default function CombustiblePage() {
     const t = useT();
@@ -27,6 +79,20 @@ export default function CombustiblePage() {
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
 
+    // Filtros avanzados: fecha exacta, trabajador, spedizione.
+    const [showFiltros, setShowFiltros] = useState(false);
+    const [fechaInicio, setFechaInicio] = useState('');
+    const [fechaFin, setFechaFin] = useState('');
+    const [trabajadorFiltro, setTrabajadorFiltro] = useState('');
+    const [spedizioneFiltro, setSpedizioneFiltro] = useState('');
+    const [trabajadores, setTrabajadores] = useState<{ id: string; nombre_completo: string }[]>([]);
+    const filtrosActivosCount = [fechaInicio, fechaFin, trabajadorFiltro, spedizioneFiltro].filter(Boolean).length;
+    const limpiarFiltrosAvanzados = () => { setFechaInicio(''); setFechaFin(''); setTrabajadorFiltro(''); setSpedizioneFiltro(''); };
+
+    useEffect(() => {
+        api.get('/trabajadores').then(res => setTrabajadores(res.data ?? [])).catch(() => { });
+    }, []);
+
     const openCreate = () => { setEditing(null); setIsModalOpen(true); };
     const openEdit = (item: any) => { setEditing(item); setIsModalOpen(true); };
     const closeModal = () => { setIsModalOpen(false); setEditing(null); };
@@ -37,16 +103,20 @@ export default function CombustiblePage() {
         return () => clearTimeout(t);
     }, [query]);
 
+    const filterParams = () => ({
+        q: debouncedQuery || undefined,
+        area: area !== 'Todos' ? area : undefined,
+        from: fechaInicio ? new Date(`${fechaInicio}T00:00:00`).toISOString() : undefined,
+        to: fechaFin ? new Date(`${fechaFin}T23:59:59`).toISOString() : undefined,
+        trabajadorId: trabajadorFiltro || undefined,
+        spedizione: spedizioneFiltro || undefined,
+    });
+
     // Only the current page is fetched; the total sum + area list are aggregated server-side.
     const fetchItems = useCallback(() => {
         setLoading(true);
         api.get('/combustible', {
-            params: {
-                q: debouncedQuery || undefined,
-                area: area !== 'Todos' ? area : undefined,
-                skip: (page - 1) * pageSize,
-                take: pageSize,
-            },
+            params: { ...filterParams(), skip: (page - 1) * pageSize, take: pageSize },
         })
             .then(res => {
                 setItems(res.data.items ?? []);
@@ -56,12 +126,37 @@ export default function CombustiblePage() {
             })
             .catch(err => console.error(err))
             .finally(() => setLoading(false));
-    }, [debouncedQuery, area, page, pageSize]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [debouncedQuery, area, page, pageSize, fechaInicio, fechaFin, trabajadorFiltro, spedizioneFiltro]);
 
     useEffect(() => { fetchItems(); }, [fetchItems]);
 
     // Back to page 1 whenever a filter changes.
-    useEffect(() => { setPage(1); }, [debouncedQuery, area, pageSize]);
+    useEffect(() => { setPage(1); }, [debouncedQuery, area, pageSize, fechaInicio, fechaFin, trabajadorFiltro, spedizioneFiltro]);
+
+    const exportToExcel = async () => {
+        try {
+            const res = await api.get('/combustible', { params: { ...filterParams(), skip: 0, take: 1000 } });
+            const data: any[] = res.data.items ?? [];
+            if (data.length === 0) return toast.error(t('combustible.sinDatosExportar'));
+            const xlsx = await import('xlsx');
+            const ws = xlsx.utils.json_to_sheet(data.map(r => ({
+                [t('combustible.colVehiculo')]: r.targa || 'N/A',
+                [t('combustible.colArea')]: r.area || '—',
+                Spedizione: r.spedizione || '—',
+                [t('combustible.colFecha')]: r.fecha ? new Date(r.fecha).toLocaleDateString() : '',
+                [t('combustible.colMetodo')]: r.metodo || '',
+                [t('combustible.colMonto')]: r.monto || 0,
+            })));
+            const wb = xlsx.utils.book_new();
+            xlsx.utils.book_append_sheet(wb, ws, 'Combustible');
+            xlsx.writeFile(wb, 'Reporte_Combustible.xlsx');
+            toast.success(t('combustible.excelGenerado'));
+        } catch (err) {
+            console.error(err);
+            toast.error(t('combustible.errorExportar'));
+        }
+    };
 
     const confirmDelete = async () => {
         if (!deleting) return;
@@ -92,18 +187,27 @@ export default function CombustiblePage() {
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">{t('combustible.title')}</h1>
                     <p className="text-sm text-slate-400 mt-0.5">{t('combustible.totalFiltrado')} <span className="font-semibold text-slate-700 tabular-nums">{format(sum)}</span></p>
                 </div>
-                <button
-                    onClick={openCreate}
-                    className="flex items-center justify-center gap-2 w-full md:w-auto px-4 py-2.5 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition"
-                >
-                    <Plus size={16} /> {t('combustible.registrar')}
-                </button>
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                    <button
+                        onClick={exportToExcel}
+                        title={t('combustible.exportar')}
+                        className="w-11 h-11 shrink-0 rounded-xl border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 transition"
+                    >
+                        <FileSpreadsheet size={17} />
+                    </button>
+                    <button
+                        onClick={openCreate}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition"
+                    >
+                        <Plus size={16} /> {t('combustible.registrar')}
+                    </button>
+                </div>
             </div>
 
             <CombustibleModal isOpen={isModalOpen} onClose={closeModal} onSuccess={fetchItems} record={editing} />
 
             {/* Search */}
-            <div className="relative mb-4">
+            <div className="relative mb-2">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
                 <input
                     value={query}
@@ -111,6 +215,56 @@ export default function CombustiblePage() {
                     placeholder={t('combustible.searchPlaceholder')}
                     className="w-full pl-10 pr-4 py-3 rounded-xl bg-white border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900 placeholder:text-slate-400 transition"
                 />
+            </div>
+
+            {/* Filtros avanzados: fecha exacta, trabajador, spedizione */}
+            <div className="mb-4">
+                <button
+                    onClick={() => setShowFiltros(v => !v)}
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-sm font-medium transition ${showFiltros || filtrosActivosCount > 0 ? 'border-blue-300 text-slate-900 bg-blue-50/40' : 'border-slate-200 text-slate-500 hover:text-slate-900 bg-white'}`}
+                >
+                    <SlidersHorizontal size={14} /> {t('combustible.filtros.titulo')}
+                    {filtrosActivosCount > 0 && (
+                        <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-md bg-[#FFC933] text-[#1a1a1c] text-[10px] font-bold">
+                            {filtrosActivosCount}
+                        </span>
+                    )}
+                </button>
+                {showFiltros && (
+                    <div className="mt-2 p-4 rounded-xl border border-slate-200 bg-white grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div>
+                            <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('combustible.filtros.fechaInicio')}</label>
+                            <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)}
+                                className="w-full px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900" />
+                        </div>
+                        <div>
+                            <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('combustible.filtros.fechaFin')}</label>
+                            <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)}
+                                className="w-full px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900" />
+                        </div>
+                        <div>
+                            <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('combustible.filtros.trabajador')}</label>
+                            <select value={trabajadorFiltro} onChange={(e) => setTrabajadorFiltro(e.target.value)}
+                                className="w-full px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900">
+                                <option value="">{t('combustible.filtros.todos')}</option>
+                                {trabajadores.map(tr => <option key={tr.id} value={tr.id}>{tr.nombre_completo}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('combustible.filtros.spedizione')}</label>
+                            <select value={spedizioneFiltro} onChange={(e) => setSpedizioneFiltro(e.target.value)}
+                                className="w-full px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900">
+                                <option value="">{t('combustible.filtros.todos')}</option>
+                                {SPEDIZIONE_OPTIONS.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
+                            </select>
+                        </div>
+                        {filtrosActivosCount > 0 && (
+                            <button onClick={limpiarFiltrosAvanzados} className="text-xs font-medium text-blue-600 hover:underline text-left sm:col-span-2 lg:col-span-4">
+                                {t('combustible.filtros.limpiar')}
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Tabs */}
@@ -136,6 +290,7 @@ export default function CombustiblePage() {
                             <tr className="border-b border-slate-100 text-slate-400">
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('combustible.colVehiculo')}</th>
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('combustible.colArea')}</th>
+                                <th className="px-5 py-3.5 font-medium whitespace-nowrap">Spedizione</th>
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('combustible.colFecha')}</th>
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('combustible.colMetodo')}</th>
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('combustible.colMes')}</th>
@@ -146,9 +301,9 @@ export default function CombustiblePage() {
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={8} className="text-center py-16 text-slate-400">{t('combustible.loading')}</td></tr>
+                                <tr><td colSpan={9} className="text-center py-16 text-slate-400">{t('combustible.loading')}</td></tr>
                             ) : items.length === 0 ? (
-                                <tr><td colSpan={8} className="text-center py-16 text-slate-400">{t('combustible.emptyState')}</td></tr>
+                                <tr><td colSpan={9} className="text-center py-16 text-slate-400">{t('combustible.emptyState')}</td></tr>
                             ) : pageRows.map((item) => (
                                 <tr key={item.id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
                                     <td className="px-5 py-3.5">
@@ -156,7 +311,7 @@ export default function CombustiblePage() {
                                             <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
                                                 <Fuel size={16} />
                                             </div>
-                                            <span className="font-semibold text-slate-900 whitespace-nowrap">{item.targa || 'N/A'}</span>
+                                            <TargaCell item={item} onSaved={fetchItems} />
                                         </div>
                                     </td>
                                     <td className="px-5 py-3.5">
@@ -168,6 +323,7 @@ export default function CombustiblePage() {
                                             </span>
                                         ) : <span className="text-slate-300">—</span>}
                                     </td>
+                                    <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">{item.spedizione || '—'}</td>
                                     <td className="px-5 py-3.5 text-slate-600 whitespace-nowrap">
                                         {item.fecha ? new Date(item.fecha).toLocaleDateString(dateLocale, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                                     </td>

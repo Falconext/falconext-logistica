@@ -25,14 +25,22 @@ export class CombustibleService {
 
     async findAll(
         tenantId: string,
-        opts: { q?: string; area?: string; skip?: number; take?: number; ownerIds?: string[] } = {},
+        opts: { q?: string; area?: string; skip?: number; take?: number; ownerIds?: string[]; from?: string; to?: string; trabajadorId?: string; spedizione?: string } = {},
     ) {
-        const { q, area, skip = 0, take = 10, ownerIds } = opts;
+        const { q, area, skip = 0, take = 10, ownerIds, from, to, trabajadorId, spedizione } = opts;
 
         const where: Prisma.CombustibleWhereInput = { tenant_id: tenantId };
         // Owner scoping: a "solo_propios" user only sees their own records.
         // Aceptamos UUID (nuevo) y código legacy para tolerar data no migrada.
         if (ownerIds?.length) where.trabajador_id = { in: ownerIds };
+        if (trabajadorId) where.trabajador_id = trabajadorId;
+        if (from || to) {
+            where.fecha = {};
+            if (from) (where.fecha as Prisma.DateTimeFilter).gte = new Date(from);
+            if (to) (where.fecha as Prisma.DateTimeFilter).lte = new Date(to);
+        }
+        // El Combustible nativo (import legacy) no tiene vínculo a Programacion/spedizione.
+        if (spedizione) where.id = '__none__';
         if (q) {
             where.OR = [
                 { targa: { contains: q } },
@@ -46,6 +54,13 @@ export class CombustibleService {
         // en esta lista. No tienen 'area' → se incluyen sólo cuando no hay filtro de área.
         const gastoWhere: Prisma.GastoOperacionWhereInput = { tenant_id: tenantId, tipo: 'COMBUSTIBLE' };
         if (ownerIds?.length) gastoWhere.trabajador_id = { in: ownerIds };
+        if (trabajadorId) gastoWhere.trabajador_id = trabajadorId;
+        if (from || to) {
+            gastoWhere.fecha = {};
+            if (from) (gastoWhere.fecha as Prisma.DateTimeFilter).gte = new Date(from);
+            if (to) (gastoWhere.fecha as Prisma.DateTimeFilter).lte = new Date(to);
+        }
+        if (spedizione) gastoWhere.programacion = { spedizione };
         if (q) gastoWhere.OR = [
             { targa: { contains: q } },
             { descripcion: { contains: q } },
@@ -61,7 +76,7 @@ export class CombustibleService {
                 ? this.prisma.gastoOperacion.findMany({
                     where: gastoWhere,
                     orderBy: { fecha: 'desc' },
-                    include: { programacion: { select: { id: true, cliente: true, id_programacion: true } } },
+                    include: { programacion: { select: { id: true, cliente: true, id_programacion: true, spedizione: true } } },
                 })
                 : this.prisma.gastoOperacion.findMany({ where: { id: '__none__' } }),
             this.prisma.gastoOperacion.aggregate({ where: includeGastos ? gastoWhere : { id: '__none__' }, _sum: { monto: true } }),
@@ -73,6 +88,8 @@ export class CombustibleService {
             programacion_id: g.programacion_id,
             id_registro: null,
             trabajador_id: g.trabajador_id,
+            cliente: g.programacion?.cliente || null,
+            spedizione: g.programacion?.spedizione || null,
             fecha: g.fecha,
             monto: g.monto,
             targa: g.targa,
@@ -103,9 +120,21 @@ export class CombustibleService {
         return { items, total, sum, areas };
     }
 
-    update(id: string, data: any) {
-        return this.prisma.combustible.update({
-            where: { id },
+    update(id: string, data: any, tenantId?: string) {
+        // Los combustibles registrados desde una operación viven en GastoOperacion
+        // (id prefijado "gasto:<id>"). Solo se les permite corregir la placa —
+        // el motivo #1 por el que el reporte muestra "N/A" en vehículo.
+        if (id.startsWith('gasto:')) {
+            const gastoId = id.slice('gasto:'.length);
+            return this.prisma.gastoOperacion.updateMany({
+                where: tenantId ? { id: gastoId, tenant_id: tenantId, tipo: 'COMBUSTIBLE' } : { id: gastoId, tipo: 'COMBUSTIBLE' },
+                data: { targa: data.targa },
+            });
+        }
+        // updateMany + tenant_id: aísla por tenant (antes faltaba, cualquier usuario
+        // autenticado podía editar un registro de otro tenant conociendo su id).
+        return this.prisma.combustible.updateMany({
+            where: tenantId ? { id, tenant_id: tenantId } : { id },
             data: {
                 id_registro: data.id_registro,
                 trabajador_id: data.trabajador_id,
