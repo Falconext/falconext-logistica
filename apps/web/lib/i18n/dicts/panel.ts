@@ -1,18 +1,16 @@
-// Namespace de traducción: panel (Torre de Control — personal, flota, entregas, mini-mapa).
+// Namespace de traducción: panel (Torre de Control — flota en vivo, estado de consegnas, resumen del día).
 // app/panel/page.tsx
 
 export const es = {
     header: {
         titulo: 'Panel de Control',
         enVivo: 'EN VIVO',
-        subtitulo: 'Torre operativa · disponibilidad y entregas',
+        subtitulo: 'Torre operativa · flota en vivo y entregas',
         actualizado: '· actualizado {hora}',
         actualizar: 'Actualizar',
         cargando: 'Cargando panel...',
     },
     kpi: {
-        personalDisponible: 'Personal disponible',
-        flotaDisponible: 'Flota disponible',
         entregasActivas: 'Entregas activas',
         enConsegna: 'En consegna',
         inSospeso: 'In sospeso',
@@ -32,41 +30,24 @@ export const es = {
         sinConductor: 'Sin conductor',
         sinDestino: 'Sin destino',
     },
-    vencimientos: {
-        titulo: 'Vencimientos',
-        critico: '{n} crít.',
-        proximo: '{n} próx.',
-        verTodas: 'Ver todas →',
-        sinVencimientos: 'Sin vencimientos en los próximos 30 días.',
-        vencidoDias: 'Vencido {dias}d',
-        venceHoy: 'Vence hoy',
-        enDias: 'en {dias}d',
-    },
-    geocercas: {
-        titulo: 'Actividad de geocercas',
-        verGeocercas: 'Ver geocercas →',
-        sinEventos: 'Sin eventos de entrada/salida recientes.',
-        entroA: 'entró a',
-        salioDe: 'salió de',
-    },
-    personal: {
-        titulo: 'Personal por zona',
-        buscarPlaceholder: 'Buscar persona o zona',
-        sinResultados: 'Sin resultados.',
-        dispAbbrev: 'disp.',
-        cargoDefault: 'Conductor',
-        enRuta: '· en ruta',
-    },
-    flota: {
-        titulo: 'Flota',
-        vehiculoDefault: 'Vehículo',
-    },
-    disponibilidad: {
-        enOperacionActiva: 'En operación activa',
-        marcarNoDisponible: 'Marcar como no disponible',
-        marcarDisponible: 'Marcar como disponible',
-        disponible: 'Disponibile',
-        noDisponible: 'Non disponibile',
+    resumenDia: {
+        titulo: 'Resumen del día',
+        sinOperaciones: 'Sin operaciones registradas hoy.',
+        estados: {
+            CONSEGNATO: 'Consegnato',
+            IN_CONSEGNA: 'In Consegna',
+            IN_SOSPESO: 'In Sospeso',
+            RITIRATO: 'Ritirato',
+            RISCHEDULATO: 'Rischedulato',
+            ANNULLATO: 'Annullato',
+            SIN_ESTADO: 'Sin estado',
+        },
+        columnas: {
+            autista: 'Autista',
+            datosConsegna: 'Datos consegna',
+            spedizione: 'Spedizione',
+            cliente: 'Cliente',
+        },
     },
     toasts: {
         errorCargar: 'Error cargando el panel',
@@ -90,14 +71,12 @@ export const it: typeof es = {
     header: {
         titulo: 'Pannello di Controllo',
         enVivo: 'IN DIRETTA',
-        subtitulo: 'Torre operativa · disponibilità e consegne',
+        subtitulo: 'Torre operativa · flotta in diretta e consegne',
         actualizado: '· aggiornato {hora}',
         actualizar: 'Aggiorna',
         cargando: 'Caricamento pannello...',
     },
     kpi: {
-        personalDisponible: 'Personale disponibile',
-        flotaDisponible: 'Flotta disponibile',
         entregasActivas: 'Consegne attive',
         enConsegna: 'In consegna',
         inSospeso: 'In sospeso',
@@ -117,41 +96,24 @@ export const it: typeof es = {
         sinConductor: 'Senza autista',
         sinDestino: 'Senza destinazione',
     },
-    vencimientos: {
-        titulo: 'Scadenze',
-        critico: '{n} crit.',
-        proximo: '{n} pross.',
-        verTodas: 'Vedi tutte →',
-        sinVencimientos: 'Nessuna scadenza nei prossimi 30 giorni.',
-        vencidoDias: 'Scaduto {dias}g',
-        venceHoy: 'Scade oggi',
-        enDias: 'tra {dias}g',
-    },
-    geocercas: {
-        titulo: 'Attività geofence',
-        verGeocercas: 'Vedi geofence →',
-        sinEventos: 'Nessun evento di ingresso/uscita recente.',
-        entroA: 'entrato in',
-        salioDe: 'uscito da',
-    },
-    personal: {
-        titulo: 'Personale per zona',
-        buscarPlaceholder: 'Cerca persona o zona',
-        sinResultados: 'Nessun risultato.',
-        dispAbbrev: 'disp.',
-        cargoDefault: 'Autista',
-        enRuta: '· in viaggio',
-    },
-    flota: {
-        titulo: 'Flotta',
-        vehiculoDefault: 'Veicolo',
-    },
-    disponibilidad: {
-        enOperacionActiva: 'In operazione attiva',
-        marcarNoDisponible: 'Segna come non disponibile',
-        marcarDisponible: 'Segna come disponibile',
-        disponible: 'Disponibile',
-        noDisponible: 'Non disponibile',
+    resumenDia: {
+        titulo: 'Riepilogo del giorno',
+        sinOperaciones: 'Nessuna operazione registrata oggi.',
+        estados: {
+            CONSEGNATO: 'Consegnato',
+            IN_CONSEGNA: 'In Consegna',
+            IN_SOSPESO: 'In Sospeso',
+            RITIRATO: 'Ritirato',
+            RISCHEDULATO: 'Rischedulato',
+            ANNULLATO: 'Annullato',
+            SIN_ESTADO: 'Senza stato',
+        },
+        columnas: {
+            autista: 'Autista',
+            datosConsegna: 'Dati consegna',
+            spedizione: 'Spedizione',
+            cliente: 'Cliente',
+        },
     },
     toasts: {
         errorCargar: 'Errore nel caricamento del pannello',

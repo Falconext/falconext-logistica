@@ -13,6 +13,12 @@ export class PanelController {
         return this.panelService.getStatus(req.user.tenantId);
     }
 
+    // RESUMEN DEL DÍA: operaciones de hoy agrupadas por estado_consegna.
+    @Get('resumen-dia')
+    getResumenDia(@Req() req) {
+        return this.panelService.resumenDia(req.user.tenantId);
+    }
+
     @Patch('trabajador/:id/disponibilidad')
     setTrabajador(@Param('id') id: string, @Body() body: { disponible: boolean }, @Req() req) {
         return this.panelService.setTrabajadorDisponible(id, !!body.disponible, req.user.tenantId);

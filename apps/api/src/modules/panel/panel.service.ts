@@ -15,6 +15,8 @@ export class PanelService {
     private static readonly EN_SOSPESO = ['PENDIENTE', 'PENDING', 'REPROGRAMADO'];
     // Solo entregas recientes: evita arrastrar operaciones pendientes viejas (histórico).
     private static readonly VENTANA_DIAS = 30;
+    // Orden de despliegue del resumen del día (coincide con el ciclo de vida de la consegna).
+    private static readonly ESTADO_CONSEGNA_ORDEN = ['CONSEGNATO', 'IN_CONSEGNA', 'IN_SOSPESO', 'RITIRATO', 'RISCHEDULATO', 'ANNULLATO'];
 
     async getStatus(tenantId: string) {
         const activos = [...PanelService.EN_CONSEGNA, ...PanelService.EN_SOSPESO];
@@ -149,6 +151,60 @@ export class PanelService {
                 entregasActivas: activas.length,
             },
         };
+    }
+
+    // RESUMEN DEL DÍA: operaciones de hoy agrupadas por estado_consegna (Consegnato/
+    // In Consegna/In Sospeso/Ritirato…), para la torre de control del Panel.
+    async resumenDia(tenantId: string) {
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        const manana = new Date(hoy);
+        manana.setDate(manana.getDate() + 1);
+
+        const ops = await this.prisma.programacion.findMany({
+            where: { tenant_id: tenantId, fecha: { gte: hoy, lt: manana } },
+            select: {
+                id: true, trabajador_id: true, estado_consegna: true,
+                spedizione: true, cliente: true, lugar_entrega: true,
+            },
+        });
+        if (ops.length === 0) return { grupos: [] };
+
+        const codes = Array.from(new Set(ops.map((o) => o.trabajador_id).filter((c): c is string => !!c)));
+        const nameByCode = new Map<string, string>();
+        if (codes.length) {
+            const ts = await this.prisma.trabajador.findMany({
+                where: { tenant_id: tenantId, OR: [{ id: { in: codes } }, { id_trabajador: { in: codes } }] },
+                select: { id: true, id_trabajador: true, nombre_completo: true },
+            });
+            ts.forEach((t) => {
+                nameByCode.set(t.id, t.nombre_completo);
+                if (t.id_trabajador) nameByCode.set(t.id_trabajador, t.nombre_completo);
+            });
+        }
+
+        const grupoMap = new Map<string, { id: string; trabajador: string | null; datosConsegna: string | null; spedizione: string | null; cliente: string | null }[]>();
+        for (const o of ops) {
+            const estado = o.estado_consegna || 'SIN_ESTADO';
+            const item = {
+                id: o.id,
+                trabajador: (o.trabajador_id && nameByCode.get(o.trabajador_id)) || o.trabajador_id || null,
+                datosConsegna: o.lugar_entrega || null,
+                spedizione: o.spedizione || null,
+                cliente: o.cliente || null,
+            };
+            if (!grupoMap.has(estado)) grupoMap.set(estado, []);
+            grupoMap.get(estado)!.push(item);
+        }
+
+        const grupos = PanelService.ESTADO_CONSEGNA_ORDEN
+            .filter((estado) => grupoMap.has(estado))
+            .map((estado) => ({ estado, total: grupoMap.get(estado)!.length, items: grupoMap.get(estado)! }));
+        // Estados fuera del orden conocido (dato legacy/sin mapear) van al final.
+        for (const [estado, items] of grupoMap) {
+            if (!PanelService.ESTADO_CONSEGNA_ORDEN.includes(estado)) grupos.push({ estado, total: items.length, items });
+        }
+        return { grupos };
     }
 
     async setTrabajadorDisponible(id: string, disponible: boolean, tenantId: string) {
