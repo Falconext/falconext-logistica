@@ -8,7 +8,6 @@ import {
 import { useSafeAreaInsets, initialWindowMetrics } from 'react-native-safe-area-context';
 import { Theme } from './ui';
 import Select from './Select';
-import ImageUpload from './ImageUpload';
 import MultiFileUpload from './MultiFileUpload';
 import MapboxWebView from './MapboxWebView';
 import api, { DEVICE_TOKEN_KEY } from '../services/api';
@@ -52,8 +51,8 @@ const fmtFechaHora = (iso?: string | null): string | undefined => {
 };
 
 type GastoRow = { tipo: string; monto: string; descripcion: string; numero_mancato: string; link_peaje: string; comprobantes: string[]; pagado_por_chofer: boolean };
-interface FormState { estado_consegna: string; foto_bolla: string; anticipo: string; attesa: string; attesa_horas: string; attesa_estado: string; gastos: GastoRow[]; lugar_retiro: string; retiros: string[]; lugar_entrega: string; destinos: string[]; }
-const emptyForm = (): FormState => ({ estado_consegna: '', foto_bolla: '', anticipo: '', attesa: '', attesa_horas: '', attesa_estado: 'PENDIENTE', gastos: [], lugar_retiro: '', retiros: [], lugar_entrega: '', destinos: [] });
+interface FormState { estado_consegna: string; foto_bolla: string[]; anticipo: string; attesa: string; attesa_horas: string; attesa_estado: string; gastos: GastoRow[]; lugar_retiro: string; retiros: string[]; lugar_entrega: string; destinos: string[]; }
+const emptyForm = (): FormState => ({ estado_consegna: '', foto_bolla: [], anticipo: '', attesa: '', attesa_horas: '', attesa_estado: 'PENDIENTE', gastos: [], lugar_retiro: '', retiros: [], lugar_entrega: '', destinos: [] });
 
 const PREP_STEPS = [
   { title: 'Consegna', Icon: Package },
@@ -93,7 +92,11 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
   const [rendAbonoDe, setRendAbonoDe] = useState('');   // quién le entregó el dinero
   const [rendGastos, setRendGastos] = useState<GastoRow[]>([]);
   const [rendEntregado, setRendEntregado] = useState(true); // ¿se entregó la consegna aquí?
-  const [rendFotoBolla, setRendFotoBolla] = useState(''); // foto de la bolla firmada en la parada
+  const [rendFotoBolla, setRendFotoBolla] = useState<string[]>([]); // foto(s) de la bolla firmada en la parada
+  // Paso del modal de llegada: primero se confirma la llegada (+ bolla), luego
+  // se sustentan los gastos — separados para que un chofer apurado no pierda
+  // la opción de subir comprobantes después (la llegada ya quedó guardada).
+  const [rendPaso, setRendPaso] = useState<'llegada' | 'gastos'>('llegada');
   const [fullOp, setFullOp] = useState<Programacion | null>(null);
   const [showRendicion, setShowRendicion] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm());
@@ -127,7 +130,7 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
     setLoaded(false); setStep(0); setShowRendicion(false); setEntregada(false);
     const populate = (src: any) => setForm({
       estado_consegna: src.estado_consegna || '',
-      foto_bolla: src.foto_bolla || '',
+      foto_bolla: Array.isArray(src.foto_bolla) ? src.foto_bolla : (src.foto_bolla ? [src.foto_bolla] : []),
       anticipo: src.anticipo != null ? String(src.anticipo) : '',
       attesa: src.attesa || '',
       attesa_horas: src.attesa_horas != null ? String(src.attesa_horas) : '',
@@ -205,7 +208,7 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
 
   const guardarDatos = () => api.patch(`/programacion/${operacion!.id}`, {
     estado_consegna: form.estado_consegna || null,
-    foto_bolla: form.foto_bolla || null,
+    foto_bolla: form.foto_bolla,
     lugar_retiro: form.lugar_retiro || null,
     retiros: form.retiros.map((s) => s.trim()).filter(Boolean),
     lugar_entrega: form.lugar_entrega || null,
@@ -284,13 +287,36 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
     finally { setBusy(false); }
   };
 
-  // Abre el modal de rendición de la parada (abono/gastos por punto).
+  // Abre el modal de rendición de una parada NUEVA (aún sin llegada registrada).
+  // Empieza en el paso "llegada": confirmar entrega + bolla, antes de gastos.
   const llegarParada = (parada: { id: string; label: string; es_retorno?: boolean }) => {
     setRendAnticipo('');
     setRendAbonoDe('');
     setRendGastos([]);
     setRendEntregado(true);
-    setRendFotoBolla('');
+    setRendFotoBolla([]);
+    setRendPaso('llegada');
+    setParadaRend(parada);
+  };
+
+  // Reabre una parada YA con llegada registrada — típicamente para terminar de
+  // sustentar gastos/comprobantes que el chofer no alcanzó a subir por el apuro
+  // de marcar la llegada. Precarga lo ya guardado y entra directo a "gastos".
+  const reabrirParada = (parada: { id: string; label: string; es_retorno?: boolean; anticipo?: number | null; abono_de?: string | null; gastos?: any; entregado?: boolean; foto_bolla?: string[] | string | null }) => {
+    setRendAnticipo(parada.anticipo != null ? String(parada.anticipo) : '');
+    setRendAbonoDe(parada.abono_de || '');
+    setRendGastos(Array.isArray(parada.gastos) ? parada.gastos.map((g: any) => ({
+      tipo: g?.tipo || 'PEAJE',
+      monto: g?.monto != null ? String(g.monto) : '',
+      descripcion: g?.descripcion || '',
+      numero_mancato: g?.numero_mancato || '',
+      link_peaje: g?.link_peaje || '',
+      comprobantes: Array.isArray(g?.comprobantes) ? g.comprobantes : [],
+      pagado_por_chofer: g?.pagado_por_chofer !== false,
+    })) : []);
+    setRendEntregado(parada.entregado !== false);
+    setRendFotoBolla(Array.isArray(parada.foto_bolla) ? parada.foto_bolla : (parada.foto_bolla ? [parada.foto_bolla] : []));
+    setRendPaso('gastos');
     setParadaRend(parada);
   };
 
@@ -299,7 +325,27 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
     setRendGastos((g) => g.map((x, idx) => (idx === i ? { ...x, ...patch } : x)));
   const rendRmGasto = (i: number) => setRendGastos((g) => g.filter((_, idx) => idx !== i));
 
-  // Confirma la llegada a la parada + su rendición. Gastos/anticipo opcionales.
+  // Paso 1 (solo paradas de entrega, no retorno): guarda entregado + bolla de
+  // inmediato y avanza al paso de gastos, SIN cerrar el modal. El endpoint es
+  // idempotente (fallback a los valores previos de la parada), así que llamarlo
+  // de nuevo en el paso 2 con los gastos no pisa nada de esto.
+  const guardarLlegadaPaso = async () => {
+    if (!recorrido || !paradaRend) return;
+    setBusy(true);
+    try {
+      await api.post(`/recorridos/${recorrido.id}/paradas/${paradaRend.id}/llegada`, {
+        entregado: rendEntregado,
+        foto_bolla: rendFotoBolla,
+      });
+      setRendPaso('gastos');
+      await loadRecorrido();
+    } catch (e: any) { Alert.alert('Error', e?.response?.data?.message || 'No se pudo confirmar la llegada.'); }
+    finally { setBusy(false); }
+  };
+
+  // Paso 2 (o único paso para la parada de retorno): guarda abono + gastos y
+  // cierra el modal. Reenvía entregado/foto_bolla también para que quede
+  // consistente si se editó algo al reabrir la parada.
   const confirmarLlegadaParada = async () => {
     if (!recorrido || !paradaRend) return;
     const gastos = rendGastos
@@ -321,14 +367,15 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
         gastos: gastos.length ? gastos : undefined,
         // Entrega por punto (no aplica a la parada de retorno al origen).
         entregado: esRetorno ? undefined : rendEntregado,
-        foto_bolla: esRetorno ? undefined : (rendFotoBolla || undefined),
+        foto_bolla: esRetorno ? undefined : rendFotoBolla,
       });
       setParadaRend(null);
       setRendAnticipo('');
       setRendAbonoDe('');
       setRendGastos([]);
       setRendEntregado(true);
-      setRendFotoBolla('');
+      setRendFotoBolla([]);
+      setRendPaso('llegada');
       // La parada de retorno (llegar al origen) cierra el recorrido en el backend:
       // detenemos el rastreo y cerramos el wizard, igual que "Finalizar recorrido".
       if (esRetorno) {
@@ -342,7 +389,7 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
   };
 
   // Paradas del recorrido (destino + destinos adicionales) y la próxima pendiente.
-  const paradas: Array<{ id: string; orden: number; label: string; es_retorno?: boolean; llegada_en?: string | null; anticipo?: number | null; gastos?: any }> =
+  const paradas: Array<{ id: string; orden: number; label: string; es_retorno?: boolean; llegada_en?: string | null; anticipo?: number | null; gastos?: any; entregado?: boolean; abono_de?: string | null; foto_bolla?: string[] | string | null }> =
     Array.isArray(recorrido?.paradas) ? [...recorrido.paradas].sort((a: any, b: any) => a.orden - b.orden) : [];
   // Paradas de ENTREGA (destinos) vs la parada final de RETORNO al origen.
   const paradasEntrega = paradas.filter((p) => !p.es_retorno);
@@ -542,13 +589,21 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                     {!!op?.nota && (<View style={styles.notaBox}><Text style={styles.notaLabel}>Nota</Text><Text style={styles.notaText}>{op.nota}</Text></View>)}
                   </View>
 
-                  {/* Foto de la bolla (DDT) */}
-                  {!!op?.foto_bolla && (
-                    <>
-                      <Text style={styles.stepHeading}>Foto de la bolla (DDT)</Text>
-                      <Image source={{ uri: op.foto_bolla }} style={styles.bollaImg} resizeMode="cover" />
-                    </>
-                  )}
+                  {/* Foto(s) de la bolla (DDT) */}
+                  {(() => {
+                    const fotos: string[] = Array.isArray(op?.foto_bolla) ? op.foto_bolla : (op?.foto_bolla ? [op.foto_bolla] : []);
+                    if (!fotos.length) return null;
+                    return (
+                      <>
+                        <Text style={styles.stepHeading}>Foto{fotos.length > 1 ? 's' : ''} de la bolla (DDT)</Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                          {fotos.map((url, i) => (
+                            <Image key={url + i} source={{ uri: url }} style={styles.bollaImg} resizeMode="cover" />
+                          ))}
+                        </View>
+                      </>
+                    );
+                  })()}
 
                   {/* Rendición de gastos */}
                   {hayRendicion && (
@@ -611,7 +666,8 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
               {phase === 'prep' && !bloqueada && step === 1 && (
                 <View>
                   <Text style={styles.stepHeading}>Foto de la bolla (DDT)</Text>
-                  <ImageUpload value={form.foto_bolla} onChange={(url) => setForm({ ...form, foto_bolla: url })} onClear={() => setForm({ ...form, foto_bolla: '' })} label="Subir foto de la bolla" variant="wide" />
+                  <Text style={styles.hint}>Si la bolla tiene varias hojas, puedes subir más de una foto.</Text>
+                  <MultiFileUpload value={form.foto_bolla} onChange={(urls) => setForm({ ...form, foto_bolla: urls })} label="Agregar foto de la bolla" />
                   <Text style={styles.hint}>Los gastos (peajes/combustible) se registran al final, cuando termines la ruta.</Text>
                 </View>
               )}
@@ -807,8 +863,12 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                         const esProxima = p.es_retorno
                           ? (!p.llegada_en && recorrido.estado === 'EN_RUTA_VUELTA' && !paradaRetorno?.llegada_en)
                           : proximaParada?.id === p.id;
+                        // Ya con llegada registrada: tappable para reabrir y completar/editar
+                        // gastos, comprobantes o fotos de bolla que hayan quedado pendientes.
+                        const RowWrap = p.llegada_en ? TouchableOpacity : View;
+                        const rowWrapProps = p.llegada_en ? { activeOpacity: 0.7, onPress: () => reabrirParada(p), disabled: busy } : {};
                         return (
-                          <View key={p.id} style={styles.paradaRow}>
+                          <RowWrap key={p.id} style={styles.paradaRow} {...rowWrapProps}>
                             <View style={[styles.paradaDot, p.llegada_en ? styles.paradaDotOk : esProxima ? styles.paradaDotNext : styles.paradaDotPend]}>
                               <Text style={styles.paradaDotTxt}>{p.llegada_en ? '✓' : p.es_retorno ? '⟲' : String(p.orden)}</Text>
                             </View>
@@ -820,12 +880,15 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                                 </Text>
                               )}
                             </View>
-                            {p.llegada_en
-                              ? <Text style={styles.paradaOk}>{new Date(p.llegada_en).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</Text>
-                              : esProxima
+                            {p.llegada_en ? (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Text style={styles.paradaOk}>{new Date(p.llegada_en).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</Text>
+                                <ChevronRight size={16} color={C.textFaint} />
+                              </View>
+                            ) : esProxima
                                 ? <Text style={styles.paradaNext}>Próxima</Text>
                                 : <Text style={styles.paradaPend}>Pendiente</Text>}
-                          </View>
+                          </RowWrap>
                         );
                       })}
                       {/* Resumen de control del dinero: al visitar todas las paradas */}
@@ -1032,15 +1095,15 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
           <View style={styles.rendSheet}>
             <View style={styles.rendHead}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.rendTitle}>Llegada a destino</Text>
+                <Text style={styles.rendTitle}>
+                  {paradaRend?.es_retorno ? 'Llegada al origen' : rendPaso === 'llegada' ? 'Paso 1 de 2 · Confirmar llegada' : 'Paso 2 de 2 · Sustentar gastos'}
+                </Text>
                 <Text style={styles.rendSub} numberOfLines={1}>{paradaRend?.label}</Text>
               </View>
               <TouchableOpacity onPress={() => setParadaRend(null)}><X size={22} color={C.textMuted} /></TouchableOpacity>
             </View>
             <ScrollView contentContainerStyle={{ padding: S.lg, gap: S.md }} keyboardShouldPersistTaps="handled">
-              <Text style={styles.rendHint}>Si te ENTREGARON dinero en esta parada, regístralo. También los gastos. Es opcional, pero importante para el control del dinero.</Text>
-
-              {!paradaRend?.es_retorno && (
+              {!paradaRend?.es_retorno && rendPaso === 'llegada' && (
                 <View style={{ gap: S.sm }}>
                   <Text style={styles.rendLabel}>¿Se entregó la consegna aquí?</Text>
                   <View style={{ flexDirection: 'row', gap: S.sm }}>
@@ -1062,65 +1125,79 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                     </TouchableOpacity>
                   </View>
 
-                  <Text style={[styles.rendLabel, { marginTop: S.xs }]}>Foto de la bolla firmada</Text>
-                  <ImageUpload
-                    value={rendFotoBolla}
-                    onChange={setRendFotoBolla}
-                    onClear={() => setRendFotoBolla('')}
-                    label="Subir foto de la bolla firmada"
-                    variant="wide"
-                  />
+                  <Text style={[styles.rendLabel, { marginTop: S.xs }]}>Foto(s) de la bolla firmada</Text>
+                  <Text style={styles.rendHint}>Si la bolla tiene varias hojas, agrega todas las fotos que necesites.</Text>
+                  <MultiFileUpload value={rendFotoBolla} onChange={setRendFotoBolla} label="Agregar foto de la bolla firmada" />
                 </View>
               )}
 
-              <View>
-                <Text style={styles.rendLabel}>Abono recibido aquí (dinero que te dieron)</Text>
-                <TextInput style={styles.input} value={rendAnticipo} onChangeText={setRendAnticipo} placeholder="0.00" placeholderTextColor={C.textFaint} keyboardType="decimal-pad" />
-                {!!rendAnticipo && (
-                  <TextInput style={[styles.input, { marginTop: 6 }]} value={rendAbonoDe} onChangeText={setRendAbonoDe} placeholder="¿Quién te lo entregó? (opcional)" placeholderTextColor={C.textFaint} />
-                )}
-              </View>
+              {(paradaRend?.es_retorno || rendPaso === 'gastos') && (
+                <>
+                  {!paradaRend?.es_retorno && (
+                    <TouchableOpacity onPress={() => setRendPaso('llegada')} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }} activeOpacity={0.7}>
+                      <ChevronLeft size={16} color={C.info} />
+                      <Text style={{ color: C.info, fontWeight: '600', fontSize: Theme.font.size.sm }}>Editar llegada / bolla</Text>
+                    </TouchableOpacity>
+                  )}
+                  <Text style={styles.rendHint}>Si te ENTREGARON dinero en esta parada, regístralo. También los gastos. Es opcional, pero importante para el control del dinero.</Text>
 
-              <View style={{ gap: S.sm }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Text style={styles.rendLabel}>Gastos (opcional)</Text>
-                  <TouchableOpacity onPress={rendAddGasto}><Text style={styles.rendAdd}>+ Agregar</Text></TouchableOpacity>
-                </View>
-                {rendGastos.map((g, i) => (
-                  <View key={i} style={{ gap: 6, borderWidth: 1, borderColor: C.border, borderRadius: Theme.radius.md, padding: S.sm }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: S.sm }}>
-                      <View style={{ flex: 1 }}>
-                        <Select label="Tipo" value={g.tipo} onChange={(v) => rendSetGasto(i, { tipo: v })} options={GASTO_TIPOS} searchable={false} />
-                      </View>
-                      <TouchableOpacity onPress={() => rendRmGasto(i)} style={{ justifyContent: 'center', paddingHorizontal: 4, paddingBottom: 10 }}><Trash2 size={18} color={C.danger} /></TouchableOpacity>
-                    </View>
-                    <Text style={styles.rendLabel}>Monto ({moneda || 'EUR'})</Text>
-                    <TextInput style={styles.input} value={g.monto} onChangeText={(v) => rendSetGasto(i, { monto: v })} placeholder="0.00" placeholderTextColor={C.textFaint} keyboardType="decimal-pad" />
-                    {g.tipo === 'OTRO' && (<>
-                      <Text style={styles.rendLabel}>Descripción</Text>
-                      <TextInput style={styles.input} value={g.descripcion} onChangeText={(v) => rendSetGasto(i, { descripcion: v })} placeholder="¿En qué se gastó?" placeholderTextColor={C.textFaint} />
-                    </>)}
-                    {GASTO_TIPOS_CON_PAGADOR.includes(g.tipo) && (<>
-                      <Text style={styles.rendLabel}>¿Quién lo pagó?</Text>
-                      <PagadorToggle value={g.pagado_por_chofer} tipo={g.tipo} onChange={(v) => rendSetGasto(i, { pagado_por_chofer: v })} C={C} styles={styles} />
-                    </>)}
-                    {g.tipo === 'PEAJE' && !g.pagado_por_chofer && (<>
-                      <Text style={styles.rendLabel}>Nº de mancato</Text>
-                      <TextInput style={styles.input} value={g.numero_mancato} onChangeText={(v) => rendSetGasto(i, { numero_mancato: v })} placeholder="Número de mancato" placeholderTextColor={C.textFaint} />
-                      <Text style={styles.rendLabel}>Link de peaje</Text>
-                      <TextInput style={styles.input} value={g.link_peaje} onChangeText={(v) => rendSetGasto(i, { link_peaje: v })} placeholder="https://…" placeholderTextColor={C.textFaint} keyboardType="url" autoCapitalize="none" autoCorrect={false} />
-                    </>)}
-                    <Text style={styles.rendLabel}>Comprobante(s)</Text>
-                    <MultiFileUpload value={g.comprobantes} onChange={(urls) => rendSetGasto(i, { comprobantes: urls })} />
+                  <View>
+                    <Text style={styles.rendLabel}>Abono recibido aquí (dinero que te dieron)</Text>
+                    <TextInput style={styles.input} value={rendAnticipo} onChangeText={setRendAnticipo} placeholder="0.00" placeholderTextColor={C.textFaint} keyboardType="decimal-pad" />
+                    {!!rendAnticipo && (
+                      <TextInput style={[styles.input, { marginTop: 6 }]} value={rendAbonoDe} onChangeText={setRendAbonoDe} placeholder="¿Quién te lo entregó? (opcional)" placeholderTextColor={C.textFaint} />
+                    )}
                   </View>
-                ))}
-              </View>
+
+                  <View style={{ gap: S.sm }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Text style={styles.rendLabel}>Gastos (opcional)</Text>
+                      <TouchableOpacity onPress={rendAddGasto}><Text style={styles.rendAdd}>+ Agregar</Text></TouchableOpacity>
+                    </View>
+                    {rendGastos.map((g, i) => (
+                      <View key={i} style={{ gap: 6, borderWidth: 1, borderColor: C.border, borderRadius: Theme.radius.md, padding: S.sm }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: S.sm }}>
+                          <View style={{ flex: 1 }}>
+                            <Select label="Tipo" value={g.tipo} onChange={(v) => rendSetGasto(i, { tipo: v })} options={GASTO_TIPOS} searchable={false} />
+                          </View>
+                          <TouchableOpacity onPress={() => rendRmGasto(i)} style={{ justifyContent: 'center', paddingHorizontal: 4, paddingBottom: 10 }}><Trash2 size={18} color={C.danger} /></TouchableOpacity>
+                        </View>
+                        <Text style={styles.rendLabel}>Monto ({moneda || 'EUR'})</Text>
+                        <TextInput style={styles.input} value={g.monto} onChangeText={(v) => rendSetGasto(i, { monto: v })} placeholder="0.00" placeholderTextColor={C.textFaint} keyboardType="decimal-pad" />
+                        {g.tipo === 'OTRO' && (<>
+                          <Text style={styles.rendLabel}>Descripción</Text>
+                          <TextInput style={styles.input} value={g.descripcion} onChangeText={(v) => rendSetGasto(i, { descripcion: v })} placeholder="¿En qué se gastó?" placeholderTextColor={C.textFaint} />
+                        </>)}
+                        {GASTO_TIPOS_CON_PAGADOR.includes(g.tipo) && (<>
+                          <Text style={styles.rendLabel}>¿Quién lo pagó?</Text>
+                          <PagadorToggle value={g.pagado_por_chofer} tipo={g.tipo} onChange={(v) => rendSetGasto(i, { pagado_por_chofer: v })} C={C} styles={styles} />
+                        </>)}
+                        {g.tipo === 'PEAJE' && !g.pagado_por_chofer && (<>
+                          <Text style={styles.rendLabel}>Nº de mancato</Text>
+                          <TextInput style={styles.input} value={g.numero_mancato} onChangeText={(v) => rendSetGasto(i, { numero_mancato: v })} placeholder="Número de mancato" placeholderTextColor={C.textFaint} />
+                          <Text style={styles.rendLabel}>Link de peaje</Text>
+                          <TextInput style={styles.input} value={g.link_peaje} onChangeText={(v) => rendSetGasto(i, { link_peaje: v })} placeholder="https://…" placeholderTextColor={C.textFaint} keyboardType="url" autoCapitalize="none" autoCorrect={false} />
+                        </>)}
+                        <Text style={styles.rendLabel}>Comprobante(s)</Text>
+                        <MultiFileUpload value={g.comprobantes} onChange={(urls) => rendSetGasto(i, { comprobantes: urls })} />
+                      </View>
+                    ))}
+                  </View>
+                </>
+              )}
             </ScrollView>
             <View style={[styles.rendFooter, { paddingBottom: S.lg + insets.bottom }]}>
-              <TouchableOpacity style={[styles.rendConfirmBtn, busy && { opacity: 0.6 }]} disabled={busy} onPress={confirmarLlegadaParada} activeOpacity={0.85}>
-                {busy ? <ActivityIndicator color="#fff" size="small" /> : <Flag size={19} color="#fff" />}
-                <Text style={styles.rendConfirmTxt}>Confirmar llegada</Text>
-              </TouchableOpacity>
+              {!paradaRend?.es_retorno && rendPaso === 'llegada' ? (
+                <TouchableOpacity style={[styles.rendConfirmBtn, busy && { opacity: 0.6 }]} disabled={busy} onPress={guardarLlegadaPaso} activeOpacity={0.85}>
+                  {busy ? <ActivityIndicator color="#fff" size="small" /> : <ChevronRight size={19} color="#fff" />}
+                  <Text style={styles.rendConfirmTxt}>Siguiente · Sustentar gastos</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={[styles.rendConfirmBtn, busy && { opacity: 0.6 }]} disabled={busy} onPress={confirmarLlegadaParada} activeOpacity={0.85}>
+                  {busy ? <ActivityIndicator color="#fff" size="small" /> : <Flag size={19} color="#fff" />}
+                  <Text style={styles.rendConfirmTxt}>{paradaRend?.es_retorno ? 'Confirmar llegada' : 'Guardar gastos'}</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </KeyboardAvoidingView>

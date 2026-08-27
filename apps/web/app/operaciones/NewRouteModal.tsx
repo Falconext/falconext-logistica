@@ -7,7 +7,6 @@ import { Programacion } from '../../types';
 import api from '../../lib/api';
 import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
-import FileUpload from '../../components/FileUpload';
 import MultiFileUpload from '../../components/MultiFileUpload';
 import { useCurrency } from '../../lib/useCurrency';
 import { APP_OPTIONS, SPEDIZIONE_OPTIONS, ESTADO_CONSEGNA_META, RETIRO_PRESETS, isCoords, GASTO_TIPOS_CON_PAGADOR, pagadorLabels, categoriaVehiculoLabel, calcularIngresoSugerido, TarifasIngreso } from './constants';
@@ -163,7 +162,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
         estado_consegna: '',
         attesa: '',
         otros_datos: '',
-        foto_bolla: '',
+        foto_bolla: [] as string[],
 
         // Rendición del chofer
         anticipo: '',
@@ -280,7 +279,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 estado_consegna: src.estado_consegna || '',
                 attesa: src.attesa || '',
                 otros_datos: src.otros_datos || '',
-                foto_bolla: src.foto_bolla || '',
+                foto_bolla: Array.isArray(src.foto_bolla) ? src.foto_bolla : (src.foto_bolla ? [src.foto_bolla] : []),
                 anticipo: src.anticipo != null ? String(src.anticipo) : '',
                 gastos: Array.isArray(src.gastos) ? src.gastos.map((g: any) => ({
                     tipo: g.tipo || 'OTRO',
@@ -331,7 +330,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 estado_consegna: '',
                 attesa: '',
                 otros_datos: '',
-                foto_bolla: '',
+                foto_bolla: [],
                 anticipo: '',
                 gastos: [],
                 nota: '',
@@ -419,7 +418,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 estado_consegna: formData.estado_consegna || null,
                 attesa: formData.attesa || null,
                 otros_datos: formData.otros_datos || null,
-                foto_bolla: formData.foto_bolla || null,
+                foto_bolla: formData.foto_bolla,
                 anticipo: formData.anticipo !== '' ? Number(formData.anticipo) : null,
                 gastos: formData.gastos
                     .filter((g) => g.tipo && (g.monto !== '' || g.comprobantes.length || g.descripcion || g.numero_mancato || g.link_peaje))
@@ -473,7 +472,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 estado_consegna: '',
                 attesa: '',
                 otros_datos: '',
-                foto_bolla: '',
+                foto_bolla: [],
                 anticipo: '',
                 gastos: [],
                 nota: ''
@@ -963,27 +962,30 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800">
                                 <h4 className="flex items-center gap-2 text-slate-700 dark:text-slate-200 font-bold mb-3">
                                     <FileText size={16} className="text-blue-500" />
-                                    Foto de la bolla (DDT)
+                                    Foto(s) de la bolla (DDT)
                                 </h4>
-                                <FileUpload
-                                    variant="wide"
+                                <p className="text-xs text-slate-400 mb-2">Si la bolla tiene varias hojas, agrega todas las fotos que necesites.</p>
+                                <MultiFileUpload
                                     accept="image/*,application/pdf"
-                                    label="Subir foto de la bolla"
-                                    value={formData.foto_bolla || undefined}
-                                    onChange={(url) => setFormData({ ...formData, foto_bolla: url })}
-                                    onClear={() => setFormData({ ...formData, foto_bolla: '' })}
+                                    label="Agregar foto de la bolla"
+                                    value={formData.foto_bolla}
+                                    onChange={(urls) => setFormData({ ...formData, foto_bolla: urls })}
                                 />
                             </div>
-                        ) : formData.foto_bolla ? (
+                        ) : formData.foto_bolla.length > 0 ? (
                             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800">
                                 <h4 className="flex items-center gap-2 text-slate-700 dark:text-slate-200 font-bold mb-3">
                                     <FileText size={16} className="text-blue-500" />
-                                    Foto de la bolla (DDT)
+                                    Foto{formData.foto_bolla.length > 1 ? 's' : ''} de la bolla (DDT)
                                 </h4>
-                                <a href={formData.foto_bolla} target="_blank" rel="noreferrer"
-                                    className="inline-flex items-center gap-2 text-sm text-blue-600 hover:underline">
-                                    <FileText size={14} /> Ver bolla subida por el chofer
-                                </a>
+                                <div className="flex flex-col gap-1.5">
+                                    {formData.foto_bolla.map((url, i) => (
+                                        <a key={url + i} href={url} target="_blank" rel="noreferrer"
+                                            className="inline-flex items-center gap-2 text-sm text-blue-600 hover:underline">
+                                            <FileText size={14} /> Ver bolla {formData.foto_bolla.length > 1 ? `#${i + 1}` : ''} subida por el chofer
+                                        </a>
+                                    ))}
+                                </div>
                             </div>
                         ) : null}
                     </div>

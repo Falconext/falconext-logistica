@@ -108,7 +108,7 @@ export interface Programacion {
   estado_consegna?: string; // CONSEGNATO | IN_CONSEGNA | IN_SOSPESO | RITIRATO | ANNULLATO | RISCHEDULATO
   attesa?: string;
   otros_datos?: string;
-  foto_bolla?: string | null;
+  foto_bolla?: string[];
 
   // Rendición del chofer
   anticipo?: number;

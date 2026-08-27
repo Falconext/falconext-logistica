@@ -192,7 +192,7 @@ export class RecorridosService {
         recorridoId: string,
         paradaId: string,
         trabajadorId: string,
-        body: { anticipo?: number; abono_de?: string; gastos?: any; nota?: string; entregado?: boolean; foto_bolla?: string },
+        body: { anticipo?: number; abono_de?: string; gastos?: any; nota?: string; entregado?: boolean; foto_bolla?: string[] },
     ) {
         const r = await this.getOwned(tenantId, recorridoId, trabajadorId);
         const parada = await this.prisma.recorridoParada.findFirst({

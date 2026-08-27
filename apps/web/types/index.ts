@@ -99,7 +99,7 @@ export interface Programacion {
     estado_consegna?: string; // CONSEGNATO | IN_CONSEGNA | IN_SOSPESO | RITIRATO | ANNULLATO | RISCHEDULATO
     attesa?: string; // Tiempo de espera del chofer al cliente
     otros_datos?: string; // Otros datos de consegna (pegado desde WhatsApp)
-    foto_bolla?: string | null; // URL (S3) de la bolla/DDT de la operación
+    foto_bolla?: string[]; // URLs (S3) de la bolla/DDT de la operación — puede ser de varias hojas
 
     estado?: string; // Added for sync status
     ingreso_estimado?: number; // Added

@@ -50,7 +50,6 @@ import {
 } from '../../components/ui';
 import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
-import ImageUpload from '../../components/ImageUpload';
 import MultiFileUpload from '../../components/MultiFileUpload';
 import MapboxWebView from '../../components/MapboxWebView';
 import RouteReport from '../../components/RouteReport';
@@ -186,7 +185,7 @@ interface FormState {
   estado_consegna: string;
   attesa: string;
   otros_datos: string;
-  foto_bolla: string;
+  foto_bolla: string[];
   // Rendición
   anticipo: string;
   abonos_ruta: number; // solo lectura: abonos que el chofer recibió en ruta (backend)
@@ -221,7 +220,7 @@ const emptyForm = (): FormState => ({
   estado_consegna: '',
   attesa: '',
   otros_datos: '',
-  foto_bolla: '',
+  foto_bolla: [],
   anticipo: '',
   abonos_ruta: 0,
   gastos: [],
@@ -601,7 +600,7 @@ export default function OperacionesScreen() {
     estado_consegna: src.estado_consegna || '',
     attesa: src.attesa || '',
     otros_datos: src.otros_datos || '',
-    foto_bolla: src.foto_bolla || '',
+    foto_bolla: Array.isArray(src.foto_bolla) ? src.foto_bolla : (src.foto_bolla ? [src.foto_bolla] : []),
     anticipo: src.anticipo != null ? String(src.anticipo) : '',
     abonos_ruta: Number(src.abonos_ruta) || 0,
     gastos: Array.isArray(src.gastos) ? src.gastos.map((g: any) => ({
@@ -766,7 +765,7 @@ export default function OperacionesScreen() {
         estado_consegna: form.estado_consegna || null,
         attesa: form.attesa || null,
         otros_datos: form.otros_datos || null,
-        foto_bolla: form.foto_bolla || null,
+        foto_bolla: form.foto_bolla,
         anticipo: form.anticipo !== '' ? Number(form.anticipo) : null,
         gastos: form.gastos
           .filter((g) => g.tipo && (g.monto !== '' || g.comprobantes.length || g.descripcion || g.numero_mancato))
@@ -1751,13 +1750,11 @@ export default function OperacionesScreen() {
           editable={!lockOthers}
         />
 
-        <Text style={styles.formSection}>Foto de la bolla (DDT)</Text>
-        <ImageUpload
+        <Text style={styles.formSection}>Foto(s) de la bolla (DDT)</Text>
+        <MultiFileUpload
           value={form.foto_bolla}
-          onChange={(url) => setForm({ ...form, foto_bolla: url })}
-          onClear={() => setForm({ ...form, foto_bolla: '' })}
-          label="Subir foto de la bolla"
-          variant="wide"
+          onChange={(urls) => setForm({ ...form, foto_bolla: urls })}
+          label="Agregar foto de la bolla"
         />
 
         {editing && (

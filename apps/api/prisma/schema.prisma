@@ -218,7 +218,7 @@ model Programacion {
   attesa_estado      String? @default("PENDIENTE") // PENDIENTE | AUTORIZADO | DENEGADO
   attesa_autorizado_por String?                    // User.id del supervisor que decidió
   otros_datos      String?                  // Otros datos de consegna (texto pegado desde WhatsApp)
-  foto_bolla       String?                  // URL (S3) de la bolla/DDT de esta operación (la sube el chofer en Editar ruta)
+  foto_bolla       String[]  @default([])   // URLs (S3) de la bolla/DDT de esta operación — puede ser de varias hojas (la sube el chofer en Editar ruta)
 
   estado           String   @default("PENDING") // PENDING, IN_TRANSIT, COMPLETED, FAILED
   ingreso_estimado Float?   @default(0)
@@ -636,8 +636,9 @@ model RecorridoParada {
   // ¿Se entregó la consegna en esta parada? El chofer lo confirma al marcar la
   // llegada (una entrega puede fallar → mancata consegna).
   entregado      Boolean   @default(false)
-  // Foto de la bolla/DDT FIRMADA en esta parada (prueba de entrega por punto).
-  foto_bolla     String?
+  // Foto(s) de la bolla/DDT FIRMADA en esta parada (prueba de entrega por punto) —
+  // puede ser de varias hojas.
+  foto_bolla     String[]  @default([])
   // "Abono recibido aquí": dinero EXTRA que le entregaron al chofer en esta parada
   // (además del anticipo inicial de la operación). Sirve para el control del saldo.
   anticipo       Float?    // monto del abono recibido en esta parada (opcional)
