@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../../lib/api';
 import { MODULES } from '../../../lib/modules';
 import { ShieldCheck, Plus, Pencil, Trash2, Loader2, AlertTriangle, Users, Crown, Lock } from 'lucide-react';
@@ -33,6 +34,8 @@ function TipoBadge({ rol }: { rol: Rol }) {
 
 export default function RolesPage() {
     const t = useT();
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
     const [roles, setRoles] = useState<Rol[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -167,7 +170,7 @@ export default function RolesPage() {
             />
 
             {/* Confirmación de eliminación */}
-            {toDelete && (
+            {toDelete && mounted && createPortal(
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-sm border border-slate-200 shadow-2xl p-6 max-h-[92vh] overflow-y-auto animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="flex items-start gap-3">
@@ -198,7 +201,8 @@ export default function RolesPage() {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

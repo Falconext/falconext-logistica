@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../../lib/api';
 import { CURRENCIES, CurrencyCode, normalizeCurrency } from '../../../lib/currency';
 import Select from '../../../components/Select';
@@ -28,6 +29,8 @@ const emptyForm = {
 
 export default function TenantsPage() {
     const t = useT();
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
     const [tenants, setTenants] = useState<Tenant[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -153,7 +156,7 @@ export default function TenantsPage() {
             </div>
 
             {/* Modal crear / editar */}
-            {showForm && (
+            {showForm && mounted && createPortal(
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-[#0f172a] rounded-t-2xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-2xl overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-200 max-h-[92vh] overflow-y-auto">
                         <div className="flex justify-between items-center gap-3 p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800">
@@ -257,11 +260,12 @@ export default function TenantsPage() {
                             </div>
                         </form>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* Confirmación de eliminación */}
-            {deleteTarget && (
+            {deleteTarget && mounted && createPortal(
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-[#0f172a] rounded-t-2xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-md max-h-[92vh] overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="p-6 space-y-4">
@@ -296,7 +300,8 @@ export default function TenantsPage() {
                             </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {error && (

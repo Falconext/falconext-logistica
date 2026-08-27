@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { GeofencesMap, GeofenceEditorMap } from '../../components/tracking/MapboxGeofences';
 import { Plus, Trash, MapPin, X, Save, AlertCircle, Pencil } from 'lucide-react';
 import api from '../../lib/api';
@@ -21,6 +22,8 @@ interface Geofence {
 
 export default function GeocercasPage() {
     const t = useT();
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
     const [geofences, setGeofences] = useState<Geofence[]>([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
@@ -185,7 +188,7 @@ export default function GeocercasPage() {
             </div>
 
             {/* Create Geofence Modal */}
-            {showModal && (
+            {showModal && mounted && createPortal(
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl w-full max-w-4xl h-[88vh] sm:h-[80vh] flex flex-col shadow-2xl overflow-hidden relative animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         {/* Close Button */}
@@ -264,11 +267,12 @@ export default function GeocercasPage() {
                             </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* Delete Confirmation Modal */}
-            {deleteTarget && (
+            {deleteTarget && mounted && createPortal(
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl w-full max-w-sm p-6 shadow-2xl max-h-[92vh] overflow-y-auto animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="flex items-center gap-3 mb-4">
@@ -300,7 +304,8 @@ export default function GeocercasPage() {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

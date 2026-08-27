@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../lib/api';
 import { Vehiculo } from '../../types';
 import { Truck, Eye, Trash2, Search, SlidersHorizontal, Download, Plus, ChevronsUpDown, Crosshair, ArrowLeft, ArrowRight, Loader2, AlertTriangle, Check, X } from 'lucide-react';
@@ -24,6 +25,8 @@ const fmtFechaCorta = (raw?: string | null): string => {
 
 export default function VehiculosPage() {
     const t = useT();
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
     const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
     const [loading, setLoading] = useState(true);
     const [query, setQuery] = useState('');
@@ -385,7 +388,7 @@ export default function VehiculosPage() {
             />
 
             {/* Delete confirmation */}
-            {deleteTarget && (
+            {deleteTarget && mounted && createPortal(
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md border border-slate-200 shadow-2xl overflow-hidden max-h-[92vh] animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="p-6 flex items-start gap-4">
@@ -417,7 +420,8 @@ export default function VehiculosPage() {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

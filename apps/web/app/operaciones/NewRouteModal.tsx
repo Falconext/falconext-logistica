@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Save, Loader2, MapPin, Calendar, Clock, User, Truck, FileText, Package, Play, CheckCircle2, PauseCircle, Undo2, RefreshCw, Ban, Bell, Flag, Wallet, Plus, Trash2 } from 'lucide-react';
 import { Programacion } from '../../types';
 import api from '../../lib/api';
@@ -108,6 +109,10 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
     // Consegna ya realizada: el chofer pierde toda edición (incl. estado/bolla).
     // Solo supervisores/administradores (canEditAll) pueden seguir editando.
     const consegnaBloqueada = lockOthers && initialData?.estado_consegna === 'CONSEGNATO';
+    // Portal a <body>: sin esto el modal queda acotado al <main overflow-y-auto>
+    // del layout en vez de cubrir todo el viewport.
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
     const { currency } = useCurrency();
     const [vehicles, setVehicles] = useState<any[]>([]);
     const [workers, setWorkers] = useState<any[]>([]);
@@ -536,9 +541,9 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
     const anticipoNum = formData.anticipo !== '' ? Number(formData.anticipo) || 0 : 0;
     const saldo = anticipoNum - gastadoChofer;
 
-    if (!isOpen) return null;
+    if (!isOpen || !mounted) return null;
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white dark:bg-[#0f172a] rounded-t-2xl sm:rounded-2xl w-full max-w-2xl border border-slate-200 dark:border-slate-800 shadow-2xl max-h-[92vh] flex flex-col animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                 {/* Modal Header */}
@@ -1333,6 +1338,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

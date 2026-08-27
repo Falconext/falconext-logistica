@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, memo, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../lib/api';
 import { Programacion } from '../../types';
 import { MapboxRouteMap } from '../../components/tracking/MapboxRouteMap';
@@ -216,6 +217,9 @@ export default function OperacionesPage() {
     }, []);
 
     const trabajadorOptions = useMemo(() => trabajadores.map(tr => ({ value: tr.id, label: tr.nombre_completo })), [trabajadores]);
+    // Portal a <body> para el modal de confirmación de borrado.
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
 
     useEffect(() => {
         api.get('/trabajadores').then(res => setTrabajadores(res.data ?? [])).catch(() => { });
@@ -678,7 +682,7 @@ export default function OperacionesPage() {
             />
 
             {/* Confirmación de eliminación */}
-            {deleting && (
+            {deleting && mounted && createPortal(
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-sm border border-slate-200 shadow-2xl p-6 max-h-[92vh] overflow-y-auto animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="flex items-start gap-3">
@@ -714,7 +718,8 @@ export default function OperacionesPage() {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Save, Plus, Loader2, ShieldCheck, Lock } from 'lucide-react';
 import api from '../../../lib/api';
 import { MODULES } from '../../../lib/modules';
@@ -40,6 +41,8 @@ export default function RolModal({ isOpen, onClose, onSuccess, initialData }: Ro
     const [form, setForm] = useState({ ...emptyForm });
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
 
     const set = (k: keyof typeof emptyForm, v: any) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -117,13 +120,13 @@ export default function RolModal({ isOpen, onClose, onSuccess, initialData }: Ro
         }
     };
 
-    if (!isOpen) return null;
+    if (!isOpen || !mounted) return null;
 
     const inputCls =
         'w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900 placeholder:text-slate-400 transition disabled:opacity-60 disabled:cursor-not-allowed';
     const labelCls = 'text-xs font-semibold text-slate-500 uppercase tracking-wide';
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-2xl border border-slate-200 shadow-2xl max-h-[92vh] flex flex-col animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                 {/* Header */}
@@ -243,6 +246,7 @@ export default function RolModal({ isOpen, onClose, onSuccess, initialData }: Ro
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

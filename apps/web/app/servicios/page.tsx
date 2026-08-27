@@ -5,6 +5,7 @@
 // sistema anterior. Dos vistas: lista de partes y resumen mensual por chofer.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Package, Search, Settings2, X, Sun, Moon, Timer, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 
 const ChevronRightIcon = ChevronRight;
@@ -65,6 +66,8 @@ export default function ServiciosPage() {
     const { locale } = useI18n();
     const { format } = useCurrency();
     const { user } = useAuthStore();
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
     const isAdmin = !!user?.es_admin;
 
     const now = new Date();
@@ -387,7 +390,7 @@ export default function ServiciosPage() {
             </div>
 
             {/* Modal tarifas */}
-            {showTarifas && (
+            {showTarifas && mounted && createPortal(
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowTarifas(false)}>
                     <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-4">
@@ -469,7 +472,8 @@ export default function ServiciosPage() {
                             <button onClick={guardarTarifas} disabled={savingTarifas} className="px-4 py-2 rounded-xl bg-[#1a1a1c] text-white text-sm font-semibold disabled:opacity-50">{t('servicios.guardar')}</button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

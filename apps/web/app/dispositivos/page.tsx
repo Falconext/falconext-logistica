@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import api from "../../lib/api";
 import { Plus, Smartphone, Trash2, Copy, Map, X, Truck, Clock, Pencil, AlertTriangle, User } from "lucide-react";
 import { toast } from "sonner";
@@ -34,6 +35,8 @@ interface Device {
 
 export default function DispositivosPage() {
     const t = useT();
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
     const [devices, setDevices] = useState<Device[]>([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
@@ -284,8 +287,8 @@ export default function DispositivosPage() {
             )}
 
             {/* Map Modal */}
-            {viewingDevice && (
-                <div className="fixed inset-0 top-[-32px] z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
+            {viewingDevice && mounted && createPortal(
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-slate-900 w-full max-w-5xl h-[88vh] sm:h-[80vh] rounded-t-2xl sm:rounded-2xl overflow-hidden flex flex-col shadow-2xl animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center gap-3 bg-white dark:bg-slate-900">
                             <div className="min-w-0">
@@ -312,11 +315,12 @@ export default function DispositivosPage() {
                             />
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* Modal Crear Dispositivo */}
-            {showModal && (
+            {showModal && mounted && createPortal(
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-[#0F172A] rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-md max-h-[92vh] overflow-y-auto border border-slate-200 dark:border-slate-800 animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="p-5 sm:p-6 border-b border-slate-200 dark:border-slate-800">
@@ -404,11 +408,12 @@ export default function DispositivosPage() {
                             </div>
                         </form>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* Modal Confirmar Eliminación */}
-            {deletingDevice && (
+            {deletingDevice && mounted && createPortal(
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-[#0F172A] rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-sm max-h-[92vh] overflow-hidden border border-slate-200 dark:border-slate-800 animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="p-6">
@@ -444,7 +449,8 @@ export default function DispositivosPage() {
                             </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

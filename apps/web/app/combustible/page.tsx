@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../lib/api';
 import { Fuel, Plus, Search, ArrowLeft, ArrowRight, Pencil, Trash2, Paperclip, Loader2, SlidersHorizontal, FileSpreadsheet, Check, X } from 'lucide-react';
 import CombustibleModal from './CombustibleModal';
@@ -88,6 +89,9 @@ export default function CombustiblePage() {
     const [spedizioneFiltro, setSpedizioneFiltro] = useState('');
     const [trabajadores, setTrabajadores] = useState<{ id: string; nombre_completo: string }[]>([]);
     const trabajadorOptions = useMemo(() => trabajadores.map(tr => ({ value: tr.id, label: tr.nombre_completo })), [trabajadores]);
+    // Portal a <body> para el modal de confirmación de borrado.
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
     const filtrosActivosCount = [fechaInicio, fechaFin, trabajadorFiltro, spedizioneFiltro].filter(Boolean).length;
     const limpiarFiltrosAvanzados = () => { setFechaInicio(''); setFechaFin(''); setTrabajadorFiltro(''); setSpedizioneFiltro(''); };
 
@@ -395,7 +399,7 @@ export default function CombustiblePage() {
             )}
 
             {/* Delete confirmation */}
-            {deleting && (
+            {deleting && mounted && createPortal(
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
                     <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md border border-slate-200 shadow-2xl p-6 max-h-[92vh] animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="flex items-center gap-3 mb-2">
@@ -425,7 +429,8 @@ export default function CombustiblePage() {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

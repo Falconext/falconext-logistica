@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../lib/api';
 import { Wrench, Plus, Search, Calendar, ArrowLeft, ArrowRight, Pencil, Trash2, Paperclip, Loader2 } from 'lucide-react';
 import MaintenanceModal from './MaintenanceModal';
@@ -27,6 +28,8 @@ export default function MaintenancePage() {
     const t = useT();
     const dateLocale = useDateLocale();
     const { format } = useCurrency();
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
     const [maintenance, setMaintenance] = useState<any[]>([]);
     const [total, setTotal] = useState(0);
     const [counts, setCounts] = useState<Record<string, number>>({ Todos: 0, Preventivo: 0, Correctivo: 0, Emergencia: 0 });
@@ -237,7 +240,7 @@ export default function MaintenancePage() {
             )}
 
             {/* Delete confirmation */}
-            {deleting && (
+            {deleting && mounted && createPortal(
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
                     <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md border border-slate-200 shadow-2xl p-6 max-h-[92vh] animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="flex items-center gap-3 mb-2">
@@ -268,7 +271,8 @@ export default function MaintenancePage() {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../../lib/api';
 import { Truck, FileText, Phone, Mail, MapPin, ArrowLeft, Fuel, Receipt, ChevronLeft, ChevronRight, Calendar, Navigation, X, Radio, KeyRound, FolderArchive } from 'lucide-react';
 import Link from 'next/link';
@@ -43,6 +44,8 @@ export default function TrabajadorDetailsPage() {
     const params = useParams();
     const id = params.id as string;
     const { format } = useCurrency();
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
 
     const [worker, setWorker] = useState<any>(null);
     const [historial, setHistorial] = useState<HistorialData>({ rutas: [], peajes: [], combustible: [] });
@@ -610,7 +613,7 @@ export default function TrabajadorDetailsPage() {
             </div>
 
             {/* Modal mapa en vivo */}
-            {showLocationMap && location?.device && (
+            {showLocationMap && location?.device && mounted && createPortal(
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-slate-900 w-full max-w-5xl h-[88vh] sm:h-[80vh] rounded-t-2xl sm:rounded-2xl overflow-hidden flex flex-col shadow-2xl animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
@@ -641,7 +644,8 @@ export default function TrabajadorDetailsPage() {
                             />
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* Modal: dar / gestionar acceso a la app (usuario vinculado) */}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../lib/api';
 import { useCurrency } from '../../lib/useCurrency';
 import { Trabajador } from '../../types';
@@ -15,6 +16,8 @@ const PAGE_SIZE = 10;
 export default function TrabajadoresPage() {
     const t = useT();
     const { format } = useCurrency();
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
     const [trabajadores, setTrabajadores] = useState<Trabajador[]>([]);
     const [loading, setLoading] = useState(true);
     const [query, setQuery] = useState('');
@@ -232,7 +235,7 @@ export default function TrabajadoresPage() {
             />
 
             {/* Confirmación de eliminación */}
-            {toDelete && (
+            {toDelete && mounted && createPortal(
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-sm border border-slate-200 shadow-2xl p-6 max-h-[92vh] overflow-y-auto animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="flex items-start gap-3">
@@ -261,7 +264,8 @@ export default function TrabajadoresPage() {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

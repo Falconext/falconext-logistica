@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Save, Loader2, Truck, FileText } from 'lucide-react';
 import { Vehiculo } from '../../types';
 import api from '../../lib/api';
@@ -55,6 +56,8 @@ const CATEGORIA_OPTIONS = [
 export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData }: VehiculoModalProps) {
     const [form, setForm] = useState<Record<string, string>>(EMPTY);
     const [submitting, setSubmitting] = useState(false);
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
 
     const isEdit = !!initialData?.id;
 
@@ -147,9 +150,9 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
         }
     };
 
-    if (!isOpen) return null;
+    if (!isOpen || !mounted) return null;
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-2xl border border-slate-200 shadow-2xl max-h-[92vh] flex flex-col animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                 {/* Header */}
@@ -354,6 +357,7 @@ export default function VehiculoModal({ isOpen, onClose, onSuccess, initialData 
                     </div>
                 </form>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

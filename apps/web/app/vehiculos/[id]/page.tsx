@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams } from 'next/navigation';
 import api from '../../../lib/api';
 import { Vehiculo } from '../../../types';
@@ -30,6 +31,8 @@ export default function VehiculoDetailPage() {
     const dateLocale = useDateLocale();
     const params = useParams();
     const vehiculoId = params.id as string;
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
 
     const { format } = useCurrency();
 
@@ -555,7 +558,7 @@ export default function VehiculoDetailPage() {
             />
 
             {/* Edit Cost Modal */}
-            {editingMant && (
+            {editingMant && mounted && createPortal(
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-[#0f172a] rounded-t-2xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-md overflow-hidden max-h-[92vh] animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="flex justify-between items-center p-4 border-b border-slate-100 dark:border-slate-800">
@@ -625,7 +628,8 @@ export default function VehiculoDetailPage() {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

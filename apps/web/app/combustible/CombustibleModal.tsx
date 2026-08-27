@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Save, Loader2 } from 'lucide-react';
 import api from '../../lib/api';
 import FileUpload from '../../components/FileUpload';
@@ -29,6 +30,9 @@ const emptyForm = () => ({
 export default function CombustibleModal({ isOpen, onClose, onSuccess, record }: CombustibleModalProps) {
     const { currency } = useCurrency();
     const isEdit = !!record;
+
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
 
     const [vehicles, setVehicles] = useState<any[]>([]);
     const [workers, setWorkers] = useState<any[]>([]);
@@ -78,11 +82,11 @@ export default function CombustibleModal({ isOpen, onClose, onSuccess, record }:
         }
     };
 
-    if (!isOpen) return null;
+    if (!isOpen || !mounted) return null;
 
     const inputClass = 'w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 outline-none focus:border-slate-400 focus:ring-2 focus:ring-[#FFC933]/40 transition text-sm text-slate-900';
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
             <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-2xl border border-slate-200 shadow-2xl max-h-[92vh] overflow-y-auto animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                 <div className="p-4 sm:p-6 border-b border-slate-200 flex justify-between items-center sticky top-0 bg-white/90 backdrop-blur-md z-10">
@@ -176,6 +180,7 @@ export default function CombustibleModal({ isOpen, onClose, onSuccess, record }:
                     </div>
                 </form>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

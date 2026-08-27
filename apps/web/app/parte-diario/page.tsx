@@ -6,6 +6,7 @@
 // crea/edita/elimina cada parte (POST/PATCH/DELETE /registros). Las tarifas y
 // el total del período vienen de /registros/mias/resumen.
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Plus, Save, Trash2, Sun, Moon, Loader2, X, ClipboardList, Calendar, CheckCircle2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../lib/api';
@@ -52,6 +53,8 @@ interface Resumen {
 export default function ParteDiarioPage() {
     const user = useAuthStore((s) => s.user);
     const { format } = useCurrency();
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
     const [loading, setLoading] = useState(true);
     const [resumen, setResumen] = useState<Resumen | null>(null);
     const [registros, setRegistros] = useState<any[]>([]);
@@ -218,7 +221,7 @@ export default function ParteDiarioPage() {
             )}
 
             {/* Modal formulario */}
-            {modalOpen && (
+            {modalOpen && mounted && createPortal(
                 <div className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4">
                     <div className="bg-white w-full md:max-w-lg md:rounded-2xl rounded-t-2xl max-h-[92vh] overflow-y-auto">
                         <div className="sticky top-0 bg-white border-b border-slate-100 px-5 py-3 flex items-center justify-between">
@@ -294,7 +297,8 @@ export default function ParteDiarioPage() {
                             </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

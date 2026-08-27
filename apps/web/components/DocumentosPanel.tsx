@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
     UploadCloud, Loader2, FileText, Eye, Trash2, X, ExternalLink, Download,
     type LucideIcon,
@@ -145,6 +146,8 @@ export default function DocumentosPanel({
 
 function PreviewModal({ url, label, onClose }: { url: string; label: string; onClose: () => void }) {
     const t = useT();
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
         document.addEventListener('keydown', onKey);
@@ -153,7 +156,8 @@ function PreviewModal({ url, label, onClose }: { url: string; label: string; onC
 
     const pdf = isPdf(url);
 
-    return (
+    if (!mounted) return null;
+    return createPortal(
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200"
             onClick={onClose}>
             <div className="bg-white dark:bg-slate-900 w-full max-w-4xl h-[92vh] sm:h-[88vh] sm:rounded-2xl overflow-hidden flex flex-col shadow-2xl"
@@ -182,7 +186,8 @@ function PreviewModal({ url, label, onClose }: { url: string; label: string; onC
                     )}
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }
 

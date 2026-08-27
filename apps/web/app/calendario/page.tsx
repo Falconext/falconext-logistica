@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../lib/api';
 import { Programacion } from '../../types';
 import { ChevronLeft, ChevronRight, Calendar, MapPin, Truck, User, Clock, X } from 'lucide-react';
@@ -11,6 +12,8 @@ import { useT, useDateLocale } from '../../lib/i18n';
 export default function CalendarioPage() {
     const t = useT();
     const dateLocale = useDateLocale();
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
     const [currentDate, setCurrentDate] = useState(new Date());
     const [rutas, setRutas] = useState<Programacion[]>([]);
     const [loading, setLoading] = useState(true);
@@ -219,7 +222,7 @@ export default function CalendarioPage() {
             </div>
 
             {/* Day Detail Modal */}
-            {selectedDay && (
+            {selectedDay && mounted && createPortal(
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-[#0f172a] rounded-t-2xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-lg max-h-[92vh] overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="flex justify-between items-center p-4 border-b border-slate-100 dark:border-slate-800">
@@ -305,7 +308,8 @@ export default function CalendarioPage() {
                             </Link>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

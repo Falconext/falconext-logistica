@@ -7,6 +7,7 @@
 //  3. Si hay recorrido activo → panel "traslado en curso" con las acciones por
 //     estado (llegada / descanso / reanudar / regreso / finalizar / cancelar).
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
     Navigation, MapPin, Package, CheckCircle2, Play, Flag, CornerUpLeft, Coffee,
     RefreshCw, Ban, Loader2, Truck, Clock, Plus, Trash2, X,
@@ -436,6 +437,8 @@ function RendicionParadaModal({ parada, busy, onClose, onConfirm }: {
     const [abonoDe, setAbonoDe] = useState('');
     const [nota, setNota] = useState('');
     const [gastos, setGastos] = useState<{ tipo: string; monto: string; descripcion: string }[]>([]);
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
 
     const addGasto = () => setGastos((g) => [...g, { tipo: 'PEAJE', monto: '', descripcion: '' }]);
     const setGasto = (i: number, campo: string, v: string) => setGastos((g) => g.map((x, idx) => idx === i ? { ...x, [campo]: v } : x));
@@ -455,7 +458,8 @@ function RendicionParadaModal({ parada, busy, onClose, onConfirm }: {
 
     const sinDatos = !anticipo && gastos.every((g) => !Number(g.monto)) && !nota.trim();
 
-    return (
+    if (!mounted) return null;
+    return createPortal(
         <div className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4">
             <div className="bg-white w-full md:max-w-md md:rounded-2xl rounded-t-2xl max-h-[92vh] overflow-y-auto">
                 <div className="sticky top-0 bg-white border-b border-slate-100 px-5 py-3 flex items-center justify-between">
@@ -513,6 +517,7 @@ function RendicionParadaModal({ parada, busy, onClose, onConfirm }: {
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }
