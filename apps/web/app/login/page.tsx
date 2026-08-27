@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../../lib/store';
 import api from '../../lib/api';
 import { useT } from '../../lib/i18n';
-import { Truck, Lock, User, ArrowRight, Loader2 } from 'lucide-react';
+import { Lock, User, ArrowRight, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
     const router = useRouter();
@@ -45,8 +45,9 @@ export default function LoginPage() {
 
             <div className="w-full max-w-md bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl relative z-10 animate-in fade-in zoom-in duration-500">
                 <div className="text-center mb-8">
-                    <div className="w-16 h-16 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-blue-500/20">
-                        <Truck className="text-white" size={32} />
+                    <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-blue-500/20 overflow-hidden">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src="/logo-mark.png" alt="Gamonal Driver" className="w-full h-full object-contain p-1.5" />
                     </div>
                     <h1 className="text-2xl font-bold text-white mb-2">{t('login.welcome')}</h1>
                     <p className="text-slate-400">{t('login.subtitle')}</p>

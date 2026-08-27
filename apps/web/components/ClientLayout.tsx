@@ -103,8 +103,9 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                         <Menu size={22} />
                     </button>
                     <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#FFD84D] to-[#F5A623] shrink-0" />
-                        <span className="font-bold tracking-tight">Logistica</span>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src="/logo-mark.png" alt="Gamonal Driver" className="w-7 h-7 rounded-lg bg-white object-contain p-0.5 shrink-0" />
+                        <span className="font-bold tracking-tight">Gamonal Driver</span>
                     </div>
                 </header>
 

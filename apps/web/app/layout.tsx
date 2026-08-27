@@ -14,7 +14,7 @@ const body = Inter({ subsets: ["latin"], variable: "--font-body" });
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono", weight: ["400", "500", "600"] });
 
 export const metadata: Metadata = {
-    title: "Logistica Premium",
+    title: "Gamonal Driver",
     description: "Sistema de gestión de transporte y personal",
 };
 

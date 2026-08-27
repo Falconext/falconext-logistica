@@ -92,12 +92,12 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             {/* Logo */}
             <div className="p-3">
                 <div className="flex items-center gap-3 rounded-2xl bg-white/[0.05] px-3 py-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#FFD84D] to-[#F5A623] flex items-center justify-center relative overflow-hidden shrink-0">
-                        <span className="absolute w-4 h-4 rounded-full bg-white/40 -left-0.5 -top-0.5" />
-                        <span className="absolute w-4 h-4 rounded-full bg-black/10 -right-0.5 -bottom-0.5" />
+                    <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center relative overflow-hidden shrink-0">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src="/logo-mark.png" alt="Gamonal Driver" className="w-full h-full object-contain p-0.5" />
                     </div>
                     <div className="flex-1 min-w-0">
-                        <h1 className="text-[15px] font-bold tracking-tight text-white leading-tight truncate">Logistica</h1>
+                        <h1 className="text-[15px] font-bold tracking-tight text-white leading-tight truncate">Gamonal Driver</h1>
                         <span className="text-xs text-zinc-500">{t('nav.company')}</span>
                     </div>
                     <ChevronsLeft size={18} className="text-zinc-500" />
