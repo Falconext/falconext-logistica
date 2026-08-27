@@ -105,6 +105,9 @@ const extractPlaca = (raw?: string): string => {
 
 export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData, canEditAll = true }: NewRouteModalProps) {
     const lockOthers = !canEditAll; // chofer: bloquea todo menos el itinerario
+    // Consegna ya realizada: el chofer pierde toda edición (incl. estado/bolla).
+    // Solo supervisores/administradores (canEditAll) pueden seguir editando.
+    const consegnaBloqueada = lockOthers && initialData?.estado_consegna === 'CONSEGNATO';
     const { currency } = useCurrency();
     const [vehicles, setVehicles] = useState<any[]>([]);
     const [workers, setWorkers] = useState<any[]>([]);
@@ -347,6 +350,13 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
     const handleSubmit = async (e?: React.FormEvent) => {
         e?.preventDefault();
 
+        // Defensa extra además del UI deshabilitado: un chofer no puede guardar
+        // cambios sobre una consegna ya realizada.
+        if (consegnaBloqueada) {
+            toast.error('Esta consegna ya fue realizada. Solo un supervisor o administrador puede editarla.');
+            return;
+        }
+
         // Únicos campos obligatorios: vehículo y chofer.
         if (!formData.vehiculo_id || !formData.trabajador_id) {
             toast.error('Vehículo y Conductor son obligatorios');
@@ -544,14 +554,19 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
 
                 <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6 sm:space-y-8 flex-1 overflow-y-auto min-h-0">
 
-                    {lockOthers && (
+                    {consegnaBloqueada ? (
+                        <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-900/40 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+                            <Flag size={16} className="mt-0.5 shrink-0" />
+                            <span>Esta consegna ya fue <b>realizada (Consegnato)</b> — la edición queda bloqueada. Solo un supervisor o administrador puede modificarla.</span>
+                        </div>
+                    ) : lockOthers && (
                         <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-900/40 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
                             <MapPin size={16} className="mt-0.5 shrink-0" />
                             <span>Como conductor puedes actualizar el <b>estado de la consegna</b> y el <b>origen/destino</b>. El resto de datos es de solo lectura.</span>
                         </div>
                     )}
 
-                    {/* 0. Estado de la consegna — editable por todos (incl. chofer) */}
+                    {/* 0. Estado de la consegna — editable por todos (incl. chofer), salvo que ya esté Consegnato */}
                     <div className="space-y-3">
                         <div className="flex items-center gap-2 text-slate-800 dark:text-white font-bold border-b border-slate-100 dark:border-slate-800 pb-2">
                             <Flag size={18} className="text-blue-500" />
@@ -565,8 +580,9 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                     <button
                                         key={value}
                                         type="button"
+                                        disabled={consegnaBloqueada}
                                         onClick={() => setFormData({ ...formData, estado_consegna: active ? '' : value })}
-                                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-semibold transition ${active
+                                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed ${active
                                             ? `${meta.badge} ring-1 ring-current`
                                             : 'bg-slate-50 dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
                                     >
@@ -935,9 +951,10 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                             </div>
                         </div>
 
-                        {/* Bolla / DDT de la operación. Solo la sube el CHOFER (modo lockOthers);
-                            el supervisor únicamente puede verla si ya fue subida. */}
-                        {lockOthers ? (
+                        {/* Bolla / DDT de la operación. Solo la sube el CHOFER (modo lockOthers, y
+                            solo mientras la consegna no esté ya realizada); el supervisor únicamente
+                            puede verla si ya fue subida. */}
+                        {lockOthers && !consegnaBloqueada ? (
                             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800">
                                 <h4 className="flex items-center gap-2 text-slate-700 dark:text-slate-200 font-bold mb-3">
                                     <FileText size={16} className="text-blue-500" />

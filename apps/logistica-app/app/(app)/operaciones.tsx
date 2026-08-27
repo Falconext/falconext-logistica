@@ -616,9 +616,10 @@ export default function OperacionesScreen() {
 
   const openEdit = (r: Programacion) => {
     // Bloqueo pedido por dirección: una consegna ya realizada (entregado /
-    // consegnato) no se puede editar. Solo se permite eliminarla (admin).
-    if (isConsegnaRealizada(r)) {
-      Alert.alert('Consegna realizada', 'Esta operación ya fue entregada (consegnato). No se puede editar.');
+    // consegnato) no se puede editar — pero SOLO para el chofer (autista).
+    // Supervisores/administradores (canEditAll) sí pueden seguir editándola.
+    if (isChofer(user) && isConsegnaRealizada(r)) {
+      Alert.alert('Consegna realizada', 'Esta operación ya fue entregada (consegnato). Solo un supervisor o administrador puede editarla.');
       return;
     }
     setEditing(r);
@@ -705,9 +706,10 @@ export default function OperacionesScreen() {
   const saldo = recibidoNum - gastadoChofer;
 
   const save = async () => {
-    // Defensa: no permitir guardar cambios sobre una consegna ya realizada.
-    if (editing && isConsegnaRealizada(editing)) {
-      Alert.alert('Consegna realizada', 'Esta operación ya fue entregada (consegnato). No se puede editar.');
+    // Defensa: no permitir al chofer guardar cambios sobre una consegna ya
+    // realizada (supervisores/admins sí pueden).
+    if (isChofer(user) && editing && isConsegnaRealizada(editing)) {
+      Alert.alert('Consegna realizada', 'Esta operación ya fue entregada (consegnato). Solo un supervisor o administrador puede editarla.');
       return;
     }
     // Únicos obligatorios: vehículo y conductor.
@@ -1092,7 +1094,9 @@ export default function OperacionesScreen() {
                 />
               )}
               <View style={{ flexDirection: 'row', gap: S.md }}>
-                {isConsegnaRealizada(detail) ? (
+                {/* Bloqueado solo para el chofer — supervisores/admins (canEditAll)
+                    siguen pudiendo editar aunque ya esté consegnata. */}
+                {isConsegnaRealizada(detail) && isChofer(user) ? (
                   <View style={[styles.lockNote, { flex: 1 }]}>
                     <Lock size={15} color={C.textMuted} />
                     <Text style={styles.lockNoteText}>Consegna realizada · edición bloqueada</Text>
