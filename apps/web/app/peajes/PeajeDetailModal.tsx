@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ExternalLink, Paperclip } from 'lucide-react';
 import { useCurrency } from '../../lib/useCurrency';
 import { useT, useDateLocale } from '../../lib/i18n';
@@ -22,12 +24,16 @@ export default function PeajeDetailModal({ item, onClose }: PeajeDetailModalProp
     const t = useT();
     const dateLocale = useDateLocale();
     const { format } = useCurrency();
-    if (!item) return null;
+    // Portal a <body>: sin esto el modal queda acotado al <main overflow-y-auto>
+    // del layout en vez de cubrir todo el viewport.
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
+    if (!item || !mounted) return null;
 
     const fmtDate = (d?: string | null) => d ? new Date(d).toLocaleDateString(dateLocale, { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
     const comprobantes: string[] = item.comprobantes?.length ? item.comprobantes : (item.archivo ? [item.archivo] : []);
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200" onClick={onClose}>
             <div
                 className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-lg border border-slate-200 shadow-2xl max-h-[92vh] overflow-y-auto animate-in slide-in-from-bottom sm:zoom-in-95 duration-200"
@@ -94,6 +100,7 @@ export default function PeajeDetailModal({ item, onClose }: PeajeDetailModalProp
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

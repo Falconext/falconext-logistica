@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
     Navigation, MapPin, CornerUpLeft, Clock, Timer, RefreshCw, Loader2, Route as RouteIcon, User, X, MapPinned, Coffee,
     WifiOff, History, ArrowUp, ArrowDown, Minus, Radio
@@ -434,6 +435,11 @@ function RecorridoMapModal({ rec, onClose }: { rec: RecorridoActivo; onClose: ()
     const { isLoaded } = useGoogleMaps();
     const containerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<google.maps.Map | null>(null);
+    // Portal a <body>: el modal vive dentro de <main overflow-y-auto>, así que sin
+    // portal el `fixed inset-0` queda acotado a ese contenedor en vez de cubrir
+    // todo el viewport (se ve "subido"/recortado, tapando solo parte de la pantalla).
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
 
     useEffect(() => {
         if (!isLoaded || !containerRef.current || mapRef.current) return;
@@ -502,7 +508,8 @@ function RecorridoMapModal({ rec, onClose }: { rec: RecorridoActivo; onClose: ()
         return () => { cancelled = true; };
     }, [isLoaded, rec]);
 
-    return (
+    if (!mounted) return null;
+    return createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
             <div className="w-full max-w-3xl rounded-2xl overflow-hidden bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
@@ -529,7 +536,8 @@ function RecorridoMapModal({ rec, onClose }: { rec: RecorridoActivo; onClose: ()
                     <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-600" /> Posición actual</span>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }
 
@@ -538,6 +546,10 @@ function TrazaModal({ data, loading, onClose }: { data: any | null; loading: boo
     const { isLoaded } = useGoogleMaps();
     const containerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<google.maps.Map | null>(null);
+    // Portal a <body> — mismo motivo que RecorridoMapModal (evita quedar acotado
+    // al <main overflow-y-auto> en vez de cubrir el viewport completo).
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
 
     const rec = data?.recorrido;
     const path: { lat: number; lng: number }[] = data?.path || [];
@@ -571,7 +583,8 @@ function TrazaModal({ data, loading, onClose }: { data: any | null; loading: boo
     const hasPath = path.length > 1;
     const stops = an?.stops?.length ?? 0;
 
-    return (
+    if (!mounted) return null;
+    return createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
             <div className="w-full max-w-4xl rounded-2xl overflow-hidden bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
@@ -608,7 +621,8 @@ function TrazaModal({ data, loading, onClose }: { data: any | null; loading: boo
                     </>
                 )}
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }
 
