@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import api from '../../lib/api';
 import { Receipt, Plus, Search, ArrowLeft, ArrowRight, Pencil, Trash2, Paperclip, Loader2, SlidersHorizontal, Eye, FileSpreadsheet } from 'lucide-react';
 import PeajeModal from './PeajeModal';
 import PeajeDetailModal from './PeajeDetailModal';
 import Select from '../../components/Select';
+import DatePicker from '../../components/DatePicker';
 import { useCurrency } from '../../lib/useCurrency';
 import { useT, useDateLocale } from '../../lib/i18n';
 import { useAuthStore } from '../../lib/store';
@@ -68,6 +69,7 @@ export default function PeajesPage() {
     const [trabajadorFiltro, setTrabajadorFiltro] = useState('');
     const [spedizioneFiltro, setSpedizioneFiltro] = useState('');
     const [trabajadores, setTrabajadores] = useState<{ id: string; nombre_completo: string }[]>([]);
+    const trabajadorOptions = useMemo(() => trabajadores.map(tr => ({ value: tr.id, label: tr.nombre_completo })), [trabajadores]);
     const filtrosActivosCount = [fechaInicio, fechaFin, trabajadorFiltro, spedizioneFiltro].filter(Boolean).length;
     const limpiarFiltrosAvanzados = () => { setFechaInicio(''); setFechaFin(''); setTrabajadorFiltro(''); setSpedizioneFiltro(''); };
 
@@ -237,32 +239,24 @@ export default function PeajesPage() {
                 </button>
                 {showFiltros && (
                     <div className="mt-2 p-4 rounded-xl border border-slate-200 bg-white grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                        <div>
-                            <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('peajes.filtros.fechaInicio')}</label>
-                            <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)}
-                                className="w-full px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900" />
-                        </div>
-                        <div>
-                            <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('peajes.filtros.fechaFin')}</label>
-                            <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)}
-                                className="w-full px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900" />
-                        </div>
-                        <div>
-                            <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('peajes.filtros.trabajador')}</label>
-                            <select value={trabajadorFiltro} onChange={(e) => setTrabajadorFiltro(e.target.value)}
-                                className="w-full px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900">
-                                <option value="">{t('peajes.filtros.todos')}</option>
-                                {trabajadores.map(tr => <option key={tr.id} value={tr.id}>{tr.nombre_completo}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('peajes.filtros.spedizione')}</label>
-                            <select value={spedizioneFiltro} onChange={(e) => setSpedizioneFiltro(e.target.value)}
-                                className="w-full px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900">
-                                <option value="">{t('peajes.filtros.todos')}</option>
-                                {SPEDIZIONE_OPTIONS.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
-                            </select>
-                        </div>
+                        <DatePicker label={t('peajes.filtros.fechaInicio')} value={fechaInicio} onChange={setFechaInicio} />
+                        <DatePicker label={t('peajes.filtros.fechaFin')} value={fechaFin} onChange={setFechaFin} />
+                        <Select
+                            label={t('peajes.filtros.trabajador')}
+                            value={trabajadorFiltro}
+                            onChange={setTrabajadorFiltro}
+                            options={trabajadorOptions}
+                            placeholder={t('peajes.filtros.todos')}
+                            clearable
+                        />
+                        <Select
+                            label={t('peajes.filtros.spedizione')}
+                            value={spedizioneFiltro}
+                            onChange={setSpedizioneFiltro}
+                            options={SPEDIZIONE_OPTIONS}
+                            placeholder={t('peajes.filtros.todos')}
+                            clearable
+                        />
                         {filtrosActivosCount > 0 && (
                             <button onClick={limpiarFiltrosAvanzados} className="text-xs font-medium text-blue-600 hover:underline text-left sm:col-span-2 lg:col-span-4">
                                 {t('peajes.filtros.limpiar')}
@@ -324,16 +318,18 @@ export default function PeajesPage() {
                                     </td>
                                     <td className="px-5 py-3.5">
                                         {isAdmin ? (
-                                            <select
+                                            <Select
+                                                className="w-36"
+                                                searchable={false}
                                                 value={item.estado || ''}
                                                 disabled={busyEstado.has(item.id)}
-                                                onChange={(e) => patchEstado(item, e.target.value)}
-                                                className={`px-2 py-1 rounded-md text-xs font-medium border whitespace-nowrap outline-none disabled:opacity-50 ${ESTADO_BADGE[item.estado] || 'text-slate-500 border-slate-200 bg-white'}`}
-                                            >
-                                                <option value="">{t('peajes.estados.pendiente')}</option>
-                                                <option value="PAGADO">{t('peajes.estados.pagado')}</option>
-                                                <option value="ANULADO">{t('peajes.estados.anulado')}</option>
-                                            </select>
+                                                onChange={(v) => patchEstado(item, v)}
+                                                options={[
+                                                    { value: '', label: t('peajes.estados.pendiente') },
+                                                    { value: 'PAGADO', label: t('peajes.estados.pagado') },
+                                                    { value: 'ANULADO', label: t('peajes.estados.anulado') },
+                                                ]}
+                                            />
                                         ) : item.estado ? (
                                             <span className={`px-2.5 py-0.5 rounded-md text-xs font-medium border whitespace-nowrap ${ESTADO_BADGE[item.estado] || ESTADO_BADGE.PENDIENTE}`}>
                                                 {item.estado}

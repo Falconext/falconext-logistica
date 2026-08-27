@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import api from '../../lib/api';
 import { Fuel, Plus, Search, ArrowLeft, ArrowRight, Pencil, Trash2, Paperclip, Loader2, SlidersHorizontal, FileSpreadsheet, Check, X } from 'lucide-react';
 import CombustibleModal from './CombustibleModal';
 import Select from '../../components/Select';
+import DatePicker from '../../components/DatePicker';
 import { useCurrency } from '../../lib/useCurrency';
 import { useT, useDateLocale } from '../../lib/i18n';
 import { SPEDIZIONE_OPTIONS } from '../operaciones/constants';
@@ -86,6 +87,7 @@ export default function CombustiblePage() {
     const [trabajadorFiltro, setTrabajadorFiltro] = useState('');
     const [spedizioneFiltro, setSpedizioneFiltro] = useState('');
     const [trabajadores, setTrabajadores] = useState<{ id: string; nombre_completo: string }[]>([]);
+    const trabajadorOptions = useMemo(() => trabajadores.map(tr => ({ value: tr.id, label: tr.nombre_completo })), [trabajadores]);
     const filtrosActivosCount = [fechaInicio, fechaFin, trabajadorFiltro, spedizioneFiltro].filter(Boolean).length;
     const limpiarFiltrosAvanzados = () => { setFechaInicio(''); setFechaFin(''); setTrabajadorFiltro(''); setSpedizioneFiltro(''); };
 
@@ -232,32 +234,24 @@ export default function CombustiblePage() {
                 </button>
                 {showFiltros && (
                     <div className="mt-2 p-4 rounded-xl border border-slate-200 bg-white grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                        <div>
-                            <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('combustible.filtros.fechaInicio')}</label>
-                            <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)}
-                                className="w-full px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900" />
-                        </div>
-                        <div>
-                            <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('combustible.filtros.fechaFin')}</label>
-                            <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)}
-                                className="w-full px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900" />
-                        </div>
-                        <div>
-                            <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('combustible.filtros.trabajador')}</label>
-                            <select value={trabajadorFiltro} onChange={(e) => setTrabajadorFiltro(e.target.value)}
-                                className="w-full px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900">
-                                <option value="">{t('combustible.filtros.todos')}</option>
-                                {trabajadores.map(tr => <option key={tr.id} value={tr.id}>{tr.nombre_completo}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('combustible.filtros.spedizione')}</label>
-                            <select value={spedizioneFiltro} onChange={(e) => setSpedizioneFiltro(e.target.value)}
-                                className="w-full px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900">
-                                <option value="">{t('combustible.filtros.todos')}</option>
-                                {SPEDIZIONE_OPTIONS.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
-                            </select>
-                        </div>
+                        <DatePicker label={t('combustible.filtros.fechaInicio')} value={fechaInicio} onChange={setFechaInicio} />
+                        <DatePicker label={t('combustible.filtros.fechaFin')} value={fechaFin} onChange={setFechaFin} />
+                        <Select
+                            label={t('combustible.filtros.trabajador')}
+                            value={trabajadorFiltro}
+                            onChange={setTrabajadorFiltro}
+                            options={trabajadorOptions}
+                            placeholder={t('combustible.filtros.todos')}
+                            clearable
+                        />
+                        <Select
+                            label={t('combustible.filtros.spedizione')}
+                            value={spedizioneFiltro}
+                            onChange={setSpedizioneFiltro}
+                            options={SPEDIZIONE_OPTIONS}
+                            placeholder={t('combustible.filtros.todos')}
+                            clearable
+                        />
                         {filtrosActivosCount > 0 && (
                             <button onClick={limpiarFiltrosAvanzados} className="text-xs font-medium text-blue-600 hover:underline text-left sm:col-span-2 lg:col-span-4">
                                 {t('combustible.filtros.limpiar')}

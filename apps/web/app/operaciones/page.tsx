@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, memo, useCallback, useRef } from 'react';
+import { useEffect, useState, memo, useCallback, useMemo, useRef } from 'react';
 import api from '../../lib/api';
 import { Programacion } from '../../types';
 import { MapboxRouteMap } from '../../components/tracking/MapboxRouteMap';
@@ -16,6 +16,8 @@ import { useCurrency } from '../../lib/useCurrency';
 import { useAuthStore } from '../../lib/store';
 import { isChofer } from '../../lib/modules';
 import { useT, useDateLocale } from '../../lib/i18n';
+import DatePicker from '../../components/DatePicker';
+import Select from '../../components/Select';
 
 const MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyDJ-Y0SukxfjbACOUjPY7CoV6qnaQkKSZg";
 
@@ -201,6 +203,19 @@ export default function OperacionesPage() {
             setFechaFin(hasta.toISOString().slice(0, 10));
         }
     };
+
+    // Últimos 24 meses para el selector de "Mes" (buscable, en vez de <input type="month">).
+    const mesOptions = useMemo(() => {
+        const now = new Date();
+        return Array.from({ length: 24 }, (_, i) => {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            const label = d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+            return { value, label: label.charAt(0).toUpperCase() + label.slice(1) };
+        });
+    }, []);
+
+    const trabajadorOptions = useMemo(() => trabajadores.map(tr => ({ value: tr.id, label: tr.nombre_completo })), [trabajadores]);
 
     useEffect(() => {
         api.get('/trabajadores').then(res => setTrabajadores(res.data ?? [])).catch(() => { });
@@ -456,61 +471,42 @@ export default function OperacionesPage() {
 
                         {showFiltros && (
                             <div className="mt-2 p-3 rounded-lg border border-slate-200 bg-slate-50/60 space-y-2.5">
-                                <div>
-                                    <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('operaciones.filtros.mes')}</label>
-                                    <input
-                                        type="month"
-                                        value={mes}
-                                        onChange={(e) => onMesChange(e.target.value)}
-                                        className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 focus:border-slate-400 outline-none text-xs text-slate-900"
+                                <Select
+                                    label={t('operaciones.filtros.mes')}
+                                    value={mes}
+                                    onChange={onMesChange}
+                                    options={mesOptions}
+                                    placeholder={t('operaciones.filtros.todos')}
+                                    clearable
+                                />
+                                <div className="grid grid-cols-2 gap-2">
+                                    <DatePicker
+                                        label={t('operaciones.filtros.fechaInicio')}
+                                        value={fechaInicio}
+                                        onChange={(v) => { setFechaInicio(v); setMes(''); }}
+                                    />
+                                    <DatePicker
+                                        label={t('operaciones.filtros.fechaFin')}
+                                        value={fechaFin}
+                                        onChange={(v) => { setFechaFin(v); setMes(''); }}
                                     />
                                 </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                        <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('operaciones.filtros.fechaInicio')}</label>
-                                        <input
-                                            type="date"
-                                            value={fechaInicio}
-                                            onChange={(e) => { setFechaInicio(e.target.value); setMes(''); }}
-                                            className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 focus:border-slate-400 outline-none text-xs text-slate-900"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('operaciones.filtros.fechaFin')}</label>
-                                        <input
-                                            type="date"
-                                            value={fechaFin}
-                                            onChange={(e) => { setFechaFin(e.target.value); setMes(''); }}
-                                            className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 focus:border-slate-400 outline-none text-xs text-slate-900"
-                                        />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('operaciones.filtros.trabajador')}</label>
-                                    <select
-                                        value={trabajadorFiltro}
-                                        onChange={(e) => setTrabajadorFiltro(e.target.value)}
-                                        className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 focus:border-slate-400 outline-none text-xs text-slate-900"
-                                    >
-                                        <option value="">{t('operaciones.filtros.todos')}</option>
-                                        {trabajadores.map(tr => (
-                                            <option key={tr.id} value={tr.id}>{tr.nombre_completo}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-[11px] font-medium text-slate-500 mb-1">{t('operaciones.filtros.spedizione')}</label>
-                                    <select
-                                        value={spedizioneFiltro}
-                                        onChange={(e) => setSpedizioneFiltro(e.target.value)}
-                                        className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 focus:border-slate-400 outline-none text-xs text-slate-900"
-                                    >
-                                        <option value="">{t('operaciones.filtros.todos')}</option>
-                                        {SPEDIZIONE_OPTIONS.map(op => (
-                                            <option key={op.value} value={op.value}>{op.label}</option>
-                                        ))}
-                                    </select>
-                                </div>
+                                <Select
+                                    label={t('operaciones.filtros.trabajador')}
+                                    value={trabajadorFiltro}
+                                    onChange={setTrabajadorFiltro}
+                                    options={trabajadorOptions}
+                                    placeholder={t('operaciones.filtros.todos')}
+                                    clearable
+                                />
+                                <Select
+                                    label={t('operaciones.filtros.spedizione')}
+                                    value={spedizioneFiltro}
+                                    onChange={setSpedizioneFiltro}
+                                    options={SPEDIZIONE_OPTIONS}
+                                    placeholder={t('operaciones.filtros.todos')}
+                                    clearable
+                                />
                                 {filtrosActivosCount > 0 && (
                                     <button onClick={limpiarFiltrosAvanzados} className="text-[11px] font-medium text-blue-600 hover:underline">
                                         {t('operaciones.filtros.limpiar')}
