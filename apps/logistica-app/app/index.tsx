@@ -139,7 +139,7 @@ export default function LoginScreen() {
         </View>
       </View>
 
-      <Text style={styles.footer}>v1.0.0 • Gamonal Trasporti</Text>
+      <Text style={styles.footer}>v1.0.0 • Gamonal Driver</Text>
     </KeyboardAvoidingView>
   );
 }
