@@ -293,10 +293,14 @@ export class RecorridosService {
         ]);
         // "Esperado": ETA por carretera origen→destino al iniciar (base del esperado vs real).
         const esperadoIda = oGeo && dGeo ? await this.etaMin(oGeo, dGeo) : null;
-        // Estimado de la RUTA COMPLETA (bucle origen→destinos→origen). Respaldo del
-        // GPS real al finalizar: si el chofer no manejó o el GPS falló, se usa esto.
+        // Estimado de la RUTA COMPLETA (bucle origen→retiros→entrega→destinos→origen).
+        // Respaldo del GPS real al finalizar: si el chofer no manejó o el GPS falló, se
+        // usa esto. Se incluyen los RETIROS (orígenes/almacenes adicionales) igual que
+        // los destinos: si no, el km/tiempo estimado se quedaba corto cuando había
+        // recogidas intermedias (el chofer los reportaba como "no suman").
+        const retirosProg = Array.isArray((prog as any).retiros) ? (prog as any).retiros : [];
         const destinosProg = Array.isArray((prog as any).destinos) ? (prog as any).destinos : [];
-        const loopStops = [prog.lugar_entrega, ...destinosProg].map((s: any) => (s || '').trim()).filter(Boolean);
+        const loopStops = [...retirosProg, prog.lugar_entrega, ...destinosProg].map((s: any) => (s || '').trim()).filter(Boolean);
         const est = prog.lugar_retiro && loopStops.length
             ? await this.directionsRoute(prog.lugar_retiro, loopStops, prog.lugar_retiro)
             : null;

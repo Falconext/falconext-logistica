@@ -200,11 +200,14 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
         if (!isOpen || !mapsLoaded || typeof google === 'undefined') return;
         const origen = (formData.retiro_lugar || '').trim();
         const entrega = (formData.entrega_lugar || '').trim();
+        const retiros = formData.retiros.map((r) => (r || '').trim()).filter(Boolean);
         const destinos = formData.destinos.map((d) => (d || '').trim()).filter(Boolean);
         if (!origen || !entrega) { setEtaEntrega(''); setEtaDestinos([]); return; }
 
         let cancelled = false;
-        const stops = [entrega, ...destinos]; // paradas tras el origen, en orden
+        // Orden real: origen → retiros (recogidas) → entrega → destinos. Los retiros
+        // deben contarse (antes se omitían y el km/tiempo salía corto).
+        const stops = [...retiros, entrega, ...destinos];
         const t = setTimeout(async () => {
             try {
                 const svc = new google.maps.DirectionsService();
@@ -218,14 +221,16 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 const legs = res.routes?.[0]?.legs || [];
                 let acc = 0;
                 const cum = legs.map((l) => { acc += (l.duration?.value ?? 0) / 60; return acc; });
-                setEtaEntrega(cum[0] != null ? fmtMin(cum[0]) : '');
-                setEtaDestinos(destinos.map((_, i) => (cum[i + 1] != null ? fmtMin(cum[i + 1]) : '')));
+                // La entrega es la parada nº (retiros.length): antes vienen las recogidas.
+                const idxEntrega = retiros.length;
+                setEtaEntrega(cum[idxEntrega] != null ? fmtMin(cum[idxEntrega]) : '');
+                setEtaDestinos(destinos.map((_, i) => (cum[idxEntrega + 1 + i] != null ? fmtMin(cum[idxEntrega + 1 + i]) : '')));
             } catch {
                 if (!cancelled) { setEtaEntrega(''); setEtaDestinos([]); }
             }
         }, 500);
         return () => { cancelled = true; clearTimeout(t); };
-    }, [isOpen, mapsLoaded, formData.retiro_lugar, formData.entrega_lugar, formData.destinos.join('|')]);
+    }, [isOpen, mapsLoaded, formData.retiro_lugar, formData.entrega_lugar, formData.retiros.join('|'), formData.destinos.join('|')]);
 
     useEffect(() => {
         if (isOpen) {
