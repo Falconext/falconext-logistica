@@ -116,7 +116,9 @@ export class VelocityService {
     }
 
     // Posiciones live de un cliente. Aplana devices[] y deviceGroups[].devices[].
-    async fetchDevicePositions(customerId: string): Promise<RawDevice[]> {
+    // Retorno `any[]` a propósito: no exponer el tipo interno RawDevice en la firma
+    // pública (nest build genera .d.ts y TS4053 se queja de un tipo no nombrable).
+    async fetchDevicePositions(customerId: string): Promise<any[]> {
         const r = await this.call(`/api/mobile/kinesis/device-live-positions/?customer=${encodeURIComponent(customerId)}`, { method: 'POST' });
         if (!r.ok) {
             throw new Error(`Posiciones cliente ${customerId} fallaron (HTTP ${r.status}): ${JSON.stringify(r.body).slice(0, 200)}`);
