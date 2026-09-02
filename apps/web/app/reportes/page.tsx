@@ -1,12 +1,11 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { DateRangePicker, DateRangePickerValue } from '@tremor/react';
 import { motion } from 'framer-motion';
 // framer-motion v10 fricciona con los tipos de React 19; alias sin tipos para el motion.div.
 const MotionDiv = motion.div as any;
 import { Receipt, Users, Package, Calendar, TrendingUp, Truck, Trophy, Loader2 } from 'lucide-react';
-import { es } from 'date-fns/locale';
+import DatePicker from '../../components/DatePicker';
 import api from '../../lib/api';
 import { toast } from 'sonner';
 import { useCurrency } from '../../lib/useCurrency';
@@ -21,24 +20,31 @@ import { KpiCard, ChartCard } from '../../components/mono/MonoCards';
 const REALIZADAS = 'Entregas Realizadas';
 const FALLIDAS = 'Entregas Fallidas';
 
+// Fecha local 'YYYY-MM-DD' (sin desfase de zona horaria).
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const toISODate = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
 export default function ReportesPage() {
     const t = useT();
     const { format } = useCurrency();
-    const [dateRange, setDateRange] = useState<DateRangePickerValue>({
-        from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-        to: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0),
-    });
+    const _now = new Date();
+    // Por defecto: mes actual (del 1 al último día).
+    const [from, setFrom] = useState<string>(toISODate(new Date(_now.getFullYear(), _now.getMonth(), 1)));
+    const [to, setTo] = useState<string>(toISODate(new Date(_now.getFullYear(), _now.getMonth() + 1, 0)));
 
     const [loading, setLoading] = useState(true);
     const [kpis, setKpis] = useState({ total_routes: 0, completed: 0, failed: 0, income: 0, active_clients: 0 });
     const [charts, setCharts] = useState<{ evolution: any[]; workers: any[]; vehicles: any[] }>({ evolution: [], workers: [], vehicles: [] });
 
-    useEffect(() => { fetchReports(); /* eslint-disable-next-line */ }, [dateRange]);
+    useEffect(() => { fetchReports(); /* eslint-disable-next-line */ }, [from, to]);
 
     const fetchReports = async () => {
         setLoading(true);
         try {
-            const params = { from: dateRange.from?.toISOString(), to: dateRange.to?.toISOString() };
+            const params = {
+                from: from ? new Date(`${from}T00:00:00`).toISOString() : undefined,
+                to: to ? new Date(`${to}T23:59:59`).toISOString() : undefined,
+            };
             const response = await api.get('/dashboard/reports', { params });
             setKpis(response.data.kpis);
             setCharts(response.data.charts);
@@ -81,16 +87,10 @@ export default function ReportesPage() {
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">{t('reportes.titulo')}</h1>
                     <p className="text-sm text-slate-400 mt-1">{t('reportes.evolucionSubtitulo')}</p>
                 </div>
-                <div className="flex items-center gap-2">
-                    {loading && <Loader2 size={16} className="animate-spin text-slate-400" />}
-                    <DateRangePicker
-                        className="w-full md:max-w-md"
-                        value={dateRange}
-                        onValueChange={setDateRange}
-                        locale={es}
-                        placeholder={t('reportes.seleccionarRango')}
-                        selectPlaceholder={t('reportes.seleccionar')}
-                    />
+                <div className="flex items-end gap-2">
+                    {loading && <Loader2 size={16} className="animate-spin text-slate-400 mb-3" />}
+                    <div className="w-40"><DatePicker label="Desde" value={from} onChange={setFrom} clearable={false} max={to} /></div>
+                    <div className="w-40"><DatePicker label="Hasta" value={to} onChange={setTo} clearable={false} min={from} /></div>
                 </div>
             </div>
 
