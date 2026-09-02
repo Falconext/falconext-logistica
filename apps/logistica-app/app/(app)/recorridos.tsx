@@ -7,6 +7,7 @@ import {
 } from 'lucide-react-native';
 import { Screen, AppHeader, Card, StatCard, Badge, Button, LoadingState, EmptyState, Theme } from '../../components/ui';
 import api from '../../services/api';
+import { useLivePolling } from '../../hooks/useLivePolling';
 import { useTheme } from '../../context/ThemeContext';
 import { etaInfo } from '../../constants/eta';
 
@@ -116,12 +117,10 @@ export default function RecorridosScreen() {
     else loadHistorial();
   }, [view, loadActivos, loadHistorial]));
 
-  // Auto-refresh cada 20s solo para activos.
-  useEffect(() => {
-    if (view !== 'activos') return;
-    const id = setInterval(() => loadActivos(true), REFRESH_MS);
-    return () => clearInterval(id);
-  }, [view, loadActivos]);
+  // Auto-refresco consciente del costo: solo consulta con la app en primer plano y
+  // en la vista de activos; al volver a primer plano refresca al instante. En
+  // segundo plano no consulta (Neon puede suspenderse). Ver hooks/useLivePolling.
+  useLivePolling(() => { if (view === 'activos') loadActivos(true); }, REFRESH_MS);
 
   // Tick cada 30s para que "en tramo" avance en pantalla.
   useEffect(() => {

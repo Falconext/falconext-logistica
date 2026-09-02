@@ -6,6 +6,7 @@ import {
 } from 'lucide-react-native';
 import { Screen, AppHeader, Card, StatCard, LoadingState, EmptyState, Theme } from '../../components/ui';
 import api from '../../services/api';
+import { useLivePolling } from '../../hooks/useLivePolling';
 import { useTheme } from '../../context/ThemeContext';
 
 const C = Theme.colors;
@@ -140,11 +141,11 @@ export default function PanelScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Auto-refresh + tick de reloj cada 30s (la cuenta regresiva avanza sola).
-  useEffect(() => {
-    const id = setInterval(() => load(true), REFRESH_MS);
-    return () => clearInterval(id);
-  }, [load]);
+  // Auto-refresco consciente del costo: solo consulta con la app en primer plano;
+  // al volver a primer plano refresca al instante. En segundo plano no consulta
+  // (Neon puede suspenderse). Ver hooks/useLivePolling.
+  useLivePolling(() => load(true), REFRESH_MS);
+  // Tick de reloj (cosmético, no consulta a la API).
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), REFRESH_MS);
     return () => clearInterval(id);
