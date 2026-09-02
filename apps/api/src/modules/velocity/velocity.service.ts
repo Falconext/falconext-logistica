@@ -122,6 +122,33 @@ export class VelocityService {
         return { tokenSet: !!token, tokenPreview: token ? token.slice(0, 8) + '…' : null, hit, schemes, interesting };
     }
 
+    // Lee la documentación (api-docs.velocityfleet.com) desde el server (egress limpio)
+    // para descubrir la URL del spec OpenAPI → endpoints + auth reales del API Token.
+    async fetchDocs() {
+        const tryUrl = async (url: string) => {
+            try {
+                const res = await fetch(url, { headers: { Accept: '*/*' }, signal: AbortSignal.timeout(9000) });
+                const ct = res.headers.get('content-type') || '';
+                const text = await res.text();
+                return { url, status: res.status, ct, len: text.length, body: text.slice(0, 4000) } as any;
+            } catch (e: any) { return { url, error: (e?.message || String(e)).slice(0, 80) } as any; }
+        };
+        const D = 'https://api-docs.velocityfleet.com';
+        const urls = [`${D}/`, `${D}/openapi.json`, `${D}/openapi.yaml`, `${D}/swagger.json`, `${D}/spec.json`, `${D}/api-docs.json`, `${D}/docs.json`];
+        return { results: await Promise.all(urls.map(tryUrl)) };
+    }
+
+    // Fetch crudo de una URL de velocityfleet (solo ese dominio) para inspección.
+    async rawFetch(url: string) {
+        if (!/^https?:\/\/[^/]*velocityfleet\.com/i.test(url)) return { error: 'solo velocityfleet.com' };
+        try {
+            const res = await fetch(url, { headers: { Accept: '*/*', Authorization: `Token ${process.env.VELOCITY_FLEET_TOKEN || ''}` }, signal: AbortSignal.timeout(9000) });
+            const ct = res.headers.get('content-type') || '';
+            const text = await res.text();
+            return { url, status: res.status, ct, len: text.length, body: text.slice(0, 5000) };
+        } catch (e: any) { return { url, error: (e?.message || String(e)).slice(0, 100) }; }
+    }
+
     // ---- Lectura de la API --------------------------------------------------
 
     // Lista los ids de cliente vinculados al token. La respuesta es un objeto

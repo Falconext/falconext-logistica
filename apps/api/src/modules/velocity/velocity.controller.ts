@@ -47,6 +47,20 @@ export class VelocityController {
         return this.velocity.testConnection();
     }
 
+    // Temporal (descubrimiento): lee la doc para hallar el spec OpenAPI real.
+    @Get('docs')
+    async docs(@Req() req: any) {
+        this.assertCron(req);
+        return this.velocity.fetchDocs();
+    }
+
+    // Temporal (descubrimiento): fetch crudo de una URL de velocityfleet.
+    @Get('raw')
+    async raw(@Req() req: any, @Query('url') url: string) {
+        this.assertCron(req);
+        return this.velocity.rawFetch(url || '');
+    }
+
     private assertCron(req: any) {
         const secret = process.env.CRON_SECRET;
         const auth = req.headers?.authorization || '';
