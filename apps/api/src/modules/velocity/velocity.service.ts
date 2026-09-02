@@ -125,17 +125,32 @@ export class VelocityService {
     // Lee la documentación (api-docs.velocityfleet.com) desde el server (egress limpio)
     // para descubrir la URL del spec OpenAPI → endpoints + auth reales del API Token.
     async fetchDocs() {
-        const tryUrl = async (url: string) => {
-            try {
-                const res = await fetch(url, { headers: { Accept: '*/*' }, signal: AbortSignal.timeout(9000) });
-                const ct = res.headers.get('content-type') || '';
-                const text = await res.text();
-                return { url, status: res.status, ct, len: text.length, body: text.slice(0, 4000) } as any;
-            } catch (e: any) { return { url, error: (e?.message || String(e)).slice(0, 80) } as any; }
-        };
         const D = 'https://api-docs.velocityfleet.com';
-        const urls = [`${D}/`, `${D}/openapi.json`, `${D}/openapi.yaml`, `${D}/swagger.json`, `${D}/spec.json`, `${D}/api-docs.json`, `${D}/docs.json`];
-        return { results: await Promise.all(urls.map(tryUrl)) };
+        let html = '';
+        try {
+            const res = await fetch(`${D}/`, { headers: { Accept: 'text/html' }, signal: AbortSignal.timeout(9000) });
+            html = await res.text();
+        } catch (e: any) { return { error: (e?.message || String(e)).slice(0, 100) }; }
+
+        // Referencias a script/spec en TODO el HTML (no truncado).
+        const scripts = Array.from(html.matchAll(/<script[^>]*\bsrc=["']([^"']+)["']/gi)).map((m) => m[1]);
+        const links = Array.from(html.matchAll(/(?:href|data-url|spec-url|data-spec-url)=["']([^"']+)["']/gi)).map((m) => m[1]);
+        const specUrls = Array.from(html.matchAll(/[^"' ]*(?:openapi|swagger|spec|redoc|scalar)[^"' ]*\.(?:json|yaml|js)/gi)).map((m) => m[0]);
+        // ¿El spec está EMBEBIDO? Buscamos marcadores OpenAPI en el HTML.
+        const embI = html.search(/"openapi"\s*:/i);
+        const pathsI = html.search(/"paths"\s*:/i);
+        const embedded = embI >= 0 ? html.slice(Math.max(0, embI - 40), embI + 1200) : null;
+        // Tag scalar/redoc con config.
+        const scalarTag = (html.match(/<script[^>]*id=["']api-reference["'][^>]*>/i) || [])[0] || null;
+        return {
+            len: html.length,
+            scripts: Array.from(new Set(scripts)).slice(0, 30),
+            links: Array.from(new Set(links)).slice(0, 30),
+            specUrls: Array.from(new Set(specUrls)).slice(0, 20),
+            embeddedFound: embI >= 0 || pathsI >= 0,
+            scalarTag,
+            embeddedPreview: embedded,
+        };
     }
 
     // Fetch crudo de una URL de velocityfleet (solo ese dominio) para inspección.
