@@ -89,18 +89,35 @@ export class VelocityService {
 
     // ---- Diagnóstico --------------------------------------------------------
 
-    // Devuelve el status + cuerpo CRUDO del endpoint de clientes. Sirve para validar
-    // el token en el entorno real (ver si sale el JSON o un bloqueo de firewall).
+    // Prueba varios ESQUEMAS DE AUTENTICACIÓN contra el endpoint de clientes. El API
+    // Token de Velocity es un token opaco (UUID); no sabemos si va como Bearer, Token,
+    // Api-Key o header propio → probamos todos y reportamos cuál responde 200.
     async testConnection() {
-        const tokenMode = process.env.VELOCITY_FLEET_TOKEN ? 'bearer-directo' : 'oauth-refresh';
-        try {
-            const r = await this.call('/vapi/v1/accounts/users/customers/');
-            const customerIds = r.ok && r.body && typeof r.body === 'object' && !Array.isArray(r.body)
-                ? Object.keys(r.body) : [];
-            return { ok: r.ok, status: r.status, tokenMode, customerIds, body: r.body };
-        } catch (e: any) {
-            return { ok: false, status: 0, tokenMode, error: e?.message || String(e) };
+        const token = process.env.VELOCITY_FLEET_TOKEN || '';
+        const url = `${this.baseUrl}/vapi/v1/accounts/users/customers/`;
+        const attempts: Array<{ scheme: string; headers: Record<string, string> }> = [
+            { scheme: 'Bearer', headers: { Authorization: `Bearer ${token}` } },
+            { scheme: 'Token', headers: { Authorization: `Token ${token}` } },
+            { scheme: 'Api-Key', headers: { Authorization: `Api-Key ${token}` } },
+            { scheme: 'ApiKey', headers: { Authorization: `ApiKey ${token}` } },
+            { scheme: 'JWT', headers: { Authorization: `JWT ${token}` } },
+            { scheme: 'raw-Authorization', headers: { Authorization: token } },
+            { scheme: 'X-API-Key', headers: { 'X-API-Key': token } },
+            { scheme: 'X-Api-Token', headers: { 'X-Api-Token': token } },
+            { scheme: 'Api-Token', headers: { 'Api-Token': token } },
+        ];
+        const results: any[] = [];
+        for (const a of attempts) {
+            try {
+                const res = await fetch(url, { headers: { Accept: 'application/json', ...a.headers } });
+                const text = await res.text();
+                results.push({ scheme: a.scheme, status: res.status, ok: res.ok, body: text.slice(0, 140) });
+            } catch (e: any) {
+                results.push({ scheme: a.scheme, error: e?.message || String(e) });
+            }
         }
+        const winner = results.find((r) => r.ok) || results.find((r) => r.status && r.status !== 401 && r.status !== 403);
+        return { tokenSet: !!token, tokenPreview: token ? token.slice(0, 8) + '…' : null, winner: winner?.scheme || null, results };
     }
 
     // ---- Lectura de la API --------------------------------------------------
