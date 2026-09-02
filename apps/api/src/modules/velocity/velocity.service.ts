@@ -89,66 +89,37 @@ export class VelocityService {
 
     // ---- Diagnóstico --------------------------------------------------------
 
-    // Prueba varios ESQUEMAS DE AUTENTICACIÓN contra el endpoint de clientes. El API
-    // Token de Velocity es un token opaco (UUID); no sabemos si va como Bearer, Token,
-    // Api-Key o header propio → probamos todos y reportamos cuál responde 200.
+    // Descubrimiento de auth + endpoints para el API Token opaco de Velocity. Corre
+    // TODO en PARALELO con timeout por request (evita el timeout de la función de 60s).
     async testConnection() {
         const token = process.env.VELOCITY_FLEET_TOKEN || '';
-        const url = `${this.baseUrl}/vapi/v1/accounts/users/customers/`;
-        const attempts: Array<{ scheme: string; headers: Record<string, string> }> = [
-            { scheme: 'Bearer', headers: { Authorization: `Bearer ${token}` } },
-            { scheme: 'Token', headers: { Authorization: `Token ${token}` } },
-            { scheme: 'Api-Key', headers: { Authorization: `Api-Key ${token}` } },
-            { scheme: 'ApiKey', headers: { Authorization: `ApiKey ${token}` } },
-            { scheme: 'JWT', headers: { Authorization: `JWT ${token}` } },
-            { scheme: 'raw-Authorization', headers: { Authorization: token } },
-            { scheme: 'X-API-Key', headers: { 'X-API-Key': token } },
-            { scheme: 'X-Api-Token', headers: { 'X-Api-Token': token } },
-            { scheme: 'Api-Token', headers: { 'Api-Token': token } },
-        ];
-        const results: any[] = [];
-        for (const a of attempts) {
+        const base = this.baseUrl; // https://www.velocityfleet.com
+        const probe = async (label: string, path: string, headers: Record<string, string>, method: string = 'GET') => {
             try {
-                const res = await fetch(url, { headers: { Accept: 'application/json', ...a.headers } });
+                const res = await fetch(`${base}${path}`, { method, headers: { Accept: 'application/json', ...headers }, signal: AbortSignal.timeout(6000) });
                 const text = await res.text();
-                results.push({ scheme: a.scheme, status: res.status, ok: res.ok, body: text.slice(0, 140) });
-            } catch (e: any) {
-                results.push({ scheme: a.scheme, error: e?.message || String(e) });
-            }
-        }
-        const winner = results.find((r) => r.ok) || results.find((r) => r.status && r.status !== 401 && r.status !== 403);
-
-        // Descubrimiento de endpoints: el API Token va con `Authorization: Token …` pero
-        // contra las rutas PÚBLICAS documentadas (no las del app móvil). Probamos rutas
-        // candidatas con Token y Bearer, en www y en api.velocityfleet.com.
-        const hosts = ['https://www.velocityfleet.com', 'https://api.velocityfleet.com'];
-        const paths = [
-            '/vapi/v1/vehicles/', '/vapi/v1/devices/', '/vapi/v1/positions/',
-            '/vapi/v1/device-positions/', '/vapi/v1/fleet/', '/vapi/v1/tracking/',
-            '/api/v1/vehicles/', '/api/v1/devices/', '/api/v1/positions/', '/api/v1/',
-            '/vapi/v1/', '/vapi/',
+                return { label, path, status: res.status, ok: res.ok, body: text.slice(0, 140) } as any;
+            } catch (e: any) { return { label, path, error: (e?.message || String(e)).slice(0, 50) } as any; }
+        };
+        const cust = '/vapi/v1/accounts/users/customers/';
+        const schemeJobs = [
+            probe('cust:Bearer', cust, { Authorization: `Bearer ${token}` }),
+            probe('cust:Token', cust, { Authorization: `Token ${token}` }),
+            probe('cust:Api-Key', cust, { Authorization: `Api-Key ${token}` }),
         ];
-        const discovery: any[] = [];
-        for (const host of hosts) {
-            for (const path of paths) {
-                for (const scheme of ['Token', 'Bearer'] as const) {
-                    try {
-                        const res = await fetch(`${host}${path}`, { headers: { Accept: 'application/json', Authorization: `${scheme} ${token}` } });
-                        // Solo reportamos lo interesante: 200, o algo distinto de 401/403/404.
-                        if (res.ok || (res.status !== 401 && res.status !== 403 && res.status !== 404)) {
-                            const text = await res.text();
-                            discovery.push({ host, path, scheme, status: res.status, ok: res.ok, body: text.slice(0, 160) });
-                        } else {
-                            discovery.push({ host, path, scheme, status: res.status });
-                        }
-                    } catch (e: any) {
-                        discovery.push({ host, path, scheme, error: (e?.message || String(e)).slice(0, 60) });
-                    }
-                }
-            }
-        }
-        const hit = discovery.find((d) => d.ok);
-        return { tokenSet: !!token, tokenPreview: token ? token.slice(0, 8) + '…' : null, winner: winner?.scheme || null, hit: hit || null, results, discovery };
+        // Rutas públicas candidatas (el API Token no es para las del app móvil).
+        const paths = ['/vapi/v1/vehicles/', '/vapi/v1/devices/', '/vapi/v1/positions/', '/vapi/v1/device-positions/', '/vapi/v1/tracking/', '/vapi/v1/fleet/', '/api/v1/vehicles/', '/api/v1/positions/', '/api/v1/', '/vapi/v1/'];
+        const discJobs = paths.flatMap((p) => [
+            probe(`Token ${p}`, p, { Authorization: `Token ${token}` }),
+            probe(`Bearer ${p}`, p, { Authorization: `Bearer ${token}` }),
+        ]);
+        const all = await Promise.all([...schemeJobs, ...discJobs]);
+        const schemes = all.slice(0, schemeJobs.length);
+        const discovery = all.slice(schemeJobs.length);
+        // Solo lo interesante: 200 o status distinto de 401/403/404 (endpoint que existe).
+        const interesting = discovery.filter((d) => d.ok || (d.status && d.status !== 401 && d.status !== 403 && d.status !== 404));
+        const hit = all.find((d) => d.ok) || null;
+        return { tokenSet: !!token, tokenPreview: token ? token.slice(0, 8) + '…' : null, hit, schemes, interesting };
     }
 
     // ---- Lectura de la API --------------------------------------------------
