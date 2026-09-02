@@ -117,7 +117,38 @@ export class VelocityService {
             }
         }
         const winner = results.find((r) => r.ok) || results.find((r) => r.status && r.status !== 401 && r.status !== 403);
-        return { tokenSet: !!token, tokenPreview: token ? token.slice(0, 8) + '…' : null, winner: winner?.scheme || null, results };
+
+        // Descubrimiento de endpoints: el API Token va con `Authorization: Token …` pero
+        // contra las rutas PÚBLICAS documentadas (no las del app móvil). Probamos rutas
+        // candidatas con Token y Bearer, en www y en api.velocityfleet.com.
+        const hosts = ['https://www.velocityfleet.com', 'https://api.velocityfleet.com'];
+        const paths = [
+            '/vapi/v1/vehicles/', '/vapi/v1/devices/', '/vapi/v1/positions/',
+            '/vapi/v1/device-positions/', '/vapi/v1/fleet/', '/vapi/v1/tracking/',
+            '/api/v1/vehicles/', '/api/v1/devices/', '/api/v1/positions/', '/api/v1/',
+            '/vapi/v1/', '/vapi/',
+        ];
+        const discovery: any[] = [];
+        for (const host of hosts) {
+            for (const path of paths) {
+                for (const scheme of ['Token', 'Bearer'] as const) {
+                    try {
+                        const res = await fetch(`${host}${path}`, { headers: { Accept: 'application/json', Authorization: `${scheme} ${token}` } });
+                        // Solo reportamos lo interesante: 200, o algo distinto de 401/403/404.
+                        if (res.ok || (res.status !== 401 && res.status !== 403 && res.status !== 404)) {
+                            const text = await res.text();
+                            discovery.push({ host, path, scheme, status: res.status, ok: res.ok, body: text.slice(0, 160) });
+                        } else {
+                            discovery.push({ host, path, scheme, status: res.status });
+                        }
+                    } catch (e: any) {
+                        discovery.push({ host, path, scheme, error: (e?.message || String(e)).slice(0, 60) });
+                    }
+                }
+            }
+        }
+        const hit = discovery.find((d) => d.ok);
+        return { tokenSet: !!token, tokenPreview: token ? token.slice(0, 8) + '…' : null, winner: winner?.scheme || null, hit: hit || null, results, discovery };
     }
 
     // ---- Lectura de la API --------------------------------------------------
