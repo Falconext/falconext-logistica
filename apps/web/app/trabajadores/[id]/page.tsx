@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../../../lib/api';
-import { Truck, FileText, Phone, Mail, MapPin, ArrowLeft, Fuel, Receipt, ChevronLeft, ChevronRight, Calendar, Navigation, X, Radio, KeyRound, FolderArchive } from 'lucide-react';
+import { Truck, Phone, Mail, MapPin, ArrowLeft, Fuel, Receipt, ChevronLeft, ChevronRight, Calendar, Navigation, X, Radio, KeyRound, FolderArchive } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import clsx from 'clsx';
@@ -107,8 +107,11 @@ export default function TrabajadorDetailsPage() {
             }
         };
         fetchLocation();
-        const t = setInterval(fetchLocation, 15000);
-        return () => { cancelled = true; clearInterval(t); };
+        // Solo refresca la ubicación con la pestaña visible; al volver, al instante.
+        const t = setInterval(() => { if (!document.hidden) fetchLocation(); }, 30000);
+        const onVis = () => { if (!document.hidden) fetchLocation(); };
+        document.addEventListener('visibilitychange', onVis);
+        return () => { cancelled = true; clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
     }, [id]);
 
     // Reset page when tab or month changes
@@ -161,17 +164,6 @@ export default function TrabajadorDetailsPage() {
         (currentPage - 1) * ITEMS_PER_PAGE,
         currentPage * ITEMS_PER_PAGE
     );
-
-    const checkExpiration = (dateStr: string | null) => {
-        if (!dateStr) return { status: 'MISSING', label: t('trabajadores.detalle.estadoNoRegistrado'), color: 'text-slate-400 bg-slate-100 dark:bg-slate-800' };
-        const date = new Date(dateStr);
-        const today = new Date();
-        const thirtyDays = new Date();
-        thirtyDays.setDate(today.getDate() + 30);
-        if (date < today) return { status: 'EXPIRED', label: t('trabajadores.detalle.estadoVencido'), color: 'text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400' };
-        if (date < thirtyDays) return { status: 'WARNING', label: t('trabajadores.detalle.estadoPorVencer'), color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-400' };
-        return { status: 'OK', label: t('trabajadores.detalle.estadoVigente'), color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-400' };
-    };
 
     if (loading) {
         return (
@@ -338,27 +330,10 @@ export default function TrabajadorDetailsPage() {
                         })()}
                     </div>
 
-                    {/* Documents */}
-                    <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
-                        <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
-                            <FileText size={14} className="text-blue-500" /> {t('trabajadores.detalle.documentacionTitulo')}
-                        </h3>
-                        <div className="space-y-2">
-                            {[
-                                { label: t('trabajadores.detalle.docLicencia'), date: worker.fecha_vencimiento_licencia },
-                                { label: t('trabajadores.detalle.docPasaporte'), date: worker.fecha_vencimiento_pasaporte },
-                                { label: t('trabajadores.detalle.docResidencia'), date: worker.fecha_vencimiento_residencia },
-                            ].map((doc) => {
-                                const status = checkExpiration(doc.date);
-                                return (
-                                    <div key={doc.label} className="flex items-center justify-between text-xs">
-                                        <span className="text-slate-600 dark:text-slate-300">{doc.label}</span>
-                                        <span className={`font-bold px-2 py-0.5 rounded ${status.color}`}>{status.label}</span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
+                    {/* La tarjeta-resumen de documentos (vencimientos legacy: licencia/
+                        pasaporte/residencia) se quitó: duplicaba —con otro estado— lo que
+                        ya muestra la pestaña "Documentos" (DocumentosPanel), que es la
+                        fuente única (archivo + fecha + estado + acciones). */}
 
                     {/* Month Navigation (no aplica en la pestaña Documentos) */}
                     <div className={clsx(

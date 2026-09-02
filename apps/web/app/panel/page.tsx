@@ -9,6 +9,7 @@ import {
 import { toast } from 'sonner';
 import clsx from 'clsx';
 import api from '../../lib/api';
+import { useLivePolling } from '../../lib/useLivePolling';
 import { PanelLiveMap } from '../../components/tracking/PanelLiveMap';
 import { useT, useDateLocale } from '../../lib/i18n';
 
@@ -60,6 +61,7 @@ function restanteFrom(e: Entrega, nowMs: number): number | null {
 const ESTADO_META: Record<string, { icon: any; tone: string }> = {
     CONSEGNATO: { icon: CheckCircle2, tone: 'emerald' },
     IN_CONSEGNA: { icon: Truck, tone: 'indigo' },
+    ACCETTATA: { icon: CheckCircle2, tone: 'teal' },
     IN_SOSPESO: { icon: PauseCircle, tone: 'amber' },
     RITIRATO: { icon: Flag, tone: 'pink' },
     RISCHEDULATO: { icon: RefreshCw, tone: 'blue' },
@@ -69,6 +71,7 @@ const ESTADO_META: Record<string, { icon: any; tone: string }> = {
 const ESTADO_TONES: Record<string, { chip: string; dot: string }> = {
     emerald: { chip: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400', dot: 'bg-emerald-500' },
     indigo: { chip: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-500/10 dark:text-indigo-400', dot: 'bg-indigo-500' },
+    teal: { chip: 'text-teal-600 bg-teal-50 dark:bg-teal-500/10 dark:text-teal-400', dot: 'bg-teal-500' },
     amber: { chip: 'text-amber-600 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-400', dot: 'bg-amber-500' },
     pink: { chip: 'text-pink-600 bg-pink-50 dark:bg-pink-500/10 dark:text-pink-400', dot: 'bg-pink-500' },
     blue: { chip: 'text-blue-600 bg-blue-50 dark:bg-blue-500/10 dark:text-blue-400', dot: 'bg-blue-500' },
@@ -76,7 +79,12 @@ const ESTADO_TONES: Record<string, { chip: string; dot: string }> = {
     slate: { chip: 'text-slate-600 bg-slate-100 dark:bg-slate-500/10 dark:text-slate-300', dot: 'bg-slate-400' },
 };
 
-const REFRESH_MS = 30000;
+// Refresco de datos (consulta a la API). El guard de visibilidad de abajo evita
+// consultar cuando la pestaña está oculta (pestaña olvidada abierta → 0 consultas,
+// Neon se duerme). Intervalo más holgado para no despertar la BD sin necesidad.
+const REFRESH_MS = 60000;
+// Tick cosmético del reloj/cuenta regresiva. No toca la API.
+const CLOCK_TICK_MS = 30000;
 
 export default function PanelPage() {
     const t = useT();
@@ -111,13 +119,13 @@ export default function PanelPage() {
 
     useEffect(() => { load(); }, [load]);
 
-    // Auto-refresh + tick de reloj cada 30s (la cuenta regresiva avanza sola).
+    // Auto-refresco consciente del costo: solo consulta con la pestaña visible y el
+    // usuario activo. Se pausa si la pestaña se oculta o pasan 15 min sin interacción,
+    // y reanuda al instante al volver/mover el mouse. No cierra sesión.
+    useLivePolling(() => load(true), { intervalMs: REFRESH_MS });
+    // Tick de reloj (cosmético, no consulta a la API).
     useEffect(() => {
-        const id = setInterval(() => load(true), REFRESH_MS);
-        return () => clearInterval(id);
-    }, [load]);
-    useEffect(() => {
-        const id = setInterval(() => setNow(Date.now()), REFRESH_MS);
+        const id = setInterval(() => setNow(Date.now()), CLOCK_TICK_MS);
         return () => clearInterval(id);
     }, []);
 
@@ -181,7 +189,7 @@ export default function PanelPage() {
             {/* Héroe: mapa en vivo (Rastreo) + entregas activas */}
             <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
                 {/* Mapa en vivo */}
-                <div className="xl:col-span-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 overflow-hidden flex flex-col">
+                <div className="xl:col-span-3 rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900/50 shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden flex flex-col">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
                         <div className="flex items-center gap-2">
                             <MapPin size={17} className="text-indigo-500" />
@@ -195,7 +203,7 @@ export default function PanelPage() {
                 </div>
 
                 {/* Entregas activas con pestañas */}
-                <div className="xl:col-span-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 overflow-hidden flex flex-col">
+                <div className="xl:col-span-2 rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900/50 shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden flex flex-col">
                     <div className="flex items-center gap-1 p-1.5 border-b border-slate-100 dark:border-slate-800">
                         <TabButton active={tab === 'consegna'} onClick={() => setTab('consegna')} icon={Navigation} label={t('panel.tabs.inConsegna')} count={enConsegna.length} accent="indigo" />
                         <TabButton active={tab === 'sospeso'} onClick={() => setTab('sospeso')} icon={PauseCircle} label={t('panel.tabs.inSospeso')} count={enSospeso.length} accent="amber" />
@@ -240,10 +248,10 @@ export default function PanelPage() {
             </div>
 
             {/* Resumen del día: operaciones de hoy agrupadas por estado de consegna */}
-            <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-                    <ClipboardList size={17} className="text-slate-500" />
-                    <h2 className="font-bold text-slate-900 dark:text-white">{t('panel.resumenDia.titulo')}</h2>
+            <section className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900/50 shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 dark:border-slate-800">
+                    <ClipboardList size={16} className="text-slate-500" />
+                    <h2 className="text-sm font-bold text-slate-900 dark:text-white">{t('panel.resumenDia.titulo')}</h2>
                 </div>
                 {resumenDia.length === 0 ? (
                     <div className="py-12 flex flex-col items-center justify-center text-center gap-2 text-slate-400">
@@ -257,30 +265,37 @@ export default function PanelPage() {
                             const tone = ESTADO_TONES[meta.tone];
                             const Icon = meta.icon;
                             return (
-                                <div key={grupo.estado} className="px-4 py-3">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className={clsx('flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-bold', tone.chip)}>
-                                            <Icon size={13} /> {t(`panel.resumenDia.estados.${grupo.estado}`)}
+                                <div key={grupo.estado} className="px-4 py-2">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className={clsx('flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-bold', tone.chip)}>
+                                            <Icon size={12} /> {t(`panel.resumenDia.estados.${grupo.estado}`)}
                                         </span>
                                         <span className="text-xs text-slate-400 font-semibold">{grupo.total}</span>
                                     </div>
                                     <div className="overflow-x-auto">
-                                        <table className="w-full text-sm">
+                                        {/* table-fixed + colgroup compartido → todos los grupos usan los mismos anchos y las columnas quedan alineadas entre estados */}
+                                        <table className="w-full text-sm table-fixed">
+                                            <colgroup>
+                                                <col style={{ width: '20%' }} />
+                                                <col style={{ width: '34%' }} />
+                                                <col style={{ width: '18%' }} />
+                                                <col style={{ width: '28%' }} />
+                                            </colgroup>
                                             <thead>
-                                                <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400">
-                                                    <th className="font-semibold py-1 pr-4">{t('panel.resumenDia.columnas.autista')}</th>
-                                                    <th className="font-semibold py-1 pr-4">{t('panel.resumenDia.columnas.datosConsegna')}</th>
-                                                    <th className="font-semibold py-1 pr-4">{t('panel.resumenDia.columnas.spedizione')}</th>
-                                                    <th className="font-semibold py-1">{t('panel.resumenDia.columnas.cliente')}</th>
+                                                <tr className="text-left text-[10px] uppercase tracking-wide text-slate-400">
+                                                    <th className="font-semibold py-0.5 pr-4">{t('panel.resumenDia.columnas.autista')}</th>
+                                                    <th className="font-semibold py-0.5 pr-4">{t('panel.resumenDia.columnas.datosConsegna')}</th>
+                                                    <th className="font-semibold py-0.5 pr-4">{t('panel.resumenDia.columnas.spedizione')}</th>
+                                                    <th className="font-semibold py-0.5">{t('panel.resumenDia.columnas.cliente')}</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-50 dark:divide-slate-800/60">
                                                 {grupo.items.map((it) => (
                                                     <tr key={it.id}>
-                                                        <td className="py-1.5 pr-4 font-medium text-slate-800 dark:text-slate-100 whitespace-nowrap">{it.trabajador || '—'}</td>
-                                                        <td className="py-1.5 pr-4 text-slate-500 dark:text-slate-400 truncate max-w-xs">{it.datosConsegna || '—'}</td>
-                                                        <td className="py-1.5 pr-4 text-slate-500 dark:text-slate-400 whitespace-nowrap">{it.spedizione || '—'}</td>
-                                                        <td className="py-1.5 text-slate-500 dark:text-slate-400 truncate max-w-xs">{it.cliente || '—'}</td>
+                                                        <td className="py-1 pr-4 font-medium text-slate-800 dark:text-slate-100 truncate">{it.trabajador || '—'}</td>
+                                                        <td className="py-1 pr-4 text-slate-500 dark:text-slate-400 truncate">{it.datosConsegna || '—'}</td>
+                                                        <td className="py-1 pr-4 text-slate-500 dark:text-slate-400 truncate">{it.spedizione || '—'}</td>
+                                                        <td className="py-1 text-slate-500 dark:text-slate-400 truncate">{it.cliente || '—'}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -309,14 +324,13 @@ const KPI_TONES: Record<string, { chip: string; bar: string }> = {
 function KpiCard({ icon: Icon, label, value, tone }: { icon: any; label: string; value: string | number; tone: string }) {
     const t = KPI_TONES[tone];
     return (
-        <div className="relative rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4 flex items-center gap-3 overflow-hidden">
-            <span className={clsx('absolute left-0 top-0 bottom-0 w-1', t.bar)} />
-            <div className={clsx('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', t.chip)}>
-                <Icon size={18} />
+        <div className="group rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900/50 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_30px_rgba(15,23,42,0.08)] hover:-translate-y-0.5 transition-all duration-300 p-4 flex items-center gap-3.5">
+            <div className={clsx('w-11 h-11 rounded-xl flex items-center justify-center shrink-0', t.chip)}>
+                <Icon size={20} />
             </div>
             <div className="min-w-0">
-                <p className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums leading-none">{value}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">{label}</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 truncate">{label}</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums leading-tight mt-0.5">{value}</p>
             </div>
         </div>
     );

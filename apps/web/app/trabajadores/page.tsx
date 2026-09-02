@@ -60,10 +60,14 @@ export default function TrabajadoresPage() {
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
+    // Solo consulta "online" con la pestaña visible (evita polling nocturno de una
+    // pestaña olvidada abierta). Al volver a la pestaña, actualiza al instante.
     useEffect(() => {
         fetchOnline();
-        const t = setInterval(fetchOnline, 20000);
-        return () => clearInterval(t);
+        const t = setInterval(() => { if (!document.hidden) fetchOnline(); }, 40000);
+        const onVis = () => { if (!document.hidden) fetchOnline(); };
+        document.addEventListener('visibilitychange', onVis);
+        return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
     }, [fetchOnline]);
 
     const openCreate = () => { setEditing(null); setModalOpen(true); };

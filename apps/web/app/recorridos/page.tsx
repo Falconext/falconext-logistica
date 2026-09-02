@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../../lib/api';
+import { useLivePolling } from '../../lib/useLivePolling';
 import { useGoogleMaps, GOOGLE_MAPS_KEY } from '../../components/tracking/googleMaps';
 import { stylesFor } from '../../components/tracking/mapTheme';
 
@@ -57,7 +58,7 @@ interface RecorridoHistorial {
     desvioMin: number | null;
 }
 
-const REFRESH_MS = 20000;
+const REFRESH_MS = 30000;
 
 const ESTADO_META: Record<string, { label: string; chip: string; icon: any }> = {
     EN_RUTA_IDA: { label: 'En ruta · ida', chip: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-500/10 dark:text-indigo-400', icon: Navigation },
@@ -143,10 +144,10 @@ export default function RecorridosPage() {
     }, []);
 
     useEffect(() => { load(); }, [load]);
-    useEffect(() => {
-        const id = setInterval(() => load(true), REFRESH_MS);
-        return () => clearInterval(id);
-    }, [load]);
+    // Auto-refresco consciente del costo: solo consulta con la pestaña visible y el
+    // usuario activo. Se pausa si la pestaña se oculta o pasan 15 min sin interacción,
+    // y reanuda al instante al volver/mover el mouse. No cierra sesión.
+    useLivePolling(() => load(true), { intervalMs: REFRESH_MS });
     // Tick cada 30s para que "tiempo en tramo" avance en pantalla.
     useEffect(() => {
         const id = setInterval(() => setTick((n) => n + 1), 30000);
@@ -582,6 +583,10 @@ function TrazaModal({ data, loading, onClose }: { data: any | null; loading: boo
 
     const hasPath = path.length > 1;
     const stops = an?.stops?.length ?? 0;
+    // Horas "en ruta" = las que se pagan y suman al mes: tiempo transcurrido
+    // (ida + vuelta) menos el descanso. Mismo criterio que el resumen mensual del chofer.
+    const elapsedMin = rec?.total_min ?? ((rec?.ida_min || 0) + (rec?.vuelta_min || 0));
+    const horasRuta = rec ? Math.max(0, elapsedMin - (rec.descanso_min || 0)) : null;
 
     if (!mounted) return null;
     return createPortal(
@@ -610,8 +615,9 @@ function TrazaModal({ data, loading, onClose }: { data: any | null; loading: boo
                             )}
                         </div>
                         {/* Resumen */}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-px bg-slate-100 dark:bg-slate-800 border-t border-slate-100 dark:border-slate-800">
-                            <TrazaStat label="Distancia real" value={an?.distanceKm ? `${an.distanceKm} km` : rec.ida_km != null ? `${rec.ida_km} km` : '—'} />
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-px bg-slate-100 dark:bg-slate-800 border-t border-slate-100 dark:border-slate-800">
+                            <TrazaStat label="Distancia real" value={an?.distanceKm ? `${an.distanceKm} km` : rec.total_km != null ? `${rec.total_km} km` : rec.ida_km != null ? `${rec.ida_km} km` : '—'} hint="Suma al km del mes" />
+                            <TrazaStat label="Horas en ruta" value={fmtMin(horasRuta)} hint="Lo que se paga" />
                             <TrazaStat label="Tiempo ida" value={fmtMin(rec.ida_min)} />
                             <TrazaStat label="Esperado" value={rec.esperado_ida_min != null ? fmtMin(Math.round(rec.esperado_ida_min)) : '—'} />
                             <TrazaStat label="Paradas" value={`${stops}`} />
@@ -626,11 +632,12 @@ function TrazaModal({ data, loading, onClose }: { data: any | null; loading: boo
     );
 }
 
-function TrazaStat({ label, value }: { label: string; value: string }) {
+function TrazaStat({ label, value, hint }: { label: string; value: string; hint?: string }) {
     return (
         <div className="bg-white dark:bg-slate-900 px-3 py-2.5">
             <p className="text-[10px] uppercase text-slate-400">{label}</p>
             <p className="text-sm font-bold text-slate-900 dark:text-white tabular-nums">{value}</p>
+            {hint && <p className="text-[9px] text-slate-400 mt-0.5">{hint}</p>}
         </div>
     );
 }
