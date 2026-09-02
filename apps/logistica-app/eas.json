@@ -25,6 +25,9 @@
     "production": {
       "autoIncrement": true,
       "channel": "production",
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://falconext-logistica-api.vercel.app/api",
         "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyB3laErCPuFftGUhzTXgLWcQHJ_O7NYj6I"
