@@ -20,13 +20,13 @@ function TargaCell({ item, onSaved }: { item: any; onSaved: () => void }) {
     const [saving, setSaving] = useState(false);
 
     if (item._origen !== 'operacion') {
-        return <span className="font-semibold text-slate-900 whitespace-nowrap">{item.targa || 'N/A'}</span>;
+        return <span className="font-semibold text-slate-900 dark:text-white whitespace-nowrap">{item.targa || 'N/A'}</span>;
     }
     if (!editing) {
         return (
             <button onClick={() => { setValue(item.targa || ''); setEditing(true); }} className="flex items-center gap-1.5 group">
-                <span className="font-semibold text-slate-900 whitespace-nowrap">{item.targa || 'N/A'}</span>
-                <Pencil size={11} className="text-slate-300 group-hover:text-slate-500 transition" />
+                <span className="font-semibold text-slate-900 dark:text-white whitespace-nowrap">{item.targa || 'N/A'}</span>
+                <Pencil size={11} className="text-slate-300 group-hover:text-slate-500 dark:text-slate-400 transition" />
             </button>
         );
     }
@@ -50,12 +50,12 @@ function TargaCell({ item, onSaved }: { item: any; onSaved: () => void }) {
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
-                className="w-24 px-1.5 py-1 rounded-md border border-slate-300 outline-none text-sm"
+                className="w-24 px-1.5 py-1 rounded-md border border-slate-300 dark:border-slate-600 outline-none text-sm"
             />
             <button onClick={save} disabled={saving} className="w-6 h-6 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
                 {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
             </button>
-            <button onClick={() => setEditing(false)} className="w-6 h-6 rounded-md bg-slate-50 text-slate-500 flex items-center justify-center shrink-0">
+            <button onClick={() => setEditing(false)} className="w-6 h-6 rounded-md bg-slate-50 text-slate-500 dark:text-slate-400 flex items-center justify-center shrink-0">
                 <X size={12} />
             </button>
         </div>
@@ -186,18 +186,18 @@ export default function CombustiblePage() {
     const pageRows = items;
 
     return (
-        <div className="max-w-[1100px] mx-auto animate-in fade-in duration-500">
+        <div className="max-w-[1400px] mx-auto animate-in fade-in duration-500">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">{t('combustible.title')}</h1>
-                    <p className="text-sm text-slate-400 mt-0.5">{t('combustible.totalFiltrado')} <span className="font-semibold text-slate-700 tabular-nums">{format(sum)}</span></p>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">{t('combustible.title')}</h1>
+                    <p className="text-sm text-slate-400 mt-0.5">{t('combustible.totalFiltrado')} <span className="font-semibold text-slate-700 dark:text-slate-200 tabular-nums">{format(sum)}</span></p>
                 </div>
                 <div className="flex items-center gap-2 w-full md:w-auto">
                     <button
                         onClick={exportToExcel}
                         title={t('combustible.exportar')}
-                        className="w-11 h-11 shrink-0 rounded-xl border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 transition"
+                        className="w-11 h-11 shrink-0 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 transition"
                     >
                         <FileSpreadsheet size={17} />
                     </button>
@@ -219,7 +219,7 @@ export default function CombustiblePage() {
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder={t('combustible.searchPlaceholder')}
-                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-white border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900 placeholder:text-slate-400 transition"
+                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-slate-400 outline-none text-sm text-slate-900 dark:text-white placeholder:text-slate-400 transition"
                 />
             </div>
 
@@ -227,7 +227,7 @@ export default function CombustiblePage() {
             <div className="mb-4">
                 <button
                     onClick={() => setShowFiltros(v => !v)}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-sm font-medium transition ${showFiltros || filtrosActivosCount > 0 ? 'border-blue-300 text-slate-900 bg-blue-50/40' : 'border-slate-200 text-slate-500 hover:text-slate-900 bg-white'}`}
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-sm font-medium transition ${showFiltros || filtrosActivosCount > 0 ? 'border-blue-300 text-slate-900 dark:text-white bg-blue-50/40' : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-white bg-white dark:bg-slate-900'}`}
                 >
                     <SlidersHorizontal size={14} /> {t('combustible.filtros.titulo')}
                     {filtrosActivosCount > 0 && (
@@ -237,7 +237,7 @@ export default function CombustiblePage() {
                     )}
                 </button>
                 {showFiltros && (
-                    <div className="mt-2 p-4 rounded-xl border border-slate-200 bg-white grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="mt-2 p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                         <DatePicker label={t('combustible.filtros.fechaInicio')} value={fechaInicio} onChange={setFechaInicio} />
                         <DatePicker label={t('combustible.filtros.fechaFin')} value={fechaFin} onChange={setFechaFin} />
                         <Select
@@ -267,12 +267,12 @@ export default function CombustiblePage() {
 
             {/* Tabs */}
             {areas.length > 1 && (
-                <div className="flex items-center gap-1.5 mb-5 bg-white border border-slate-200 rounded-xl p-1 max-w-full sm:w-fit flex-wrap">
+                <div className="flex items-center gap-1.5 mb-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-1 max-w-full sm:w-fit flex-wrap">
                     {areas.map((a) => (
                         <button
                             key={a}
                             onClick={() => setArea(a)}
-                            className={`flex items-center gap-2 shrink-0 whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition ${area === a ? 'bg-[#FFC933] text-[#1a1a1c]' : 'text-slate-500 hover:text-slate-900'}`}
+                            className={`flex items-center gap-2 shrink-0 whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition ${area === a ? 'bg-[#FFC933] text-[#1a1a1c]' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-white'}`}
                         >
                             {a === 'Todos' ? t('combustible.todos') : a}
                         </button>
@@ -281,11 +281,11 @@ export default function CombustiblePage() {
             )}
 
             {/* Tabla */}
-            <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
                         <thead>
-                            <tr className="border-b border-slate-100 text-slate-400">
+                            <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400">
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('combustible.colVehiculo')}</th>
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('combustible.colArea')}</th>
                                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">Spedizione</th>
@@ -303,10 +303,10 @@ export default function CombustiblePage() {
                             ) : items.length === 0 ? (
                                 <tr><td colSpan={9} className="text-center py-16 text-slate-400">{t('combustible.emptyState')}</td></tr>
                             ) : pageRows.map((item) => (
-                                <tr key={item.id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
+                                <tr key={item.id} className="border-b border-slate-50 dark:border-slate-800/60 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
                                     <td className="px-5 py-3.5">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+                                            <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 flex items-center justify-center shrink-0">
                                                 <Fuel size={16} />
                                             </div>
                                             <TargaCell item={item} onSaved={fetchItems} />
@@ -321,13 +321,13 @@ export default function CombustiblePage() {
                                             </span>
                                         ) : <span className="text-slate-300">—</span>}
                                     </td>
-                                    <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">{item.spedizione || '—'}</td>
-                                    <td className="px-5 py-3.5 text-slate-600 whitespace-nowrap">
+                                    <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400 whitespace-nowrap">{item.spedizione || '—'}</td>
+                                    <td className="px-5 py-3.5 text-slate-600 dark:text-slate-400 whitespace-nowrap">
                                         {item.fecha ? new Date(item.fecha).toLocaleDateString(dateLocale, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                                     </td>
-                                    <td className="px-5 py-3.5 text-slate-600 whitespace-nowrap">{item.metodo || '—'}</td>
-                                    <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">{item.mes || '—'}</td>
-                                    <td className="px-5 py-3.5 text-right font-bold text-slate-900 tabular-nums whitespace-nowrap">{format(item.monto || 0)}</td>
+                                    <td className="px-5 py-3.5 text-slate-600 dark:text-slate-400 whitespace-nowrap">{item.metodo || '—'}</td>
+                                    <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400 whitespace-nowrap">{item.mes || '—'}</td>
+                                    <td className="px-5 py-3.5 text-right font-bold text-slate-900 dark:text-white tabular-nums whitespace-nowrap">{format(item.monto || 0)}</td>
                                     <td className="px-5 py-3.5">
                                         {item.archivo ? (
                                             <a href={item.archivo} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 whitespace-nowrap">
@@ -343,14 +343,14 @@ export default function CombustiblePage() {
                                                 <button
                                                     onClick={() => openEdit(item)}
                                                     title={t('combustible.editar')}
-                                                    className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 hover:text-slate-900 transition"
+                                                    className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-white transition"
                                                 >
                                                     <Pencil size={15} />
                                                 </button>
                                                 <button
                                                     onClick={() => setDeleting(item)}
                                                     title={t('combustible.eliminar')}
-                                                    className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-red-50 hover:border-red-200 flex items-center justify-center text-slate-500 hover:text-red-600 transition"
+                                                    className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-red-50 hover:border-red-200 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-red-600 transition"
                                                 >
                                                     <Trash2 size={15} />
                                                 </button>
@@ -367,7 +367,7 @@ export default function CombustiblePage() {
             {/* Pagination */}
             {!loading && total > 0 && (
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-5">
-                    <div className="flex items-center gap-2 text-sm text-slate-500">
+                    <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                         <span>{t('combustible.mostrar')}</span>
                         <Select
                             className="w-[84px]"
@@ -381,16 +381,16 @@ export default function CombustiblePage() {
                         />
                         <span>{t('combustible.porPagina')}</span>
                     </div>
-                    <div className="flex items-center gap-3 text-sm text-slate-500">
+                    <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
                         <span className="tabular-nums">{t('combustible.paginationRange', { from: startIndex + 1, to: Math.min(startIndex + pageSize, total), total })}</span>
                         <div className="flex items-center gap-1.5">
                             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
-                                className="w-9 h-9 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-slate-600 transition">
+                                className="w-9 h-9 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-slate-600 dark:text-slate-400 transition">
                                 <ArrowLeft size={16} />
                             </button>
-                            <span className="px-1 font-medium text-slate-900 tabular-nums">{currentPage} / {totalPages}</span>
+                            <span className="px-1 font-medium text-slate-900 dark:text-white tabular-nums">{currentPage} / {totalPages}</span>
                             <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
-                                className="w-9 h-9 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-slate-600 transition">
+                                className="w-9 h-9 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-slate-600 dark:text-slate-400 transition">
                                 <ArrowRight size={16} />
                             </button>
                         </div>
@@ -401,21 +401,21 @@ export default function CombustiblePage() {
             {/* Delete confirmation */}
             {deleting && mounted && createPortal(
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md border border-slate-200 shadow-2xl p-6 max-h-[92vh] animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
+                    <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl w-full max-w-md border border-slate-200 dark:border-slate-700 shadow-2xl p-6 max-h-[92vh] animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="flex items-center gap-3 mb-2">
                             <div className="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
                                 <Trash2 size={18} />
                             </div>
-                            <h2 className="text-lg font-bold text-slate-900">{t('combustible.deleteTitle')}</h2>
+                            <h2 className="text-lg font-bold text-slate-900 dark:text-white">{t('combustible.deleteTitle')}</h2>
                         </div>
-                        <p className="text-sm text-slate-500 mb-6">
-                            {t('combustible.deleteConfirmPrefix')} <span className="font-medium text-slate-700">{deleting.targa || t('combustible.deleteConfirmVehiculoFallback')}</span>{t('combustible.deleteConfirmSuffix')}
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+                            {t('combustible.deleteConfirmPrefix')} <span className="font-medium text-slate-700 dark:text-slate-200">{deleting.targa || t('combustible.deleteConfirmVehiculoFallback')}</span>{t('combustible.deleteConfirmSuffix')}
                         </p>
                         <div className="flex justify-end gap-3">
                             <button
                                 onClick={() => setDeleting(null)}
                                 disabled={deleteLoading}
-                                className="px-5 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition disabled:opacity-50"
+                                className="px-5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-50"
                             >
                                 {t('combustible.cancelar')}
                             </button>

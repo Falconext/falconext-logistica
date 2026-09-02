@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, Linking } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { Receipt, Calendar, Pencil, Trash2, Coins, ClipboardList, Clock } from 'lucide-react-native';
+import { Receipt, Calendar, Pencil, Trash2, Coins, ClipboardList, Clock, ExternalLink } from 'lucide-react-native';
 import {
   Screen,
   AppHeader,
@@ -22,6 +22,7 @@ import Select from '../../components/Select';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { isChofer } from '../../constants/modules';
 import { formatMoney } from '../../constants/currency';
 import type { Vehiculo, Trabajador } from '../../types';
 
@@ -40,6 +41,13 @@ interface Peaje {
   trabajador_id?: string | null;
   comentarios?: string | null;
   tipo?: string | null;
+  // Plazo de pago (~14 días desde el paso por el peaje). Vital: si vence hay multa.
+  fecha_limite_pago?: string | null;
+  // Nº mancato y link de pago (los peajes de operación traen link_peaje).
+  numero_mancato?: string | null;
+  id_multa?: string | null;
+  link_peaje?: string | null;
+  archivo?: string | null;
   // Filas que provienen de gastos de operación (solo lectura).
   _origen?: string | null;
 }
@@ -67,6 +75,20 @@ function formatDate(v?: string | null) {
   const d = new Date(v);
   if (isNaN(d.getTime())) return v;
   return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+// El peaje sigue "pendiente" mientras no esté pagado ni anulado (estado texto libre).
+const PAGADO_VALS = ['PAGADO', 'PAGADO POR AUTISTA', 'PAGO BONIFICO'];
+const ANULADO_VALS = ['ANULADO'];
+function esPendiente(estado?: string | null) {
+  const v = (estado || '').trim().toUpperCase();
+  return !PAGADO_VALS.includes(v) && !ANULADO_VALS.includes(v);
+}
+// Fecha límite vencida y todavía sin pagar → hay riesgo de multa (se resalta en rojo).
+function esVencido(limite?: string | null, estado?: string | null) {
+  if (!limite) return false;
+  const d = new Date(limite);
+  return !isNaN(d.getTime()) && d.getTime() < Date.now() && esPendiente(estado);
 }
 
 function todayISO() {
@@ -100,7 +122,9 @@ export default function PeajesScreen() {
   const moneda = user?.moneda;
 
   // Un chofer (no admin) no elige conductor: se asigna automáticamente él mismo.
-  const canEditAll = !!user && (user.es_admin === true || user.role === 'ADMIN' || user.role === 'SUPERADMIN');
+  // La edición de peajes es solo para supervisores en adelante (igual que el web y
+  // el backend, que responde 403 a los autistas). Los autistas solo consultan lo suyo.
+  const canEditAll = !!user && !isChofer(user);
   const myWorkerId = user?.trabajador_id || '';
   const hideConductor = !canEditAll && !!myWorkerId;
 
@@ -283,6 +307,14 @@ export default function PeajesScreen() {
           </View>
           {p.trabajador_id ? <Text style={styles.meta}>· {trabajadorLabel(p.trabajador_id)}</Text> : null}
         </View>
+        {p.fecha_limite_pago ? (
+          <View style={[styles.metaItem, { marginTop: 4 }]}>
+            <Clock size={13} color={esVencido(p.fecha_limite_pago, p.estado) ? C.danger : C.textFaint} />
+            <Text style={[styles.meta, esVencido(p.fecha_limite_pago, p.estado) && styles.metaVencido]}>
+              Límite: {formatDate(p.fecha_limite_pago)}
+            </Text>
+          </View>
+        ) : null}
       </View>
       <Text style={styles.cost} numberOfLines={1}>{formatMoney(p.monto, moneda)}</Text>
     </TouchableOpacity>
@@ -325,7 +357,7 @@ export default function PeajesScreen() {
         )}
       </View>
 
-      <Fab onPress={openCreate} />
+      {canEditAll && <Fab onPress={openCreate} />}
 
       {/* Detalle */}
       <FormModal
@@ -333,7 +365,7 @@ export default function PeajesScreen() {
         onClose={() => setDetail(null)}
         title={detail?.targa || 'Detalle'}
         footer={
-          detail && detail._origen !== 'operacion' && (
+          canEditAll && detail && detail._origen !== 'operacion' && (
             <View style={{ flexDirection: 'row', gap: S.sm }}>
               <Button title="Editar" icon={Pencil} variant="secondary" style={{ flex: 1 }} onPress={() => detail && openEdit(detail)} />
               <Button title="Eliminar" icon={Trash2} variant="danger" style={{ flex: 1 }} onPress={() => detail && remove(detail)} />
@@ -347,11 +379,22 @@ export default function PeajesScreen() {
               <Badge label={detail.estado || 'N/A'} variant={estadoVariant(detail.estado)} />
             </View>
             <InfoRow label="Placa" value={detail.targa} />
+            <InfoRow label="Nº Mancato" value={detail.numero_mancato || detail.id_multa || '—'} />
             <InfoRow label="Tipo" value={detail.tipo} />
             <InfoRow label="Monto" value={formatMoney(detail.monto, moneda)} />
             <InfoRow label="Estado" value={detail.estado} />
             <InfoRow label="Fecha" value={formatDate(detail.fecha)} />
+            <InfoRow label="Fecha límite" value={formatDate(detail.fecha_limite_pago)} />
             <InfoRow label="Trabajador" value={trabajadorLabel(detail.trabajador_id)} />
+            {(detail.link_peaje || detail.archivo) ? (
+              <TouchableOpacity
+                style={styles.linkRow}
+                onPress={() => Linking.openURL((detail.link_peaje || detail.archivo) as string).catch(() => Alert.alert('Error', 'No se pudo abrir el link.'))}
+              >
+                <ExternalLink size={15} color={C.primary} />
+                <Text style={styles.linkText}>Abrir link de pago</Text>
+              </TouchableOpacity>
+            ) : null}
             <View style={styles.detailDesc}>
               <Text style={styles.detailDescLabel}>Comentarios</Text>
               <Text style={styles.detailDescText}>{detail.comentarios || '—'}</Text>
@@ -464,6 +507,9 @@ const makeStyles = () => StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   meta: { fontSize: 12, color: C.textFaint },
+  metaVencido: { color: C.danger, fontWeight: '600' },
+  linkRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10 },
+  linkText: { fontSize: 14, color: C.primary, fontWeight: '600' },
   cost: { fontSize: 15, fontWeight: '700', color: C.text },
   detailDesc: { marginTop: S.md },
   detailDescLabel: { fontSize: 13, color: C.textMuted, marginBottom: 4 },

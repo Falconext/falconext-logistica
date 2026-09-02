@@ -470,18 +470,39 @@ export class DashboardService {
         combustibles.forEach(r => { const a = (r.area || 'Sin área').trim(); areaMap[a] = (areaMap[a] || 0) + (r.monto || 0); });
         const byArea = Object.entries(areaMap).map(([area, total]) => ({ area, total })).sort((a, b) => b.total - a.total);
 
-        // Top vehículos por costo (combustible + peajes por targa)
+        // Top vehículos por costo (combustible + peajes). La `targa` guardada puede ser
+        // la placa real o un código interno (p. ej. "F097" = id_interno_furgon); resolvemos
+        // a la PLACA para mostrar el nombre real de la unidad.
         const vehMap: Record<string, number> = {};
         [...combustibles, ...peajes].forEach(r => { const t = (r.targa || '—').trim(); vehMap[t] = (vehMap[t] || 0) + (r.monto || 0); });
-        const topVehiculos = Object.entries(vehMap).map(([targa, total]) => ({ targa, total })).sort((a, b) => b.total - a.total).slice(0, 8);
+        const vehKeys = Object.keys(vehMap).filter(k => k !== '—');
+        const vehiculos = vehKeys.length
+            ? await this.prisma.vehiculo.findMany({
+                where: { tenant_id: tenantId, OR: [{ placa: { in: vehKeys } }, { id_interno_furgon: { in: vehKeys } }, { id: { in: vehKeys } }] },
+                select: { id: true, placa: true, id_interno_furgon: true },
+            })
+            : [];
+        const placaByKey: Record<string, string> = {};
+        vehiculos.forEach(v => {
+            if (v.placa) placaByKey[v.placa] = v.placa;
+            if (v.id_interno_furgon) placaByKey[v.id_interno_furgon] = v.placa;
+            placaByKey[v.id] = v.placa;
+        });
+        const topVehiculos = Object.entries(vehMap).map(([key, total]) => ({ targa: placaByKey[key] || key, total })).sort((a, b) => b.total - a.total).slice(0, 8);
 
-        // Top choferes por multas/peajes (trabajador_id = código)
+        // Top choferes por multas/peajes. `trabajador_id` puede venir como UUID (nuevo) o
+        // como código legacy (id_trabajador): resolvemos ambos al nombre del chofer.
         const chofMap: Record<string, number> = {};
         peajes.forEach(r => { const c = (r.trabajador_id || '—').trim(); chofMap[c] = (chofMap[c] || 0) + (r.monto || 0); });
         const codes = Object.keys(chofMap).filter(c => c !== '—');
-        const trabajadores = await this.prisma.trabajador.findMany({ where: { tenant_id: tenantId, id_trabajador: { in: codes } }, select: { id_trabajador: true, nombre_completo: true } });
+        const trabajadores = codes.length
+            ? await this.prisma.trabajador.findMany({
+                where: { tenant_id: tenantId, OR: [{ id: { in: codes } }, { id_trabajador: { in: codes } }] },
+                select: { id: true, id_trabajador: true, nombre_completo: true },
+            })
+            : [];
         const nombreByCode: Record<string, string> = {};
-        trabajadores.forEach(t => { if (t.id_trabajador) nombreByCode[t.id_trabajador] = t.nombre_completo; });
+        trabajadores.forEach(t => { nombreByCode[t.id] = t.nombre_completo; if (t.id_trabajador) nombreByCode[t.id_trabajador] = t.nombre_completo; });
         const topChoferes = Object.entries(chofMap).map(([codigo, total]) => ({ codigo, nombre: nombreByCode[codigo] || codigo, total })).sort((a, b) => b.total - a.total).slice(0, 8);
 
         return {

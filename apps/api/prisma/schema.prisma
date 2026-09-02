@@ -607,6 +607,10 @@ model Recorrido {
   // Es la fuente de verdad del km/tiempo de la operación y del perfil del mes.
   total_km        Float?
   total_min       Float?
+  // Tiempo REAL de MANEJO (GPS en movimiento, excluye paradas/detenido), en minutos.
+  // Base de las "horas de manejo" del pago mensual. Se persiste al finalizar; para
+  // recorridos viejos (null) el resumen cae al tiempo transcurrido menos descanso.
+  manejo_min      Float?
 
   creado_en       DateTime @default(now())
   actualizado_en  DateTime @updatedAt

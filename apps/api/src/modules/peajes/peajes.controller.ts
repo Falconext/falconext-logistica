@@ -7,8 +7,18 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 export class PeajesController {
     constructor(private readonly peajesService: PeajesService) { }
 
+    // La edición de peajes (crear/editar/borrar/estado) es solo para supervisores en
+    // adelante. Los autistas (solo_propios) únicamente ven SUS peajes (findAll ya los
+    // filtra por ownerIds) y no pueden mutarlos.
+    private assertPuedeEditar(req: any) {
+        if (req.user.soloPropios) {
+            throw new ForbiddenException('Solo un supervisor o administrador puede editar los peajes.');
+        }
+    }
+
     @Post()
     create(@Body() data: any, @Req() req) {
+        this.assertPuedeEditar(req);
         return this.peajesService.create(data, req.user.tenantId);
     }
 
@@ -29,16 +39,15 @@ export class PeajesController {
 
     @Patch(':id')
     update(@Param('id') id: string, @Body() data: any, @Req() req) {
-        // El estado (pagado/no pagado/anulado) lo decide administración: es quien
-        // paga los mancato que no cubrió el chofer, y quien concilia lo importado.
-        if (data.estado !== undefined && !req.user.esAdmin) {
-            throw new ForbiddenException('Solo un administrador puede modificar el estado del peaje.');
-        }
+        // Supervisores en adelante pueden editar el peaje, incluido su estado
+        // (pagado/no pagado/anulado). Los autistas no editan.
+        this.assertPuedeEditar(req);
         return this.peajesService.update(id, data, req.user.tenantId);
     }
 
     @Delete(':id')
     remove(@Param('id') id: string, @Req() req) {
+        this.assertPuedeEditar(req);
         return this.peajesService.remove(id, req.user.tenantId);
     }
 }

@@ -129,7 +129,7 @@ export class RegistrosService {
         const [recorridos, reperibilita, attesaAgg] = await Promise.all([
             this.prisma.recorrido.findMany({
                 where: { tenant_id: tenantId, trabajador_id: trabajadorId, finalizado_en: { gte: desde, lte: hasta } },
-                select: { total_km: true, ida_km: true, vuelta_km: true, ida_min: true, vuelta_min: true, iniciado_en: true, llegada_en: true, retorno_en: true, finalizado_en: true, descanso_min: true },
+                select: { total_km: true, manejo_min: true, ida_km: true, vuelta_km: true, ida_min: true, vuelta_min: true, iniciado_en: true, llegada_en: true, retorno_en: true, finalizado_en: true, descanso_min: true },
             }),
             this.prisma.programacion.count({
                 where: { tenant_id: tenantId, trabajador_id: trabajadorId, reperibilita: true, fecha: { gte: desde, lte: hasta } },
@@ -163,8 +163,14 @@ export class RegistrosService {
             const diaEl = ida.dia + vuelta.dia;
             const nocheEl = ida.noche + vuelta.noche;
             const elapsed = diaEl + nocheEl;
-            // Solo cuenta el manejo: se descuenta el descanso proporcionalmente.
-            const factor = elapsed > 0 ? Math.max(0, elapsed - num(r.descanso_min)) / elapsed : 0;
+            // Horas de MANEJO reales: si el recorrido tiene manejo_min (tiempo GPS en
+            // movimiento), repartimos ESE tiempo entre día/noche en la misma proporción
+            // que el transcurrido. Los recorridos viejos (sin manejo_min) caen al
+            // transcurrido menos descanso (comportamiento previo).
+            const manejo = (r as any).manejo_min;
+            const factor = elapsed > 0
+                ? (manejo != null ? Math.min(1, num(manejo) / elapsed) : Math.max(0, elapsed - num(r.descanso_min)) / elapsed)
+                : 0;
             diaMin += diaEl * factor;
             nocheMin += nocheEl * factor;
         }
@@ -211,6 +217,7 @@ export class RegistrosService {
             oreMattina: m.oreDia,
             oreSera: m.oreNoche,
             reperibilita: m.reperibilita,
+            attesaHoras: m.attesaHoras, // horas de attesa AUTORIZADAS (cuenta para el pago)
             totalPartes: m.recorridos,
             // Montos: el controller los remueve si el rol NO ve finanzas.
             pagoHoras: m.pagoHoras,
@@ -273,7 +280,7 @@ export class RegistrosService {
         const recorridos = await this.prisma.recorrido.findMany({
             where: { tenant_id: tenantId, trabajador_id: trabajadorId, finalizado_en: { gte: desde, lte: hasta } },
             select: {
-                id: true, origen_label: true, destino_label: true, ida_km: true, vuelta_km: true,
+                id: true, origen_label: true, destino_label: true, total_km: true, manejo_min: true, ida_km: true, vuelta_km: true,
                 ida_min: true, vuelta_min: true, iniciado_en: true, llegada_en: true, retorno_en: true,
                 finalizado_en: true, descanso_min: true, programacion_id: true,
             },
@@ -290,11 +297,21 @@ export class RegistrosService {
             return maxP > 0 ? Math.min(k, maxP) : 0;
         };
         const items = recorridos.map((r) => {
-            const km = Math.round((capKm(r.ida_km, r.ida_min) + capKm(r.vuelta_km, r.vuelta_min)) * 10) / 10;
+            // Mismo criterio que el TOTAL del mes (calcularMetricas): total_km fiel
+            // cuando existe; suma de tramos con tope anti-basura para recorridos viejos.
+            // Así el desglose por recorrido suma EXACTO al total mostrado.
+            const km = (r as any).total_km != null
+                ? Math.round(num((r as any).total_km) * 10) / 10
+                : Math.round((capKm(r.ida_km, r.ida_min) + capKm(r.vuelta_km, r.vuelta_min)) * 10) / 10;
             const ida = minutosDiaNoche(r.iniciado_en, r.llegada_en, tar.corte);
             const vuelta = minutosDiaNoche(r.retorno_en, r.finalizado_en, tar.corte);
             const diaEl = ida.dia + vuelta.dia, nocheEl = ida.noche + vuelta.noche, elapsed = diaEl + nocheEl;
-            const factor = elapsed > 0 ? Math.max(0, elapsed - num(r.descanso_min)) / elapsed : 0;
+            // Mismo criterio que el total: horas de manejo reales (manejo_min) repartidas
+            // por día/noche; recorridos viejos caen al transcurrido menos descanso.
+            const manejo = (r as any).manejo_min;
+            const factor = elapsed > 0
+                ? (manejo != null ? Math.min(1, num(manejo) / elapsed) : Math.max(0, elapsed - num(r.descanso_min)) / elapsed)
+                : 0;
             return {
                 fecha: r.finalizado_en,
                 cliente: (r.programacion_id && clienteById.get(r.programacion_id)) || r.destino_label || 'Recorrido',

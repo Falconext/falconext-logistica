@@ -16,7 +16,7 @@ export class PanelService {
     // Solo entregas recientes: evita arrastrar operaciones pendientes viejas (histórico).
     private static readonly VENTANA_DIAS = 30;
     // Orden de despliegue del resumen del día (coincide con el ciclo de vida de la consegna).
-    private static readonly ESTADO_CONSEGNA_ORDEN = ['CONSEGNATO', 'IN_CONSEGNA', 'IN_SOSPESO', 'RITIRATO', 'RISCHEDULATO', 'ANNULLATO'];
+    private static readonly ESTADO_CONSEGNA_ORDEN = ['CONSEGNATO', 'IN_CONSEGNA', 'ACCETTATA', 'IN_SOSPESO', 'RITIRATO', 'RISCHEDULATO', 'ANNULLATO'];
 
     async getStatus(tenantId: string) {
         const activos = [...PanelService.EN_CONSEGNA, ...PanelService.EN_SOSPESO];

@@ -175,7 +175,7 @@ export default function RecorridosPage() {
             {/* Header */}
             <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-2xl bg-[#1a1a1c] text-[#FFC933] flex items-center justify-center shrink-0">
+                    <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#FFCC00] to-[#F5A800] text-[#3a2c00] flex items-center justify-center shrink-0 shadow-sm">
                         <RouteIcon size={20} />
                     </div>
                     <div>
@@ -246,7 +246,7 @@ export default function RecorridosPage() {
                         const meta = ESTADO_META[r.estado];
                         const Icon = meta.icon;
                         return (
-                            <div key={r.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 overflow-hidden">
+                            <div key={r.id} className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900/50 shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
                                 {/* Cabecera: chofer + estado */}
                                 <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 dark:border-slate-800">
                                     <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0">
@@ -367,7 +367,7 @@ function HistorialSection({ items, loading, onOpen }: { items: RecorridoHistoria
         );
     }
     return (
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 overflow-hidden">
+        <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900/50 shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
             <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                     <thead>
@@ -652,13 +652,13 @@ const KPI_TONES: Record<string, string> = {
 
 function Kpi({ label, value, tone, icon: Icon }: { label: string; value: number; tone: string; icon: any }) {
     return (
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4 flex items-center gap-3">
-            <div className={clsx('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', KPI_TONES[tone])}>
-                <Icon size={18} />
+        <div className="group rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900/50 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_30px_rgba(15,23,42,0.08)] hover:-translate-y-0.5 transition-all duration-300 p-4 flex items-center gap-3.5">
+            <div className={clsx('w-11 h-11 rounded-xl flex items-center justify-center shrink-0', KPI_TONES[tone])}>
+                <Icon size={20} />
             </div>
             <div className="min-w-0">
-                <p className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums leading-none">{value}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">{label}</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 truncate">{label}</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums leading-tight mt-0.5">{value}</p>
             </div>
         </div>
     );

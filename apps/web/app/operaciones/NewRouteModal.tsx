@@ -678,7 +678,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                         <input
                                             type="text"
                                             placeholder="Ej: Av. Javier Prado Este 4200, Surco"
-                                            className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-emerald-500/50 outline-none"
+                                            className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500/50 outline-none"
                                             value={formData.retiro_lugar}
                                             onChange={(e) => setFormData({ ...formData, retiro_lugar: e.target.value })}
                                         />
@@ -698,7 +698,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                             <label className="text-[10px] font-bold text-slate-400 uppercase">Hora</label>
                                             <input
                                                 type="time"
-                                                className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-emerald-500/50 outline-none"
+                                                className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500/50 outline-none"
                                                 value={formData.retiro_hora}
                                                 onChange={(e) => setFormData({ ...formData, retiro_hora: e.target.value })}
                                             />
@@ -728,7 +728,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                         <input
                                             type="text"
                                             placeholder="Ej: Aeropuerto Jorge Chávez, Callao"
-                                            className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-red-500/50 outline-none"
+                                            className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-red-500/50 outline-none"
                                             value={formData.entrega_lugar}
                                             onChange={(e) => setFormData({ ...formData, entrega_lugar: e.target.value })}
                                         />
@@ -745,7 +745,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                             <label className="text-[10px] font-bold text-slate-400 uppercase">Hora</label>
                                             <input
                                                 type="time"
-                                                className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-red-500/50 outline-none"
+                                                className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-red-500/50 outline-none"
                                                 value={formData.entrega_hora}
                                                 onChange={(e) => setFormData({ ...formData, entrega_hora: e.target.value })}
                                             />
@@ -769,7 +769,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                             <input
                                                 type="text"
                                                 placeholder="Ej: B-Service, Via ... (otro almacén)"
-                                                className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-emerald-500/50 outline-none"
+                                                className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500/50 outline-none"
                                                 value={r}
                                                 onChange={(e) => updateRetiro(i, e.target.value)}
                                             />
@@ -792,7 +792,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                                 <label className="text-[10px] font-bold text-slate-400 uppercase">Hora</label>
                                                 <input
                                                     type="time"
-                                                    className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-emerald-500/50 outline-none"
+                                                    className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500/50 outline-none"
                                                     value={formData.retirosDetalle[i]?.hora || ''}
                                                     onChange={(e) => updateRetiroDetalle(i, { hora: e.target.value })}
                                                 />
@@ -862,7 +862,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                                 <input
                                                     type="text"
                                                     placeholder="Dirección de la parada adicional"
-                                                    className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-red-500/50 outline-none"
+                                                    className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-red-500/50 outline-none"
                                                     value={dest}
                                                     onChange={(e) => updateDestino(i, e.target.value)}
                                                 />
@@ -890,7 +890,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                                     <label className="text-[10px] font-bold text-slate-400 uppercase">Hora límite</label>
                                                     <input
                                                         type="time"
-                                                        className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-red-500/50 outline-none"
+                                                        className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-red-500/50 outline-none"
                                                         value={det?.hora || ''}
                                                         onChange={(e) => updateDestinoDetalle(i, { hora: e.target.value })}
                                                     />
@@ -902,7 +902,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                                     <input
                                                         type="text"
                                                         placeholder="Cliente"
-                                                        className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-red-500/50 outline-none"
+                                                        className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-red-500/50 outline-none"
                                                         value={det?.cliente || ''}
                                                         onChange={(e) => updateDestinoDetalle(i, { cliente: e.target.value })}
                                                     />
@@ -921,7 +921,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                                             min="0"
                                                             step="any"
                                                             placeholder="Km facturable"
-                                                            className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-red-500/50"
+                                                            className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-red-500/50"
                                                             value={det?.km_facturable || ''}
                                                             onChange={(e) => {
                                                                 const sug = calcularIngresoSugerido(e.target.value, categoriaDeVehiculo(formData.vehiculo_id), formData.es_navetta, det?.spedizione || formData.spedizione, tarifasConfig);
@@ -933,7 +933,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                                             min="0"
                                                             step="any"
                                                             placeholder={`Ingreso (${currency})`}
-                                                            className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-red-500/50"
+                                                            className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-red-500/50"
                                                             value={det?.ingreso || ''}
                                                             onChange={(e) => updateDestinoDetalle(i, { ingreso: e.target.value })}
                                                         />
@@ -1184,7 +1184,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                                 min="0"
                                                 step="any"
                                                 placeholder="0.00"
-                                                className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none"
+                                                className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/50 outline-none"
                                                 value={g.monto}
                                                 onChange={(e) => updateGasto(i, { monto: e.target.value })}
                                             />
@@ -1196,7 +1196,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                             <input
                                                 type="text"
                                                 placeholder="¿En qué se gastó?"
-                                                className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none"
+                                                className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/50 outline-none"
                                                 value={g.descripcion}
                                                 onChange={(e) => updateGasto(i, { descripcion: e.target.value })}
                                             />
@@ -1239,7 +1239,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                             <input
                                                 type="text"
                                                 placeholder="Número de mancato pagamento"
-                                                className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none"
+                                                className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/50 outline-none"
                                                 value={g.numero_mancato}
                                                 onChange={(e) => updateGasto(i, { numero_mancato: e.target.value })}
                                             />
@@ -1251,7 +1251,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                             <input
                                                 type="url"
                                                 placeholder="https://…"
-                                                className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none"
+                                                className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/50 outline-none"
                                                 value={g.link_peaje}
                                                 onChange={(e) => updateGasto(i, { link_peaje: e.target.value })}
                                             />

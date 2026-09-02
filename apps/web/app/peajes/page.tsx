@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../../lib/api';
-import { Receipt, Plus, Search, ArrowLeft, ArrowRight, Pencil, Trash2, Paperclip, Loader2, SlidersHorizontal, Eye, FileSpreadsheet } from 'lucide-react';
+import { Receipt, Plus, Search, ArrowLeft, ArrowRight, Pencil, Trash2, Paperclip, Loader2, SlidersHorizontal, Eye, FileSpreadsheet, ExternalLink } from 'lucide-react';
 import PeajeModal from './PeajeModal';
 import PeajeDetailModal from './PeajeDetailModal';
 import Select from '../../components/Select';
@@ -11,7 +11,7 @@ import DatePicker from '../../components/DatePicker';
 import { useCurrency } from '../../lib/useCurrency';
 import { useT, useDateLocale } from '../../lib/i18n';
 import { useAuthStore } from '../../lib/store';
-import { isAdmin as checkIsAdmin } from '../../lib/modules';
+import { isChofer as checkIsChofer } from '../../lib/modules';
 import { SPEDIZIONE_OPTIONS } from '../operaciones/constants';
 import { toast } from 'sonner';
 
@@ -27,6 +27,19 @@ const ESTADO_LABEL_KEY: Record<string, string> = {
 const ESTADO_BADGE: Record<string, string> = {
     PAGADO: 'text-emerald-600 border-emerald-200 bg-emerald-50',
     PENDIENTE: 'text-amber-600 border-amber-200 bg-amber-50',
+    ANULADO: 'text-slate-500 border-slate-200 bg-slate-50',
+};
+
+// Color por BUCKET (agrupa los estados de texto libre) — para diferenciar de un
+// vistazo lo PAGADO (verde) de lo que FALTA pagar (ámbar) y lo anulado (gris).
+const DOT_BY_BUCKET: Record<string, string> = {
+    PAGADO: 'bg-emerald-500',
+    PENDIENTE: 'bg-amber-500',
+    ANULADO: 'bg-slate-400',
+};
+const BADGE_BY_BUCKET: Record<string, string> = {
+    PAGADO: 'text-emerald-700 border-emerald-200 bg-emerald-50',
+    PENDIENTE: 'text-amber-700 border-amber-200 bg-amber-50',
     ANULADO: 'text-slate-500 border-slate-200 bg-slate-50',
 };
 
@@ -46,7 +59,9 @@ export default function PeajesPage() {
     const dateLocale = useDateLocale();
     const { format } = useCurrency();
     const user = useAuthStore((s) => s.user);
-    const isAdmin = checkIsAdmin(user);
+    // La edición de peajes es solo para supervisores en adelante; los autistas
+    // (solo_propios) solo ven su propia info (el backend ya la filtra) y no editan.
+    const canEdit = !checkIsChofer(user);
     const [items, setItems] = useState<any[]>([]);
     const [total, setTotal] = useState(0);
     const [counts, setCounts] = useState<Record<string, number>>({ Todos: 0, PENDIENTE: 0, PAGADO: 0, ANULADO: 0 });
@@ -194,7 +209,7 @@ export default function PeajesPage() {
     const pageRows = items;
 
     return (
-        <div className="max-w-[1100px] mx-auto animate-in fade-in duration-500">
+        <div className="max-w-[1560px] mx-auto animate-in fade-in duration-500">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">{t('peajes.titulo')}</h1>
@@ -293,64 +308,93 @@ export default function PeajesPage() {
                     <table className="w-full text-left text-sm">
                         <thead>
                             <tr className="border-b border-slate-100 text-slate-400">
-                                <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('peajes.columnas.vehiculo')}</th>
-                                <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('peajes.columnas.estado')}</th>
-                                <th className="px-5 py-3.5 font-medium whitespace-nowrap">Spedizione</th>
-                                <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('peajes.columnas.comentario')}</th>
-                                <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('peajes.columnas.fecha')}</th>
-                                <th className="px-5 py-3.5 font-medium whitespace-nowrap">{t('peajes.detalle.fechaLimitePago')}</th>
-                                <th className="px-5 py-3.5 font-medium whitespace-nowrap text-right">{t('peajes.columnas.monto')}</th>
-                                <th className="px-5 py-3.5 font-medium text-right whitespace-nowrap">{t('peajes.columnas.acciones')}</th>
+                                <th className="px-3.5 py-3 font-medium whitespace-nowrap">{t('peajes.columnas.estado')}</th>
+                                <th className="px-3.5 py-3 font-medium whitespace-nowrap">{t('peajes.columnas.autista')}</th>
+                                <th className="px-3.5 py-3 font-medium whitespace-nowrap">{t('peajes.columnas.vehiculo')}</th>
+                                <th className="px-3.5 py-3 font-medium whitespace-nowrap">{t('peajes.columnas.nroMancato')}</th>
+                                <th className="px-3.5 py-3 font-medium whitespace-nowrap">{t('peajes.columnas.linkPago')}</th>
+                                <th className="px-3.5 py-3 font-medium whitespace-nowrap">{t('peajes.columnas.fecha')}</th>
+                                <th className="px-3.5 py-3 font-medium whitespace-nowrap">{t('peajes.detalle.fechaLimitePago')}</th>
+                                <th className="px-3.5 py-3 font-medium whitespace-nowrap text-right">{t('peajes.columnas.monto')}</th>
+                                <th className="px-3.5 py-3 font-medium text-right whitespace-nowrap">{t('peajes.columnas.acciones')}</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={8} className="text-center py-16 text-slate-400">{t('peajes.cargando')}</td></tr>
+                                <tr><td colSpan={9} className="text-center py-16 text-slate-400">{t('peajes.cargando')}</td></tr>
                             ) : items.length === 0 ? (
-                                <tr><td colSpan={8} className="text-center py-16 text-slate-400">{t('peajes.vacio')}</td></tr>
+                                <tr><td colSpan={9} className="text-center py-16 text-slate-400">{t('peajes.vacio')}</td></tr>
                             ) : pageRows.map((item) => {
                                 const limite = item.fecha_limite_pago ? new Date(item.fecha_limite_pago) : null;
-                                const vencido = !!limite && limite.getTime() < Date.now() && bucketOfEstado(item.estado) === 'PENDIENTE';
+                                const bucket = bucketOfEstado(item.estado);
+                                const vencido = !!limite && limite.getTime() < Date.now() && bucket === 'PENDIENTE';
+                                const nroMancato = item.numero_mancato || item.id_multa || null;
+                                const linkPago = item.link_peaje || item.archivo || null;
                                 return (
                                 <tr key={item.id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
-                                    <td className="px-5 py-3.5">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
-                                                <Receipt size={16} />
+                                    {/* Estado — con color por bucket para diferenciar pagado / por pagar / anulado */}
+                                    <td className="px-3.5 py-3">
+                                        {canEdit ? (
+                                            <div className="flex items-center gap-2">
+                                                <span className={`w-2 h-2 rounded-full shrink-0 ${DOT_BY_BUCKET[bucket]}`} />
+                                                <Select
+                                                    className="w-36"
+                                                    searchable={false}
+                                                    value={item.estado || ''}
+                                                    disabled={busyEstado.has(item.id)}
+                                                    onChange={(v) => patchEstado(item, v)}
+                                                    options={[
+                                                        { value: '', label: t('peajes.estados.pendiente') },
+                                                        { value: 'PAGADO', label: t('peajes.estados.pagado') },
+                                                        { value: 'ANULADO', label: t('peajes.estados.anulado') },
+                                                    ]}
+                                                />
                                             </div>
-                                            <span className="font-semibold text-slate-900 whitespace-nowrap">{item.targa || 'N/A'}</span>
+                                        ) : (
+                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-medium border whitespace-nowrap ${BADGE_BY_BUCKET[bucket]}`}>
+                                                <span className={`w-2 h-2 rounded-full ${DOT_BY_BUCKET[bucket]}`} />
+                                                {item.estado || t('peajes.estados.pendiente')}
+                                            </span>
+                                        )}
+                                    </td>
+                                    {/* Autista */}
+                                    <td className="px-3.5 py-3 text-slate-700 whitespace-nowrap">{item.autista || '—'}</td>
+                                    {/* Vehículo */}
+                                    <td className="px-3.5 py-3">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+                                                <Receipt size={15} />
+                                            </div>
+                                            <span className="font-semibold text-slate-900 truncate max-w-[120px]" title={item.targa || ''}>{item.targa || 'N/A'}</span>
                                         </div>
                                     </td>
-                                    <td className="px-5 py-3.5">
-                                        {isAdmin ? (
-                                            <Select
-                                                className="w-36"
-                                                searchable={false}
-                                                value={item.estado || ''}
-                                                disabled={busyEstado.has(item.id)}
-                                                onChange={(v) => patchEstado(item, v)}
-                                                options={[
-                                                    { value: '', label: t('peajes.estados.pendiente') },
-                                                    { value: 'PAGADO', label: t('peajes.estados.pagado') },
-                                                    { value: 'ANULADO', label: t('peajes.estados.anulado') },
-                                                ]}
-                                            />
-                                        ) : item.estado ? (
-                                            <span className={`px-2.5 py-0.5 rounded-md text-xs font-medium border whitespace-nowrap ${ESTADO_BADGE[item.estado] || ESTADO_BADGE.PENDIENTE}`}>
-                                                {item.estado}
-                                            </span>
-                                        ) : <span className="text-slate-300">—</span>}
+                                    {/* Nº Mancato */}
+                                    <td className="px-3.5 py-3 text-slate-600 tabular-nums">
+                                        <span className="block truncate max-w-[120px]" title={nroMancato || ''}>{nroMancato || '—'}</span>
                                     </td>
-                                    <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">{item.spedizione || '—'}</td>
-                                    <td className="px-5 py-3.5 text-slate-600 max-w-[220px] truncate">{item.comentarios || '—'}</td>
-                                    <td className="px-5 py-3.5 text-slate-600 whitespace-nowrap">
+                                    {/* Link de pago — se muestra el texto tal cual (legible, para
+                                        identificar el peaje) y se normaliza el href para que abra. */}
+                                    <td className="px-3.5 py-3">
+                                        {linkPago ? (
+                                            <a href={/^https?:\/\//i.test(linkPago) ? linkPago : `https://${linkPago}`} target="_blank" rel="noopener noreferrer"
+                                                title={linkPago}
+                                                className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline font-medium max-w-[200px] truncate">
+                                                <ExternalLink size={14} className="shrink-0" /> <span className="truncate">{String(linkPago).replace(/^https?:\/\//i, '').replace(/\/+$/, '')}</span>
+                                            </a>
+                                        ) : <span className="text-slate-300 dark:text-slate-600">—</span>}
+                                    </td>
+                                    {/* Fecha */}
+                                    <td className="px-3.5 py-3 text-slate-600 whitespace-nowrap">
                                         {item.fecha ? new Date(item.fecha).toLocaleDateString(dateLocale, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                                     </td>
-                                    <td className={`px-5 py-3.5 whitespace-nowrap ${vencido ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>
+                                    {/* Fecha límite */}
+                                    <td className={`px-3.5 py-3 whitespace-nowrap ${vencido ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>
                                         {limite ? limite.toLocaleDateString(dateLocale, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                                     </td>
-                                    <td className="px-5 py-3.5 text-right font-bold text-slate-900 tabular-nums whitespace-nowrap">{format(item.monto || 0)}</td>
-                                    <td className="px-5 py-3.5">
+                                    {/* Monto */}
+                                    <td className="px-3.5 py-3 text-right font-bold text-slate-900 tabular-nums whitespace-nowrap">{format(item.monto || 0)}</td>
+                                    {/* Acciones */}
+                                    <td className="px-3.5 py-3">
                                         <div className="flex items-center justify-end gap-1.5">
                                             <button
                                                 onClick={() => setViewing(item)}
@@ -359,7 +403,7 @@ export default function PeajesPage() {
                                             >
                                                 <Eye size={15} />
                                             </button>
-                                            {item._origen === 'operacion' ? (
+                                            {canEdit && (item._origen === 'operacion' ? (
                                                 <span className="text-xs text-slate-400 italic whitespace-nowrap px-1">{t('peajes.desdeOperacion')}</span>
                                             ) : (
                                                 <>
@@ -378,7 +422,7 @@ export default function PeajesPage() {
                                                         <Trash2 size={15} />
                                                     </button>
                                                 </>
-                                            )}
+                                            ))}
                                         </div>
                                     </td>
                                 </tr>

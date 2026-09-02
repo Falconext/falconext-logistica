@@ -12,9 +12,9 @@ import { useT, useDateLocale } from '../../lib/i18n';
 const TIPOS = ['Todos', 'Preventivo', 'Correctivo', 'Emergencia'] as const;
 
 const TIPO_BADGE: Record<string, string> = {
-    Preventivo: 'text-emerald-600 border-emerald-200 bg-emerald-50',
-    Correctivo: 'text-amber-600 border-amber-200 bg-amber-50',
-    Emergencia: 'text-red-600 border-red-200 bg-red-50',
+    Preventivo: 'text-emerald-600 border-emerald-200 bg-emerald-50 dark:text-emerald-400 dark:border-emerald-500/20 dark:bg-emerald-500/10',
+    Correctivo: 'text-amber-600 border-amber-200 bg-amber-50 dark:text-amber-400 dark:border-amber-500/20 dark:bg-amber-500/10',
+    Emergencia: 'text-rose-600 border-rose-200 bg-rose-50 dark:text-rose-400 dark:border-rose-500/20 dark:bg-rose-500/10',
 };
 
 const TIPO_LABEL_KEY: Record<string, string> = {
@@ -101,13 +101,13 @@ export default function MaintenancePage() {
     const pageRows = maintenance;
 
     return (
-        <div className="max-w-[1100px] mx-auto animate-in fade-in duration-500">
+        <div className="w-full animate-in fade-in duration-500">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">{t('mantenimiento.title')}</h1>
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">{t('mantenimiento.title')}</h1>
                 <button
                     onClick={openCreate}
-                    className="flex items-center justify-center gap-2 w-full md:w-auto px-4 py-2.5 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition"
+                    className="flex items-center justify-center gap-2 w-full md:w-auto px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-semibold transition shadow-sm"
                 >
                     <Plus size={16} /> {t('mantenimiento.registrar')}
                 </button>
@@ -122,20 +122,20 @@ export default function MaintenancePage() {
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder={t('mantenimiento.searchPlaceholder')}
-                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-white border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900 placeholder:text-slate-400 transition"
+                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 outline-none text-sm text-slate-900 dark:text-white placeholder:text-slate-400 transition"
                 />
             </div>
 
             {/* Tabs */}
-            <div className="flex items-center gap-1.5 mb-5 bg-white border border-slate-200 rounded-xl p-1 w-full sm:w-fit overflow-x-auto">
+            <div className="flex items-center gap-1.5 mb-5 bg-white dark:bg-slate-900/50 border border-slate-200/70 dark:border-slate-800 rounded-xl p-1 w-full sm:w-fit overflow-x-auto">
                 {TIPOS.map((tipoOption) => (
                     <button
                         key={tipoOption}
                         onClick={() => setTipo(tipoOption)}
-                        className={`flex items-center gap-2 shrink-0 whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition ${tipo === tipoOption ? 'bg-[#FFC933] text-[#1a1a1c]' : 'text-slate-500 hover:text-slate-900'}`}
+                        className={`flex items-center gap-2 shrink-0 whitespace-nowrap px-4 py-2 rounded-lg text-sm font-semibold transition ${tipo === tipoOption ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
                     >
                         {t(`mantenimiento.${TIPO_LABEL_KEY[tipoOption]}`)}
-                        <span className={`min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-md text-[11px] font-bold ${tipo === tipoOption ? 'bg-[#1a1a1c]/10 text-[#1a1a1c]' : 'bg-slate-100 text-slate-500'}`}>
+                        <span className={`min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-md text-[11px] font-bold ${tipo === tipoOption ? 'bg-white/20 dark:bg-black/10' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>
                             {counts[tipoOption as keyof typeof counts]}
                         </span>
                     </button>
@@ -146,36 +146,36 @@ export default function MaintenancePage() {
             {loading ? (
                 <div className="text-center py-16 text-sm text-slate-400">{t('mantenimiento.loading')}</div>
             ) : maintenance.length === 0 ? (
-                <div className="text-center py-16 text-sm text-slate-400 bg-white border border-slate-200 rounded-2xl">
+                <div className="text-center py-16 text-sm text-slate-400 bg-white dark:bg-slate-900/50 border border-slate-200/70 dark:border-slate-800 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
                     {t('mantenimiento.emptyState')}
                 </div>
             ) : (
                 <div className="space-y-3">
                     {pageRows.map((item) => (
-                        <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4 hover:border-slate-300 transition">
+                        <div key={item.id} className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900/50 shadow-[0_1px_2px_rgba(15,23,42,0.04)] p-4 hover:border-slate-300 dark:hover:border-slate-700 transition">
                             {/* Top */}
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                                <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+                                <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
                                     <Wrench size={18} />
                                 </div>
-                                <span className="font-semibold text-slate-900">{item.vehiculo?.placa || 'N/A'}</span>
-                                <span className={`px-2.5 py-0.5 rounded-md text-xs font-medium border ${TIPO_BADGE[item.tipo] || TIPO_BADGE.Preventivo}`}>
+                                <span className="font-semibold text-slate-900 dark:text-white">{item.vehiculo?.placa || 'N/A'}</span>
+                                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${TIPO_BADGE[item.tipo] || TIPO_BADGE.Preventivo}`}>
                                     {item.tipo}
                                 </span>
                                 <div className="ml-auto flex items-center gap-3">
-                                    <div className="text-lg font-bold text-slate-900 tabular-nums">{format(item.costo || 0)}</div>
+                                    <div className="text-lg font-bold text-slate-900 dark:text-white tabular-nums">{format(item.costo || 0)}</div>
                                     <div className="flex items-center gap-1">
                                         <button
                                             onClick={() => openEdit(item)}
                                             title={t('mantenimiento.editar')}
-                                            className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 hover:text-slate-900 transition"
+                                            className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
                                         >
                                             <Pencil size={15} />
                                         </button>
                                         <button
                                             onClick={() => setDeleting(item)}
                                             title={t('mantenimiento.eliminar')}
-                                            className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-red-50 hover:border-red-200 flex items-center justify-center text-slate-500 hover:text-red-600 transition"
+                                            className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-red-50 hover:border-red-200 dark:hover:bg-red-500/10 dark:hover:border-red-500/30 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-red-600 transition"
                                         >
                                             <Trash2 size={15} />
                                         </button>
@@ -186,7 +186,7 @@ export default function MaintenancePage() {
                             {/* Meta */}
                             <div className="mt-3 pl-[52px] flex flex-wrap items-center justify-between gap-2">
                                 <div className="min-w-0">
-                                    <p className="text-sm text-slate-700 truncate">{item.descripcion}</p>
+                                    <p className="text-sm text-slate-700 dark:text-slate-300 truncate">{item.descripcion}</p>
                                     <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
                                         <span className="flex items-center gap-1"><Calendar size={12} /> {new Date(item.fecha).toLocaleDateString(dateLocale, { day: '2-digit', month: 'short', year: 'numeric' })}</span>
                                         {item.taller && <span>{t('mantenimiento.tallerLabel', { taller: item.taller })}</span>}
@@ -207,7 +207,7 @@ export default function MaintenancePage() {
             {/* Pagination */}
             {!loading && total > 0 && (
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-5">
-                    <div className="flex items-center gap-2 text-sm text-slate-500">
+                    <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                         <span>{t('mantenimiento.mostrar')}</span>
                         <Select
                             className="w-[84px]"
@@ -222,16 +222,16 @@ export default function MaintenancePage() {
                         />
                         <span>{t('mantenimiento.porPagina')}</span>
                     </div>
-                    <div className="flex items-center gap-3 text-sm text-slate-500">
+                    <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
                         <span className="tabular-nums">{t('mantenimiento.paginationRange', { from: startIndex + 1, to: Math.min(startIndex + pageSize, total), total })}</span>
                         <div className="flex items-center gap-1.5">
                             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
-                                className="w-9 h-9 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-slate-600 transition">
+                                className="w-9 h-9 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-slate-600 dark:text-slate-400 transition">
                                 <ArrowLeft size={16} />
                             </button>
-                            <span className="px-1 font-medium text-slate-900 tabular-nums">{currentPage} / {totalPages}</span>
+                            <span className="px-1 font-medium text-slate-900 dark:text-white tabular-nums">{currentPage} / {totalPages}</span>
                             <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
-                                className="w-9 h-9 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-slate-600 transition">
+                                className="w-9 h-9 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-slate-600 dark:text-slate-400 transition">
                                 <ArrowRight size={16} />
                             </button>
                         </div>
@@ -242,22 +242,22 @@ export default function MaintenancePage() {
             {/* Delete confirmation */}
             {deleting && mounted && createPortal(
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md border border-slate-200 shadow-2xl p-6 max-h-[92vh] animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
+                    <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl w-full max-w-md border border-slate-200 dark:border-slate-800 shadow-2xl p-6 max-h-[92vh] animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="flex items-center gap-3 mb-2">
-                            <div className="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+                            <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-500/10 text-red-600 flex items-center justify-center shrink-0">
                                 <Trash2 size={18} />
                             </div>
-                            <h2 className="text-lg font-bold text-slate-900">{t('mantenimiento.deleteTitle')}</h2>
+                            <h2 className="text-lg font-bold text-slate-900 dark:text-white">{t('mantenimiento.deleteTitle')}</h2>
                         </div>
-                        <p className="text-sm text-slate-500 mb-6">
-                            {t('mantenimiento.deleteConfirmPrefix')} <span className="font-medium text-slate-700">{deleting.vehiculo?.placa || t('mantenimiento.deleteConfirmVehiculoFallback')}</span>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+                            {t('mantenimiento.deleteConfirmPrefix')} <span className="font-medium text-slate-700 dark:text-slate-200">{deleting.vehiculo?.placa || t('mantenimiento.deleteConfirmVehiculoFallback')}</span>
                             {deleting.descripcion ? ` (${deleting.descripcion})` : ''}{t('mantenimiento.deleteConfirmSuffix')}
                         </p>
                         <div className="flex justify-end gap-3">
                             <button
                                 onClick={() => setDeleting(null)}
                                 disabled={deleteLoading}
-                                className="px-5 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition disabled:opacity-50"
+                                className="px-5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-50"
                             >
                                 {t('mantenimiento.cancelar')}
                             </button>

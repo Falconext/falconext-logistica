@@ -438,26 +438,28 @@ export class RecorridosService {
             data.ida_min = Math.round((now.getTime() - r.iniciado_en.getTime()) / 60000);
         }
 
-        // ----- Total FIEL del recorrido: GPS real con respaldo del estimado -----
-        // km real (ida+vuelta) con tope anti-basura (un tramo no puede implicar >160 km/h).
-        const capKm = (km: any, min: any) => {
-            const k = Number(km) || 0, m = Number(min) || 0;
-            const max = (m / 60) * 160; // km máximos plausibles para esos minutos
-            return m > 0 && k > max ? max : k;
-        };
-        const idaKm = data.ida_km ?? r.ida_km, idaMin = data.ida_min ?? r.ida_min;
-        const vueltaKm = data.vuelta_km ?? r.vuelta_km, vueltaMin = data.vuelta_min ?? r.vuelta_min;
-        const realKm = capKm(idaKm, idaMin) + capKm(vueltaKm, vueltaMin);
+        // ----- Total FIEL del recorrido: km y tiempo de MANEJO reales (GPS en
+        // movimiento, mismo cálculo que el Reporte de Ruta). Así el km/horas que suma
+        // al total del mes es EXACTAMENTE lo que se manejó (excluye paradas). -----
+        const idaMin = data.ida_min ?? r.ida_min;
+        const vueltaMin = data.vuelta_min ?? r.vuelta_min;
         const realMin = (Number(idaMin) || 0) + (Number(vueltaMin) || 0);
-        // Respaldo: si el GPS real es implausiblemente bajo respecto al estimado de la
-        // ruta (GPS falló o no se manejó de verdad), usamos el estimado de Directions.
+        // km real GPS/carretera (distancia manejada) + minutos EN MOVIMIENTO.
+        const { distanceKm: gpsKm, movingMin } = await this.gps.getTripKmForPay(r.device_id, r.iniciado_en, now);
+        // Respaldo del estimado SOLO si el GPS FALLÓ (device apagado / sin señal): capturó
+        // menos del 15% de la ruta planeada. NO se usa cuando el chofer simplemente manejó
+        // menos que el estimado (p. ej. una consegna de solo IDA) — antes ese caso inflaba
+        // el km al estimado de viaje redondo. Con GPS válido, el GPS es la fuente de verdad.
         const estKm = Number(r.esperado_km) || 0;
         const estMin = Number(r.esperado_min) || 0;
-        const usarEstimado = estKm > 0 && realKm < 0.7 * estKm;
-        const finalKm = Math.round((usarEstimado ? estKm : realKm) * 10) / 10;
+        const usarEstimado = estKm > 5 && gpsKm < Math.max(2, 0.15 * estKm);
+        const finalKm = Math.round((usarEstimado ? estKm : gpsKm) * 10) / 10;
         const finalMin = Math.round(usarEstimado && estMin > 0 ? estMin : realMin);
         data.total_km = finalKm;
         data.total_min = finalMin;
+        // Tiempo de manejo real (base de las horas del pago). Si se usó el estimado
+        // (GPS vacío), aproximamos el manejo al estimado de conducción.
+        data.manejo_min = Math.round(usarEstimado && estMin > 0 ? estMin : movingMin);
 
         const updated = await this.prisma.recorrido.update({ where: { id: r.id }, data });
 

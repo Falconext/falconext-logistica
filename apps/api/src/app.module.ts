@@ -18,6 +18,7 @@ import { RolesModule } from './modules/roles/roles.module';
 import { PanelModule } from './modules/panel/panel.module';
 import { RecorridosModule } from './modules/recorridos/recorridos.module';
 import { RegistrosModule } from './modules/registros/registros.module';
+import { VelocityModule } from './modules/velocity/velocity.module';
 
 @Module({
     imports: [
@@ -40,6 +41,7 @@ import { RegistrosModule } from './modules/registros/registros.module';
         PanelModule,
         RecorridosModule,
         RegistrosModule,
+        VelocityModule,
     ],
     controllers: [],
     providers: [],

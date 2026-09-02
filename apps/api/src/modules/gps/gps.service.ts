@@ -591,79 +591,11 @@ export class GpsService {
         };
         if (pts.length < 2) return empty;
 
-        // Distancia total + velocidad máxima (filtrando saltos absurdos del GPS).
-        let distanceKm = 0;
-        let maxSpeedKmh = 0;
-        const cumDist: number[] = [0]; // km acumulados hasta el punto i
-        for (let i = 1; i < pts.length; i++) {
-            const d = this.getDistanceFromLatLonInKm(pts[i - 1].lat, pts[i - 1].lng, pts[i].lat, pts[i].lng);
-            distanceKm += d;
-            cumDist[i] = distanceKm;
-        }
-        for (const p of pts) {
-            const kmh = p.speed * 3.6;
-            if (kmh > maxSpeedKmh && kmh < 200) maxSpeedKmh = kmh;
-        }
-
-        // Clasificar cada tramo por su VELOCIDAD REAL: movimiento vs detenido/idle.
-        // Antes se contaba como "en movimiento" todo lo que no fuera una parada por
-        // radio (60m/3min), pero la DERIVA del GPS con el vehículo quieto se escapa de
-        // ese radio y se contaba como manejo (bug: 8h a 4.4 km/h = ruido, no ruta).
-        // Ahora: por debajo de MOVING_MIN_KMH es detenido y NO suma tiempo ni distancia.
-        const MOVING_MIN_KMH = 5;   // < 5 km/h => detenido (motor apagado / deriva GPS)
-        const JUMP_MAX_KMH = 200;   // saltos irreales del GPS: ni movimiento ni distancia
-        const STOP_MIN_MS = 3 * 60 * 1000; // una parada real dura >= 3 min
-        const segs: { a: number; dtMs: number; km: number; moving: boolean }[] = [];
-        for (let k = 1; k < pts.length; k++) {
-            const dtMs = pts[k].t - pts[k - 1].t;
-            if (dtMs <= 0) continue;
-            const km = cumDist[k] - cumDist[k - 1];
-            const kmh = km / (dtMs / 3600000);
-            segs.push({ a: k, dtMs, km, moving: kmh >= MOVING_MIN_KMH && kmh < JUMP_MAX_KMH });
-        }
-
-        // Recortar idle inicial/final: el recorrido "real" va del primer al último
-        // movimiento (el empresario quiere solo el tramo manejado, no el parqueo previo
-        // ni el rato que el GPS siguió corriendo después de la entrega).
-        const firstMove = segs.findIndex((s) => s.moving);
-        let lastMove = -1;
-        for (let k = segs.length - 1; k >= 0; k--) if (segs[k].moving) { lastMove = k; break; }
-
-        let startTime = pts[0].t;
-        let endTime = pts[pts.length - 1].t;
-        let movingMs = 0;
-        let stoppedMs = 0;
-        distanceKm = 0; // recomputar: solo distancia recorrida EN MOVIMIENTO (sin deriva)
-        const stops: any[] = [];
-        if (firstMove !== -1) {
-            const trimmed = segs.slice(firstMove, lastMove + 1);
-            startTime = pts[trimmed[0].a - 1].t;
-            endTime = pts[trimmed[trimmed.length - 1].a].t;
-            // Agrupar tramos idle consecutivos (dentro del tramo real) en paradas.
-            let g: { t0: number; t1: number; sumLat: number; sumLng: number; cnt: number } | null = null;
-            const flush = () => {
-                if (g && (g.t1 - g.t0) >= STOP_MIN_MS) {
-                    stops.push({
-                        lat: g.sumLat / g.cnt, lng: g.sumLng / g.cnt,
-                        startTime: new Date(g.t0).toISOString(), endTime: new Date(g.t1).toISOString(),
-                        durationMin: Math.round((g.t1 - g.t0) / 60000),
-                        _tStart: g.t0, _tEnd: g.t1,
-                    });
-                }
-                g = null;
-            };
-            for (const s of trimmed) {
-                if (s.moving) {
-                    movingMs += s.dtMs; distanceKm += s.km; flush();
-                } else {
-                    stoppedMs += s.dtMs;
-                    const p0 = pts[s.a - 1], p1 = pts[s.a];
-                    if (!g) g = { t0: p0.t, t1: p1.t, sumLat: p0.lat + p1.lat, sumLng: p0.lng + p1.lng, cnt: 2 };
-                    else { g.t1 = p1.t; g.sumLat += p1.lat; g.sumLng += p1.lng; g.cnt++; }
-                }
-            }
-            flush();
-        }
+        // Distancia (solo-movimiento), tiempos y paradas: algoritmo compartido con
+        // getTripKmForPay() para que el km que se MUESTRA sea el mismo que se PERSISTE
+        // (Recorrido.total_km) y suma al total del mes. Ver computeMovingStats().
+        const { cumDist, distanceKm, movingMs, stoppedMs, startTime, endTime, stops, maxSpeedKmh } =
+            this.computeMovingStats(pts);
         const durationMs = endTime - startTime;
 
         // Distancia recorrida dentro de una ventana de tiempo [a, b].
@@ -753,6 +685,162 @@ export class GpsService {
             matchedGeometry: matched ? { type: 'LineString', coordinates: matched } : null,
             stops: cleanStops,
             legs,
+        };
+    }
+
+    // Núcleo del análisis de movimiento sobre puntos GPS: distancia recorrida SOLO
+    // en movimiento (descarta deriva/idle), tiempo en movimiento vs detenido, recorte
+    // del ralentí inicial/final y detección de paradas. Es matemática pura (sin
+    // llamadas externas). Fuente única usada por getTripAnalysis() (lo que se MUESTRA)
+    // y getTripKmForPay() (lo que se PERSISTE en Recorrido.total_km y suma al mes).
+    private computeMovingStats(pts: { lat: number; lng: number; speed: number; t: number }[]) {
+        // Distancia bruta acumulada + velocidad máxima (filtrando saltos absurdos).
+        let rawTotalKm = 0;
+        let maxSpeedKmh = 0;
+        const cumDist: number[] = [0]; // km acumulados hasta el punto i
+        for (let i = 1; i < pts.length; i++) {
+            const d = this.getDistanceFromLatLonInKm(pts[i - 1].lat, pts[i - 1].lng, pts[i].lat, pts[i].lng);
+            rawTotalKm += d;
+            cumDist[i] = rawTotalKm;
+        }
+        for (const p of pts) {
+            const kmh = p.speed * 3.6;
+            if (kmh > maxSpeedKmh && kmh < 200) maxSpeedKmh = kmh;
+        }
+
+        // Clasificar cada tramo por su VELOCIDAD REAL: movimiento vs detenido/idle.
+        // Por debajo de MOVING_MIN_KMH es detenido y NO suma tiempo ni distancia
+        // (la deriva del GPS con el vehículo quieto se escapa del radio de parada).
+        const MOVING_MIN_KMH = 5;   // < 5 km/h => detenido (motor apagado / deriva GPS)
+        const JUMP_MAX_KMH = 200;   // saltos irreales del GPS: ni movimiento ni distancia
+        const STOP_MIN_MS = 3 * 60 * 1000; // una parada real dura >= 3 min
+        const segs: { a: number; dtMs: number; km: number; moving: boolean }[] = [];
+        for (let k = 1; k < pts.length; k++) {
+            const dtMs = pts[k].t - pts[k - 1].t;
+            if (dtMs <= 0) continue;
+            const km = cumDist[k] - cumDist[k - 1];
+            const kmh = km / (dtMs / 3600000);
+            segs.push({ a: k, dtMs, km, moving: kmh >= MOVING_MIN_KMH && kmh < JUMP_MAX_KMH });
+        }
+
+        // Recortar idle inicial/final: el recorrido "real" va del primer al último
+        // movimiento (solo el tramo manejado, no el parqueo previo ni el rato que el
+        // GPS siguió corriendo después de la entrega).
+        const firstMove = segs.findIndex((s) => s.moving);
+        let lastMove = -1;
+        for (let k = segs.length - 1; k >= 0; k--) if (segs[k].moving) { lastMove = k; break; }
+
+        let startTime = pts[0].t;
+        let endTime = pts[pts.length - 1].t;
+        let movingMs = 0;
+        let stoppedMs = 0;
+        let distanceKm = 0; // solo distancia recorrida EN MOVIMIENTO (sin deriva)
+        const stops: any[] = [];
+        // Puntos que forman parte de tramos EN MOVIMIENTO, en orden — para encajarlos
+        // a las calles (map-matching) y medir el km por carretera real (menos zigzag).
+        const movingPoints: { lng: number; lat: number }[] = [];
+        const pushMov = (p: { lat: number; lng: number }) => {
+            const last = movingPoints[movingPoints.length - 1];
+            if (!last || last.lng !== p.lng || last.lat !== p.lat) movingPoints.push({ lng: p.lng, lat: p.lat });
+        };
+        if (firstMove !== -1) {
+            const trimmed = segs.slice(firstMove, lastMove + 1);
+            startTime = pts[trimmed[0].a - 1].t;
+            endTime = pts[trimmed[trimmed.length - 1].a].t;
+            // Agrupar tramos idle consecutivos (dentro del tramo real) en paradas.
+            let g: { t0: number; t1: number; sumLat: number; sumLng: number; cnt: number } | null = null;
+            const flush = () => {
+                if (g && (g.t1 - g.t0) >= STOP_MIN_MS) {
+                    stops.push({
+                        lat: g.sumLat / g.cnt, lng: g.sumLng / g.cnt,
+                        startTime: new Date(g.t0).toISOString(), endTime: new Date(g.t1).toISOString(),
+                        durationMin: Math.round((g.t1 - g.t0) / 60000),
+                        _tStart: g.t0, _tEnd: g.t1,
+                    });
+                }
+                g = null;
+            };
+            for (const s of trimmed) {
+                if (s.moving) {
+                    movingMs += s.dtMs; distanceKm += s.km; pushMov(pts[s.a - 1]); pushMov(pts[s.a]); flush();
+                } else {
+                    stoppedMs += s.dtMs;
+                    const p0 = pts[s.a - 1], p1 = pts[s.a];
+                    if (!g) g = { t0: p0.t, t1: p1.t, sumLat: p0.lat + p1.lat, sumLng: p0.lng + p1.lng, cnt: 2 };
+                    else { g.t1 = p1.t; g.sumLat += p1.lat; g.sumLng += p1.lng; g.cnt++; }
+                }
+            }
+            flush();
+        }
+
+        return { cumDist, distanceKm, movingMs, stoppedMs, startTime, endTime, stops, maxSpeedKmh, movingPoints };
+    }
+
+    // Distancia por CARRETERA (km) de una lista de puntos: los encaja a las calles con
+    // Mapbox Map Matching y suma la distancia reportada por el match. Devuelve null si
+    // no hay token/puntos o si el match falla (el llamador cae al km GPS crudo).
+    private async roadDistanceKm(points: { lng: number; lat: number }[]): Promise<number | null> {
+        const token = this.mapboxToken();
+        if (!token || points.length < 2) return null;
+        // Submuestreo (igual que mapMatch): jitter fuera y tope de puntos.
+        const MIN_GAP_M = 20, MAX_POINTS = 600;
+        let s: { lng: number; lat: number }[] = [points[0]];
+        for (let i = 1; i < points.length; i++) {
+            const last = s[s.length - 1];
+            if (this.getDistanceFromLatLonInKm(last.lat, last.lng, points[i].lat, points[i].lng) * 1000 >= MIN_GAP_M) s.push(points[i]);
+        }
+        if (s.length > MAX_POINTS) { const stride = Math.ceil(s.length / MAX_POINTS); s = s.filter((_, i) => i % stride === 0); }
+        if (s.length < 2) return null;
+        const MAX = 100;
+        let totalM = 0, matched = false;
+        for (let i = 0; i < s.length; i += MAX - 1) {
+            const chunk = s.slice(i, i + MAX);
+            if (chunk.length < 2) continue;
+            try {
+                const coords = chunk.map((p) => `${p.lng},${p.lat}`).join(';');
+                const radiuses = chunk.map(() => 25).join(';');
+                const url = `https://api.mapbox.com/matching/v5/mapbox/driving/${coords}` +
+                    `?geometries=geojson&overview=full&tidy=true&radiuses=${radiuses}&access_token=${token}`;
+                const j: any = await (await fetch(url)).json();
+                const d = j?.matchings?.[0]?.distance;
+                if (typeof d === 'number' && isFinite(d)) { totalM += d; matched = true; }
+            } catch (e) {
+                console.warn('[Mapbox matching] roadDistance chunk falló:', (e as any)?.message);
+            }
+        }
+        return matched ? Math.round((totalM / 1000) * 10) / 10 : null;
+    }
+
+    // Km "de pago/reporte" de un recorrido: distancia SOLO-MOVIMIENTO (mismo algoritmo
+    // que el Reporte de Ruta), sin las llamadas caras a Directions/Mapbox. Se usa al
+    // finalizar un recorrido para persistir Recorrido.total_km, de modo que el km que
+    // suma al total del mes sea EXACTAMENTE el que se muestra en el Reporte de Ruta.
+    async getTripKmForPay(deviceId: string, from: Date, to: Date): Promise<{ distanceKm: number; movingMin: number; distanceSource: 'road' | 'gps' }> {
+        const positions = await this.prisma.position.findMany({
+            where: { device_id: deviceId, timestamp: { gte: from, lte: to } },
+            orderBy: { timestamp: 'asc' },
+        });
+        const pts = positions
+            .map((p) => ({
+                lat: Number(p.latitude),
+                lng: Number(p.longitude),
+                speed: p.speed != null ? Number(p.speed) : 0,
+                t: new Date(p.timestamp).getTime(),
+            }))
+            .filter((p) => !isNaN(p.lat) && !isNaN(p.lng));
+        if (pts.length < 2) return { distanceKm: 0, movingMin: 0, distanceSource: 'gps' };
+        const st = this.computeMovingStats(pts);
+        const gpsKm = Math.round(st.distanceKm * 100) / 100;
+        // Distancia por carretera (map-matched) de los tramos manejados — quita el
+        // zigzag del GPS denso. GUARDRAIL: el map-matching por chunks colapsa/pierde
+        // tramos en recorridos largos (p. ej. 431 km → 85 km); solo lo aceptamos si cae
+        // en un rango razonable del GPS crudo. Fuera de rango → GPS crudo (más fiable).
+        const roadKm = await this.roadDistanceKm(st.movingPoints);
+        const roadOk = roadKm != null && gpsKm > 0 && roadKm >= 0.6 * gpsKm && roadKm <= 1.05 * gpsKm;
+        return {
+            distanceKm: roadOk ? (roadKm as number) : gpsKm,
+            movingMin: Math.round(st.movingMs / 60000),
+            distanceSource: roadOk ? 'road' : 'gps',
         };
     }
 }

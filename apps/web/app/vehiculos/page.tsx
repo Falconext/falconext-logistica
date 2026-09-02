@@ -12,15 +12,10 @@ import { useT } from '../../lib/i18n';
 
 const PAGE_SIZE = 10;
 
-// revision_tecnica es texto libre legacy (a veces una fecha completa de JS como
-// "Tue Sep 30 2025 00:00:36 GMT-0500 (…)"). La formateamos a fecha corta; si no
-// parsea como fecha, mostramos el valor tal cual.
 const fmtFechaCorta = (raw?: string | null): string => {
     if (!raw) return '';
     const d = new Date(raw);
-    return isNaN(d.getTime())
-        ? raw
-        : d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+    return isNaN(d.getTime()) ? raw : d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
 export default function VehiculosPage() {
@@ -40,40 +35,30 @@ export default function VehiculosPage() {
     const [estadoFilter, setEstadoFilter] = useState<Set<string>>(new Set());
     const [tipoFilter, setTipoFilter] = useState<Set<string>>(new Set());
     const [areaFilter, setAreaFilter] = useState<Set<string>>(new Set());
-    // GPS por vehículo: ¿tiene dispositivo? ¿está en línea (posición <5 min)?
     const [gpsByVeh, setGpsByVeh] = useState<Record<string, { deviceId: string; online: boolean; hasPos: boolean }>>({});
 
     const fetchVehiculos = () => {
         setLoading(true);
-        api.get('/vehiculos')
-            .then(res => setVehiculos(res.data))
-            .catch(err => console.error('Error fetching vehicles:', err))
-            .finally(() => setLoading(false));
+        api.get('/vehiculos').then(res => setVehiculos(res.data)).catch(err => console.error('Error fetching vehicles:', err)).finally(() => setLoading(false));
     };
 
-    // Estado GPS real por vehículo (dispositivo asignado + última posición).
     const fetchGps = () => {
-        api.get('/gps/devices')
-            .then(res => {
-                const map: Record<string, { deviceId: string; online: boolean; hasPos: boolean }> = {};
-                const now = Date.now();
-                (Array.isArray(res.data) ? res.data : []).forEach((d: any) => {
-                    const vehId = d.vehiculo?.id || d.vehiculo_id;
-                    if (!vehId) return;
-                    const pos = d.positions?.[0];
-                    const hasPos = !!pos;
-                    const online = hasPos && now - new Date(pos.timestamp).getTime() < 5 * 60 * 1000;
-                    map[vehId] = { deviceId: d.id, online, hasPos };
-                });
-                setGpsByVeh(map);
-            })
-            .catch(err => console.error('Error fetching GPS devices:', err));
+        api.get('/gps/devices').then(res => {
+            const map: Record<string, { deviceId: string; online: boolean; hasPos: boolean }> = {};
+            const now = Date.now();
+            (Array.isArray(res.data) ? res.data : []).forEach((d: any) => {
+                const vehId = d.vehiculo?.id || d.vehiculo_id;
+                if (!vehId) return;
+                const pos = d.positions?.[0];
+                const hasPos = !!pos;
+                const online = hasPos && now - new Date(pos.timestamp).getTime() < 5 * 60 * 1000;
+                map[vehId] = { deviceId: d.id, online, hasPos };
+            });
+            setGpsByVeh(map);
+        }).catch(err => console.error('Error fetching GPS devices:', err));
     };
 
-    useEffect(() => {
-        fetchVehiculos();
-        fetchGps();
-    }, []);
+    useEffect(() => { fetchVehiculos(); fetchGps(); }, []);
 
     const handleDelete = async () => {
         if (!deleteTarget) return;
@@ -91,36 +76,18 @@ export default function VehiculosPage() {
         }
     };
 
-    // Distinct option values for the filter dropdown (derived from live data)
-    const estadoOptions = useMemo(
-        () => Array.from(new Set(vehiculos.map(v => v.estado_vehiculo).filter(Boolean) as string[])).sort(),
-        [vehiculos]
-    );
-    const tipoOptions = useMemo(
-        () => Array.from(new Set(vehiculos.map(v => v.tipo_unidad).filter(Boolean) as string[])).sort(),
-        [vehiculos]
-    );
-    const areaOptions = useMemo(
-        () => Array.from(new Set(vehiculos.map(v => v.area).filter(Boolean) as string[])).sort(),
-        [vehiculos]
-    );
-
+    const estadoOptions = useMemo(() => Array.from(new Set(vehiculos.map(v => v.estado_vehiculo).filter(Boolean) as string[])).sort(), [vehiculos]);
+    const tipoOptions = useMemo(() => Array.from(new Set(vehiculos.map(v => v.tipo_unidad).filter(Boolean) as string[])).sort(), [vehiculos]);
+    const areaOptions = useMemo(() => Array.from(new Set(vehiculos.map(v => v.area).filter(Boolean) as string[])).sort(), [vehiculos]);
     const activeFilterCount = estadoFilter.size + tipoFilter.size + areaFilter.size;
 
     const toggleSetValue = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, value: string) => {
-        setter(prev => {
-            const next = new Set(prev);
-            next.has(value) ? next.delete(value) : next.add(value);
-            return next;
-        });
+        setter(prev => { const next = new Set(prev); next.has(value) ? next.delete(value) : next.add(value); return next; });
     };
-
     const clearFilters = () => { setEstadoFilter(new Set()); setTipoFilter(new Set()); setAreaFilter(new Set()); };
 
     const filtered = useMemo(() => vehiculos.filter(v => {
-        const matchesQuery =
-            v.placa?.toLowerCase().includes(query.toLowerCase()) ||
-            v.marca_modelo?.toLowerCase().includes(query.toLowerCase());
+        const matchesQuery = v.placa?.toLowerCase().includes(query.toLowerCase()) || v.marca_modelo?.toLowerCase().includes(query.toLowerCase());
         const matchesEstado = estadoFilter.size === 0 || (v.estado_vehiculo ? estadoFilter.has(v.estado_vehiculo) : false);
         const matchesTipo = tipoFilter.size === 0 || (v.tipo_unidad ? tipoFilter.has(v.tipo_unidad) : false);
         const matchesArea = areaFilter.size === 0 || (v.area ? areaFilter.has(v.area) : false);
@@ -152,151 +119,93 @@ export default function VehiculosPage() {
     const currentPage = Math.min(page, totalPages);
     const pageRows = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
+    const checkboxCls = (on: boolean) => `w-4 h-4 rounded flex items-center justify-center border ${on ? 'bg-blue-500 border-blue-500' : 'border-slate-300 dark:border-slate-600'}`;
+    const filterOptBtn = "w-full flex items-center gap-2.5 px-1.5 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition text-left";
+
     return (
-        <div className="max-w-[1400px] mx-auto animate-in fade-in duration-500">
+        <div className="max-w-[1400px] mx-auto animate-in fade-in duration-500 pb-6">
             {/* Header */}
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
                 <div className="flex items-center gap-3">
-                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">{t('vehiculos.lista.titulo')}</h1>
-                    <span className="min-w-[28px] h-6 px-2 flex items-center justify-center rounded-md bg-[#FFC933] text-[#1a1a1c] text-sm font-bold">
-                        {vehiculos.length}
-                    </span>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">{t('vehiculos.lista.titulo')}</h1>
+                    <span className="min-w-[28px] h-7 px-2.5 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-sm font-bold tabular-nums">{vehiculos.length}</span>
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 flex-wrap">
                     <div className="relative w-full sm:w-auto">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                        <input
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                            placeholder={t('vehiculos.lista.buscar')}
-                            className="w-full sm:w-56 pl-9 pr-3 py-2.5 rounded-xl bg-white border border-slate-200 focus:border-slate-400 outline-none text-sm text-slate-900 placeholder:text-slate-400 transition"
-                        />
+                        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('vehiculos.lista.buscar')}
+                            className="w-full sm:w-56 pl-9 pr-3 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 outline-none text-sm text-slate-900 dark:text-white placeholder:text-slate-400 transition" />
                     </div>
                     <div className="relative w-full sm:w-auto">
-                        <button
-                            onClick={() => setShowFilters(v => !v)}
-                            className={`w-full sm:w-auto flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-white border text-sm transition ${showFilters || activeFilterCount > 0 ? 'border-slate-400 text-slate-900' : 'border-slate-200 hover:border-slate-300 text-slate-700'}`}
-                        >
+                        <button onClick={() => setShowFilters(v => !v)}
+                            className={`w-full sm:w-auto flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border text-sm transition ${showFilters || activeFilterCount > 0 ? 'border-blue-400 text-slate-900 dark:text-white' : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 text-slate-700 dark:text-slate-300'}`}>
                             <SlidersHorizontal size={16} /> {t('vehiculos.lista.filtros')}
-                            {activeFilterCount > 0 && (
-                                <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-[#FFC933] text-[#1a1a1c] text-[11px] font-bold">
-                                    {activeFilterCount}
-                                </span>
-                            )}
+                            {activeFilterCount > 0 && <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-blue-500 text-white text-[11px] font-bold">{activeFilterCount}</span>}
                         </button>
-
                         {showFilters && (
                             <>
                                 <div className="fixed inset-0 z-10" onClick={() => setShowFilters(false)} />
-                                <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 p-4 z-20 animate-in fade-in zoom-in-95 duration-150">
+                                <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-4 z-20 animate-in fade-in zoom-in-95 duration-150">
                                     <div className="flex items-center justify-between mb-3">
-                                        <span className="text-sm font-semibold text-slate-900">{t('vehiculos.lista.filtrarPor')}</span>
-                                        {activeFilterCount > 0 && (
-                                            <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-700 transition">
-                                                <X size={12} /> {t('vehiculos.lista.limpiar')}
-                                            </button>
-                                        )}
+                                        <span className="text-sm font-semibold text-slate-900 dark:text-white">{t('vehiculos.lista.filtrarPor')}</span>
+                                        {activeFilterCount > 0 && <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition"><X size={12} /> {t('vehiculos.lista.limpiar')}</button>}
                                     </div>
-
                                     <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400 mb-1.5">{t('vehiculos.lista.estado')}</p>
                                     <div className="space-y-1 mb-3">
                                         {estadoOptions.length === 0 && <p className="text-xs text-slate-400">{t('vehiculos.lista.sinDatos')}</p>}
-                                        {estadoOptions.map((e) => {
-                                            const on = estadoFilter.has(e);
-                                            return (
-                                                <button
-                                                    key={e}
-                                                    onClick={() => toggleSetValue(setEstadoFilter, e)}
-                                                    className="w-full flex items-center gap-2.5 px-1.5 py-1.5 rounded-lg hover:bg-slate-50 transition text-left"
-                                                >
-                                                    <span className={`w-4 h-4 rounded flex items-center justify-center border ${on ? 'bg-[#FFC933] border-[#FFC933]' : 'border-slate-300'}`}>
-                                                        {on && <Check size={11} className="text-[#1a1a1c]" />}
-                                                    </span>
-                                                    <span className="text-sm text-slate-700 flex-1 truncate">{e}</span>
-                                                </button>
-                                            );
-                                        })}
+                                        {estadoOptions.map((e) => { const on = estadoFilter.has(e); return (
+                                            <button key={e} onClick={() => toggleSetValue(setEstadoFilter, e)} className={filterOptBtn}>
+                                                <span className={checkboxCls(on)}>{on && <Check size={11} className="text-white" />}</span>
+                                                <span className="text-sm text-slate-700 dark:text-slate-200 flex-1 truncate">{e}</span>
+                                            </button>); })}
                                     </div>
-
                                     <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400 mb-1.5">{t('vehiculos.lista.tipoUnidad')}</p>
                                     <div className="space-y-1">
                                         {tipoOptions.length === 0 && <p className="text-xs text-slate-400">{t('vehiculos.lista.sinDatos')}</p>}
-                                        {tipoOptions.map((t) => {
-                                            const on = tipoFilter.has(t);
-                                            return (
-                                                <button
-                                                    key={t}
-                                                    onClick={() => toggleSetValue(setTipoFilter, t)}
-                                                    className="w-full flex items-center gap-2.5 px-1.5 py-1.5 rounded-lg hover:bg-slate-50 transition text-left"
-                                                >
-                                                    <span className={`w-4 h-4 rounded flex items-center justify-center border ${on ? 'bg-[#FFC933] border-[#FFC933]' : 'border-slate-300'}`}>
-                                                        {on && <Check size={11} className="text-[#1a1a1c]" />}
-                                                    </span>
-                                                    <span className="text-sm text-slate-700 flex-1 truncate">{t}</span>
-                                                </button>
-                                            );
-                                        })}
+                                        {tipoOptions.map((tp) => { const on = tipoFilter.has(tp); return (
+                                            <button key={tp} onClick={() => toggleSetValue(setTipoFilter, tp)} className={filterOptBtn}>
+                                                <span className={checkboxCls(on)}>{on && <Check size={11} className="text-white" />}</span>
+                                                <span className="text-sm text-slate-700 dark:text-slate-200 flex-1 truncate">{tp}</span>
+                                            </button>); })}
                                     </div>
-
                                     <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400 mb-1.5 mt-3">{t('vehiculos.lista.area')}</p>
                                     <div className="space-y-1">
                                         {areaOptions.length === 0 && <p className="text-xs text-slate-400">{t('vehiculos.lista.sinDatos')}</p>}
-                                        {areaOptions.map((a) => {
-                                            const on = areaFilter.has(a);
-                                            return (
-                                                <button
-                                                    key={a}
-                                                    onClick={() => toggleSetValue(setAreaFilter, a)}
-                                                    className="w-full flex items-center gap-2.5 px-1.5 py-1.5 rounded-lg hover:bg-slate-50 transition text-left"
-                                                >
-                                                    <span className={`w-4 h-4 rounded flex items-center justify-center border ${on ? 'bg-[#FFC933] border-[#FFC933]' : 'border-slate-300'}`}>
-                                                        {on && <Check size={11} className="text-[#1a1a1c]" />}
-                                                    </span>
-                                                    <span className="text-sm text-slate-700 flex-1 truncate">{a}</span>
-                                                </button>
-                                            );
-                                        })}
+                                        {areaOptions.map((a) => { const on = areaFilter.has(a); return (
+                                            <button key={a} onClick={() => toggleSetValue(setAreaFilter, a)} className={filterOptBtn}>
+                                                <span className={checkboxCls(on)}>{on && <Check size={11} className="text-white" />}</span>
+                                                <span className="text-sm text-slate-700 dark:text-slate-200 flex-1 truncate">{a}</span>
+                                            </button>); })}
                                     </div>
                                 </div>
                             </>
                         )}
                     </div>
-                    <button
-                        onClick={exportToExcel}
-                        className="w-full sm:w-auto flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 hover:border-slate-300 text-sm text-slate-700 transition"
-                    >
+                    <button onClick={exportToExcel} className="w-full sm:w-auto flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-slate-300 text-sm text-slate-700 dark:text-slate-300 transition">
                         <Download size={16} /> {t('vehiculos.lista.exportar')}
                     </button>
-                    <button
-                        onClick={() => setModalOpen(true)}
-                        className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#1a1a1c] hover:bg-[#2a2a2e] text-white text-sm font-medium transition"
-                    >
+                    <button onClick={() => setModalOpen(true)} className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-semibold transition shadow-sm">
                         <Plus size={16} /> {t('vehiculos.lista.nuevoVehiculo')}
                     </button>
                 </div>
             </div>
 
             {/* Table */}
-            <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+            <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900/50 shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
                         <thead>
-                            <tr className="border-b border-slate-100 text-slate-400">
+                            <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400">
                                 {[
-                                    t('vehiculos.lista.columnas.unidad'),
-                                    t('vehiculos.lista.columnas.marcaModelo'),
-                                    t('vehiculos.lista.columnas.tipo'),
-                                    t('vehiculos.lista.columnas.anio'),
-                                    t('vehiculos.lista.columnas.seguro'),
-                                    t('vehiculos.lista.columnas.revTecnica'),
-                                    t('vehiculos.lista.columnas.gps'),
-                                    t('vehiculos.lista.columnas.estado'),
+                                    t('vehiculos.lista.columnas.unidad'), t('vehiculos.lista.columnas.marcaModelo'), t('vehiculos.lista.columnas.tipo'),
+                                    t('vehiculos.lista.columnas.anio'), t('vehiculos.lista.columnas.seguro'), t('vehiculos.lista.columnas.revTecnica'),
+                                    t('vehiculos.lista.columnas.gps'), t('vehiculos.lista.columnas.estado'),
                                 ].map((h) => (
-                                    <th key={h} className="px-5 py-3.5 font-medium">
-                                        <span className="inline-flex items-center gap-1">{h} <ChevronsUpDown size={13} className="text-slate-300" /></span>
+                                    <th key={h} className="px-5 py-3.5 font-semibold text-[11px] uppercase tracking-wider whitespace-nowrap">
+                                        <span className="inline-flex items-center gap-1">{h} <ChevronsUpDown size={12} className="text-slate-300 dark:text-slate-600" /></span>
                                     </th>
                                 ))}
-                                <th className="px-5 py-3.5 font-medium text-right">{t('vehiculos.lista.columnas.acciones')}</th>
+                                <th className="px-5 py-3.5 font-semibold text-[11px] uppercase tracking-wider text-right">{t('vehiculos.lista.columnas.acciones')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -308,63 +217,43 @@ export default function VehiculosPage() {
                                 const estado = (v.estado_vehiculo || '').toUpperCase();
                                 const available = estado === 'ACTIVO' || estado === 'DISPONIBLE';
                                 return (
-                                    <tr key={v.id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
+                                    <tr key={v.id} className="border-b border-slate-50 dark:border-slate-800/60 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
                                         <td className="px-5 py-3.5">
                                             <div className="flex items-center gap-2.5">
-                                                <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
-                                                    <Truck size={16} />
-                                                </div>
-                                                <span className="font-semibold text-slate-900">{v.placa}</span>
+                                                <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center shrink-0"><Truck size={16} /></div>
+                                                <span className="font-semibold text-slate-900 dark:text-white">{v.placa}</span>
                                             </div>
                                         </td>
-                                        <td className="px-5 py-3.5 text-slate-600">{v.marca_modelo || '-'}</td>
-                                        <td className="px-5 py-3.5 text-slate-600">{v.tipo_unidad || '-'}</td>
-                                        <td className="px-5 py-3.5 text-slate-600">{v.anio_fabricacion || '-'}</td>
+                                        <td className="px-5 py-3.5 text-slate-600 dark:text-slate-400">{v.marca_modelo || '-'}</td>
+                                        <td className="px-5 py-3.5 text-slate-600 dark:text-slate-400">{v.tipo_unidad || '-'}</td>
+                                        <td className="px-5 py-3.5 text-slate-600 dark:text-slate-400">{v.anio_fabricacion || '-'}</td>
                                         <td className="px-5 py-3.5">
-                                            {v.poliza_seguro
-                                                ? <span className="text-slate-600">{v.poliza_seguro}</span>
-                                                : <span className="text-red-500 text-xs font-medium">{t('vehiculos.lista.sinSeguro')}</span>}
+                                            {v.poliza_seguro ? <span className="text-slate-600 dark:text-slate-400">{v.poliza_seguro}</span> : <span className="text-rose-500 text-xs font-medium">{t('vehiculos.lista.sinSeguro')}</span>}
                                         </td>
-                                        <td className="px-5 py-3.5 text-slate-600 whitespace-nowrap">{fmtFechaCorta(v.revision_tecnica) || <span className="text-amber-500 text-xs font-medium">{t('vehiculos.lista.pendiente')}</span>}</td>
+                                        <td className="px-5 py-3.5 text-slate-600 dark:text-slate-400 whitespace-nowrap">{fmtFechaCorta(v.revision_tecnica) || <span className="text-amber-500 text-xs font-medium">{t('vehiculos.lista.pendiente')}</span>}</td>
                                         <td className="px-5 py-3.5">
                                             {(() => {
                                                 const gps = gpsByVeh[v.id];
-                                                if (!gps) {
-                                                    return (
-                                                        <span title="Sin dispositivo GPS asignado" className="w-8 h-8 rounded-lg border border-dashed border-slate-200 flex items-center justify-center text-slate-300">
-                                                            <Crosshair size={15} />
-                                                        </span>
-                                                    );
-                                                }
+                                                if (!gps) return <span title="Sin dispositivo GPS asignado" className="w-8 h-8 rounded-lg border border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-300 dark:text-slate-600"><Crosshair size={15} /></span>;
                                                 return (
-                                                    <Link
-                                                        href={`/rastreo?device=${gps.deviceId}`}
-                                                        title={gps.online ? 'GPS en línea · ver en el mapa' : gps.hasPos ? 'Dispositivo asignado · sin señal reciente' : 'Dispositivo asignado · sin posición aún'}
-                                                        className={`relative w-8 h-8 rounded-lg border flex items-center justify-center transition ${gps.online ? 'border-emerald-200 text-emerald-600 bg-emerald-50 hover:bg-emerald-100' : 'border-slate-200 text-slate-400 hover:bg-slate-100'}`}
-                                                    >
+                                                    <Link href={`/rastreo?device=${gps.deviceId}`} title={gps.online ? 'GPS en línea · ver en el mapa' : gps.hasPos ? 'Dispositivo asignado · sin señal reciente' : 'Dispositivo asignado · sin posición aún'}
+                                                        className={`relative w-8 h-8 rounded-lg border flex items-center justify-center transition ${gps.online ? 'border-emerald-200 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 dark:border-emerald-500/30 dark:text-emerald-400 dark:bg-emerald-500/10' : 'border-slate-200 dark:border-slate-700 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
                                                         <Crosshair size={15} />
-                                                        {gps.online && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white" />}
+                                                        {gps.online && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />}
                                                     </Link>
                                                 );
                                             })()}
                                         </td>
                                         <td className="px-5 py-3.5">
-                                            <span className={`text-sm font-medium ${available ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${available ? 'text-emerald-600 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/20' : 'text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20'}`}>
+                                                <span className={`w-1.5 h-1.5 rounded-full ${available ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                                                 {available ? t('vehiculos.lista.disponible') : t('vehiculos.lista.noDisponible')}
                                             </span>
                                         </td>
                                         <td className="px-5 py-3.5">
                                             <div className="flex items-center justify-end gap-1.5">
-                                                <Link href={`/vehiculos/${v.id}`} title={t('vehiculos.lista.ver')} className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-100 flex items-center justify-center text-slate-500 transition">
-                                                    <Eye size={15} />
-                                                </Link>
-                                                <button
-                                                    title={t('vehiculos.lista.eliminar')}
-                                                    onClick={() => setDeleteTarget(v)}
-                                                    className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-red-50 hover:border-red-200 hover:text-red-500 flex items-center justify-center text-slate-500 transition"
-                                                >
-                                                    <Trash2 size={15} />
-                                                </button>
+                                                <Link href={`/vehiculos/${v.id}`} title={t('vehiculos.lista.ver')} className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 transition"><Eye size={15} /></Link>
+                                                <button title={t('vehiculos.lista.eliminar')} onClick={() => setDeleteTarget(v)} className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-red-50 hover:border-red-200 hover:text-red-500 dark:hover:bg-red-500/10 dark:hover:border-red-500/30 flex items-center justify-center text-slate-500 dark:text-slate-400 transition"><Trash2 size={15} /></button>
                                             </div>
                                         </td>
                                     </tr>
@@ -373,50 +262,25 @@ export default function VehiculosPage() {
                         </tbody>
                     </table>
                 </div>
-
-                {/* Pagination */}
-                {!loading && filtered.length > 0 && (
-                    <Pagination page={currentPage} totalPages={totalPages} onChange={setPage} />
-                )}
+                {!loading && filtered.length > 0 && <Pagination page={currentPage} totalPages={totalPages} onChange={setPage} />}
             </div>
 
-            {/* Create modal */}
-            <VehiculoModal
-                isOpen={modalOpen}
-                onClose={() => setModalOpen(false)}
-                onSuccess={() => fetchVehiculos()}
-            />
+            <VehiculoModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onSuccess={() => fetchVehiculos()} />
 
-            {/* Delete confirmation */}
             {deleteTarget && mounted && createPortal(
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md border border-slate-200 shadow-2xl overflow-hidden max-h-[92vh] animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
+                    <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl w-full max-w-md border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden max-h-[92vh] animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         <div className="p-6 flex items-start gap-4">
-                            <div className="w-11 h-11 rounded-xl bg-red-50 text-red-500 flex items-center justify-center shrink-0">
-                                <AlertTriangle size={22} />
-                            </div>
+                            <div className="w-11 h-11 rounded-xl bg-red-50 dark:bg-red-500/10 text-red-500 flex items-center justify-center shrink-0"><AlertTriangle size={22} /></div>
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900">{t('vehiculos.lista.confirmarEliminarTitulo')}</h3>
-                                <p className="text-sm text-slate-500 mt-1">
-                                    {t('vehiculos.lista.confirmarEliminarPre')}<span className="font-semibold text-slate-700">{deleteTarget.placa}</span>{t('vehiculos.lista.confirmarEliminarPost')}
-                                </p>
+                                <h3 className="text-lg font-bold text-slate-900 dark:text-white">{t('vehiculos.lista.confirmarEliminarTitulo')}</h3>
+                                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{t('vehiculos.lista.confirmarEliminarPre')}<span className="font-semibold text-slate-700 dark:text-slate-200">{deleteTarget.placa}</span>{t('vehiculos.lista.confirmarEliminarPost')}</p>
                             </div>
                         </div>
                         <div className="px-6 pb-6 flex justify-end gap-3">
-                            <button
-                                onClick={() => setDeleteTarget(null)}
-                                disabled={deleting}
-                                className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition disabled:opacity-60"
-                            >
-                                {t('vehiculos.lista.cancelar')}
-                            </button>
-                            <button
-                                onClick={handleDelete}
-                                disabled={deleting}
-                                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-medium transition flex items-center gap-2 disabled:opacity-60 disabled:pointer-events-none"
-                            >
-                                {deleting ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />}
-                                {t('vehiculos.lista.eliminar')}
+                            <button onClick={() => setDeleteTarget(null)} disabled={deleting} className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-60">{t('vehiculos.lista.cancelar')}</button>
+                            <button onClick={handleDelete} disabled={deleting} className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-medium transition flex items-center gap-2 disabled:opacity-60 disabled:pointer-events-none">
+                                {deleting ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />}{t('vehiculos.lista.eliminar')}
                             </button>
                         </div>
                     </div>
@@ -431,32 +295,16 @@ function Pagination({ page, totalPages, onChange }: { page: number; totalPages: 
     const t = useT();
     const pages = Array.from({ length: totalPages }, (_, i) => i + 1).slice(0, 6);
     return (
-        <div className="flex items-center justify-between px-5 py-3.5 border-t border-slate-100">
-            <button
-                onClick={() => onChange(Math.max(1, page - 1))}
-                disabled={page === 1}
-                className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition"
-            >
+        <div className="flex items-center justify-between px-5 py-3.5 border-t border-slate-100 dark:border-slate-800">
+            <button onClick={() => onChange(Math.max(1, page - 1))} disabled={page === 1} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition">
                 <ArrowLeft size={16} /> {t('vehiculos.lista.anterior')}
             </button>
             <div className="flex items-center gap-1.5">
                 {pages.map((p) => (
-                    <button
-                        key={p}
-                        onClick={() => onChange(p)}
-                        className={`w-9 h-9 rounded-lg text-sm font-medium transition ${p === page
-                            ? 'border-2 border-blue-500 text-slate-900'
-                            : 'border border-slate-200 text-slate-500 hover:bg-slate-50'}`}
-                    >
-                        {p}
-                    </button>
+                    <button key={p} onClick={() => onChange(p)} className={`w-9 h-9 rounded-lg text-sm font-medium transition ${p === page ? 'border-2 border-blue-500 text-slate-900 dark:text-white' : 'border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>{p}</button>
                 ))}
             </div>
-            <button
-                onClick={() => onChange(Math.min(totalPages, page + 1))}
-                disabled={page === totalPages}
-                className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition"
-            >
+            <button onClick={() => onChange(Math.min(totalPages, page + 1))} disabled={page === totalPages} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition">
                 {t('vehiculos.lista.siguiente')} <ArrowRight size={16} />
             </button>
         </div>

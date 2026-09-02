@@ -12,30 +12,32 @@ import { useI18n } from '../lib/i18n';
 import { LanguageSwitcher } from './LanguageSwitcher';
 
 // El nombre visible se resuelve por clave con t('nav.<key>'); aquí solo el icono.
-const primaryItems = [
+// Lista única y corrida (orden definido por la dirección; antes eran dos grupos con
+// divisor). 'finanzas' no es un módulo asignable: se gatea por el flag ve_finanzas
+// (gate: 'finanzas'). 'servicios' (DHL/Farmacia) queda fuera del menú a pedido del
+// empresario; su ruta y permiso siguen existiendo.
+const navItems = [
     { key: 'dashboard', href: '/', icon: LayoutDashboard },
     { key: 'panel', href: '/panel', icon: Boxes },
+    { key: 'rastreo', href: '/rastreo', icon: Navigation },
     { key: 'operaciones', href: '/operaciones', icon: Map },
-    { key: 'servicios', href: '/servicios', icon: Package },
+    { key: 'recorridos', href: '/recorridos', icon: Route },
+    { key: 'reportes', href: '/reportes', icon: BarChart3 },
+    { key: 'mi-perfil', href: '/mi-perfil', icon: Users },
     { key: 'trabajadores', href: '/trabajadores', icon: Users },
     { key: 'vehiculos', href: '/vehiculos', icon: Truck },
+    { key: 'mi-resumen', href: '/mi-resumen', icon: LayoutDashboard },
+    { key: 'finanzas', href: '/finanzas', icon: TrendingUp, gate: 'finanzas' },
+    { key: 'historial-mensual', href: '/historial-mensual', icon: CalendarClock },
+    { key: 'mis-consegnas', href: '/mis-consegnas', icon: Package },
     { key: 'mantenimiento', href: '/mantenimiento', icon: Wrench },
     { key: 'peajes', href: '/peajes', icon: Receipt },
+    // Sin número explícito en la referencia: van al final en este orden.
     { key: 'combustible', href: '/combustible', icon: Fuel },
-    { key: 'calendario', href: '/calendario', icon: CalendarDays },
-    { key: 'reportes', href: '/reportes', icon: BarChart3 },
-];
-
-const trackingItems = [
-    { key: 'mi-resumen', href: '/mi-resumen', icon: LayoutDashboard },
     { key: 'mi-ruta', href: '/mi-ruta', icon: Navigation },
-    { key: 'mis-consegnas', href: '/mis-consegnas', icon: Package },
     { key: 'parte-diario', href: '/parte-diario', icon: Receipt },
-    { key: 'historial-mensual', href: '/historial-mensual', icon: CalendarClock },
     { key: 'ganancias-direccion', href: '/ganancias-direccion', icon: BarChart3 },
-    { key: 'mi-perfil', href: '/mi-perfil', icon: Users },
-    { key: 'recorridos', href: '/recorridos', icon: Route },
-    { key: 'rastreo', href: '/rastreo', icon: Navigation },
+    { key: 'calendario', href: '/calendario', icon: CalendarDays },
     { key: 'alertas', href: '/alertas', icon: Bell },
     // Scadenze pertenece al módulo Alertas (gateKey): no es un permiso propio.
     { key: 'scadenze', gateKey: 'alertas', href: '/scadenze', icon: CalendarClock },
@@ -58,8 +60,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
     // Finanzas no es un módulo asignable (no vive en MODULES): se gatea directo
     // por el flag ve_finanzas del rol (supervisor general, dirección...).
     const veFinanzas = !!(user as any)?.ve_finanzas;
-    const visiblePrimary = primaryItems.filter((i) => canAccessModule(user, i.key));
-    const visibleTracking = trackingItems.filter((i) => canAccessModule(user, (i as any).gateKey ?? i.key));
+    // 'finanzas' se gatea por ve_finanzas; el resto por su módulo (o gateKey).
+    const visibleNav = navItems.filter((i) =>
+        (i as any).gate === 'finanzas' ? veFinanzas : canAccessModule(user, (i as any).gateKey ?? i.key),
+    );
 
     const NavLink = ({ href, name, Icon, badge }: { href: string; name: string; Icon: any; badge?: number }) => {
         const isActive = pathname === href;
@@ -106,26 +110,12 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
 
             {/* Nav */}
             <nav className="flex-1 overflow-y-auto px-3 pb-3">
-                {(visiblePrimary.length > 0 || veFinanzas) && (
+                {visibleNav.length > 0 && (
                     <div className="space-y-1">
-                        {visiblePrimary.map((item) => (
+                        {visibleNav.map((item) => (
                             <NavLink key={item.href} href={item.href} name={t(`nav.${item.key}`)} Icon={item.icon} />
                         ))}
-                        {veFinanzas && (
-                            <NavLink href="/finanzas" name={t('nav.finanzas')} Icon={TrendingUp} />
-                        )}
                     </div>
-                )}
-
-                {visibleTracking.length > 0 && (
-                    <>
-                        <SectionDivider />
-                        <div className="space-y-1">
-                            {visibleTracking.map((item) => (
-                                <NavLink key={item.href} href={item.href} name={t(`nav.${item.key}`)} Icon={item.icon} />
-                            ))}
-                        </div>
-                    </>
                 )}
 
                 {isManager && (

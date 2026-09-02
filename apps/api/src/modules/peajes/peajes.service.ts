@@ -110,6 +110,7 @@ export class PeajesService {
         const nativeSelect = {
             id: true, targa: true, estado: true, comentarios: true, fecha: true, hora: true, tipo: true, monto: true,
             archivo: true, id_multa: true, recibo_pago: true, fecha_recepcion: true, fecha_limite_pago: true,
+            trabajador_id: true,
         } as const;
         const [nativeItems, gastos, gastosParaContar] = await this.prisma.$transaction([
             this.prisma.peaje.findMany({ where: itemsWhere, orderBy: { fecha: 'desc' }, select: nativeSelect }),
@@ -138,6 +139,7 @@ export class PeajesService {
             id_multa: g.numero_mancato || null,
             numero_mancato: g.numero_mancato || null,
             link_peaje: g.link_peaje || null,
+            trabajador_id: g.trabajador_id || null,
             // false = peaje MANCATO (lo paga la empresa, no se descuenta al chofer).
             pagado_por_chofer: g.pagado_por_chofer !== false,
             fecha: g.fecha,
@@ -156,6 +158,26 @@ export class PeajesService {
         const total = merged.length;
         const items = merged.slice(skip, skip + take);
 
+        // Nombre del AUTISTA (conductor) para la página actual: el trabajador_id puede
+        // venir como UUID (nuevo) o como código legacy; resolvemos ambos. Solo para los
+        // items visibles (evita traer nombres de toda la lista).
+        const codes = Array.from(new Set(items.map((i: any) => i.trabajador_id).filter((c: any): c is string => !!c)));
+        const nameByCode = new Map<string, string>();
+        if (codes.length) {
+            const ts = await this.prisma.trabajador.findMany({
+                where: { tenant_id: tenantId, OR: [{ id: { in: codes } }, { id_trabajador: { in: codes } }] },
+                select: { id: true, id_trabajador: true, nombre_completo: true },
+            });
+            ts.forEach((t) => {
+                nameByCode.set(t.id, t.nombre_completo);
+                if (t.id_trabajador) nameByCode.set(t.id_trabajador, t.nombre_completo);
+            });
+        }
+        const itemsConAutista = items.map((i: any) => ({
+            ...i,
+            autista: (i.trabajador_id && nameByCode.get(i.trabajador_id)) || i.trabajador_id || null,
+        }));
+
         // groupBy cast to any: its `having` mapped type trips a known TS2615.
         const grouped: Array<{ estado: string | null; _count: { _all: number } }> =
             await (this.prisma.peaje.groupBy as any)({
@@ -173,7 +195,7 @@ export class PeajesService {
             counts[bucketOf(g.estado)] += 1;
         });
 
-        return { items, total, counts };
+        return { items: itemsConAutista, total, counts };
     }
 
     update(id: string, data: any, tenantId?: string) {

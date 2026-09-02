@@ -13,6 +13,9 @@ export const es = {
     columnas: {
         vehiculo: 'Vehículo',
         estado: 'Estado',
+        autista: 'Autista',
+        nroMancato: 'Nº Mancato',
+        linkPago: 'Link de pago',
         comentario: 'Comentario',
         fecha: 'Fecha',
         hora: 'Hora',
@@ -78,6 +81,9 @@ export const it: typeof es = {
     columnas: {
         vehiculo: 'Veicolo',
         estado: 'Stato',
+        autista: 'Autista',
+        nroMancato: 'N° Mancato',
+        linkPago: 'Link di pagamento',
         comentario: 'Commento',
         fecha: 'Data',
         hora: 'Ora',

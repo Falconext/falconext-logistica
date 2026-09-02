@@ -17,6 +17,7 @@ import {
   CircleUser,
   PlusCircle,
   Fuel,
+  Hourglass,
 } from 'lucide-react-native';
 import {
   Screen,
@@ -48,6 +49,7 @@ interface Resumen {
   oreSera: number;
   oreTotal: number;
   reperibilita?: number; // contador de reperibilità (el chofer NO ve el monto)
+  attesaHoras?: number;  // horas de attesa AUTORIZADAS del mes
   gananciaEstimada: number;
   recientes: { id: string; fecha: string; operacion: string; targa?: string | null; km: number; oreMattina: number; oreSera: number; ganancia: number }[];
 }
@@ -230,21 +232,18 @@ export default function MiResumenScreen() {
       {/* "Registrar parte del día" se quitó: las horas/km ahora son automáticas
           (desde los recorridos), el chofer ya no registra parte manual. */}
 
-      {/* Métricas personales — OCULTAS al chofer/supervisor por ahora: los km/horas
-          salen de los recorridos GPS y todavía no cuadran (hay que verificar el
-          cálculo). Solo visibles a roles con ve_finanzas para poder revisarlas. */}
-      {(user as any)?.ve_finanzas && (
-        <>
-          <View style={styles.statsRow}>
-            <StatCard label="Horas día" value={horasLabel(resumen?.oreMattina ?? 0)} icon={Clock} color={C.primary} style={{ flex: 1 }} />
-            <StatCard label="Km del mes" value={`${resumen?.km ?? 0} km`} icon={Route} color={C.info} style={{ flex: 1 }} />
-          </View>
-          <View style={styles.statsRow}>
-            <StatCard label="Horas noche" value={horasLabel(resumen?.oreSera ?? 0)} icon={Moon} color={C.accent} style={{ flex: 1 }} />
-            <StatCard label="Reperibilità" value={resumen?.reperibilita ?? 0} icon={ClipboardList} color={C.success} style={{ flex: 1 }} />
-          </View>
-        </>
-      )}
+      {/* Km y horas del mes (base del pago). Ya cuadran con los recorridos GPS —
+          el km/horas que se muestra es el mismo que suma al total del mes. */}
+      <SectionTitle style={{ marginTop: S.lg }}>Mi mes</SectionTitle>
+      <View style={styles.statsRow}>
+        <StatCard label="Km del mes" value={`${resumen?.km ?? 0} km`} icon={Route} color={C.info} style={{ flex: 1 }} />
+        <StatCard label="Horas día" value={horasLabel(resumen?.oreMattina ?? 0)} icon={Clock} color={C.primary} style={{ flex: 1 }} />
+        <StatCard label="Horas noche" value={horasLabel(resumen?.oreSera ?? 0)} icon={Moon} color={C.accent} style={{ flex: 1 }} />
+      </View>
+      <View style={styles.statsRow}>
+        <StatCard label="Reperibilità" value={resumen?.reperibilita ?? 0} icon={ClipboardList} color={C.success} style={{ flex: 1 }} />
+        <StatCard label="Attesa autorizadas" value={horasLabel(resumen?.attesaHoras ?? 0)} icon={Hourglass} color={C.warning} style={{ flex: 1 }} />
+      </View>
 
       {/* Accesos rápidos */}
       <View style={styles.quickRow}>

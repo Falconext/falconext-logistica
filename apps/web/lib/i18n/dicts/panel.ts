@@ -36,6 +36,7 @@ export const es = {
         estados: {
             CONSEGNATO: 'Consegnato',
             IN_CONSEGNA: 'In Consegna',
+            ACCETTATA: 'Aceptada',
             IN_SOSPESO: 'In Sospeso',
             RITIRATO: 'Ritirato',
             RISCHEDULATO: 'Rischedulato',
@@ -102,6 +103,7 @@ export const it: typeof es = {
         estados: {
             CONSEGNATO: 'Consegnato',
             IN_CONSEGNA: 'In Consegna',
+            ACCETTATA: 'Accettata',
             IN_SOSPESO: 'In Sospeso',
             RITIRATO: 'Ritirato',
             RISCHEDULATO: 'Rischedulato',

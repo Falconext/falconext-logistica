@@ -1,26 +1,25 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import {
-    Card,
-    Title,
-    Text,
-    AreaChart,
-    BarChart,
-    Metric,
-    Flex,
-    DateRangePicker,
-    DateRangePickerValue,
-    Subtitle,
-    Grid
-} from '@tremor/react';
-import { BarChart3, Receipt, Users, Package, Calendar } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { DateRangePicker, DateRangePickerValue } from '@tremor/react';
+import { motion } from 'framer-motion';
+// framer-motion v10 fricciona con los tipos de React 19; alias sin tipos para el motion.div.
+const MotionDiv = motion.div as any;
+import { Receipt, Users, Package, Calendar, TrendingUp, Truck, Trophy, Loader2 } from 'lucide-react';
 import { es } from 'date-fns/locale';
-import api from '../../lib/api'; // Correct path to API client
+import api from '../../lib/api';
 import { toast } from 'sonner';
 import { useCurrency } from '../../lib/useCurrency';
 import { useT } from '../../lib/i18n';
 import CostosReport from './CostosReport';
+// Charts "Mono" (estilo Amicro/Mono Charts) sobre recharts: monocromo, redondeado,
+// con gradientes y value labels. Theme-aware.
+import { MonoAreaChart } from '../../components/mono/MonoAreaChart';
+import { MonoBarChart } from '../../components/mono/MonoBarChart';
+import { KpiCard, ChartCard } from '../../components/mono/MonoCards';
+
+const REALIZADAS = 'Entregas Realizadas';
+const FALLIDAS = 'Entregas Fallidas';
 
 export default function ReportesPage() {
     const t = useT();
@@ -31,30 +30,15 @@ export default function ReportesPage() {
     });
 
     const [loading, setLoading] = useState(true);
-    const [kpis, setKpis] = useState({
-        total_routes: 0,
-        completed: 0,
-        failed: 0,
-        income: 0,
-        active_clients: 0
-    });
-    const [charts, setCharts] = useState({
-        evolution: [],
-        workers: [],
-        vehicles: []
-    });
+    const [kpis, setKpis] = useState({ total_routes: 0, completed: 0, failed: 0, income: 0, active_clients: 0 });
+    const [charts, setCharts] = useState<{ evolution: any[]; workers: any[]; vehicles: any[] }>({ evolution: [], workers: [], vehicles: [] });
 
-    useEffect(() => {
-        fetchReports();
-    }, [dateRange]);
+    useEffect(() => { fetchReports(); /* eslint-disable-next-line */ }, [dateRange]);
 
     const fetchReports = async () => {
         setLoading(true);
         try {
-            const params = {
-                from: dateRange.from ? dateRange.from.toISOString() : undefined,
-                to: dateRange.to ? dateRange.to.toISOString() : undefined
-            };
+            const params = { from: dateRange.from?.toISOString(), to: dateRange.to?.toISOString() };
             const response = await api.get('/dashboard/reports', { params });
             setKpis(response.data.kpis);
             setCharts(response.data.charts);
@@ -66,16 +50,39 @@ export default function ReportesPage() {
         }
     };
 
+    // ---- Métricas derivadas para los headers de cada chart ----
+    const stats = useMemo(() => {
+        const ev = charts.evolution || [];
+        const realizadas = ev.reduce((a, r) => a + (Number(r[REALIZADAS]) || 0), 0);
+        const fallidas = ev.reduce((a, r) => a + (Number(r[FALLIDAS]) || 0), 0);
+        const tasa = realizadas + fallidas > 0 ? Math.round((realizadas / (realizadas + fallidas)) * 100) : 0;
+        const topWorker = (charts.workers || [])[0] || null;
+        const viajes = (charts.vehicles || []).reduce((a, r) => a + (Number(r.Viajes) || 0), 0);
+        const flotaActiva = (charts.vehicles || []).filter((r) => (Number(r.Viajes) || 0) > 0).length;
+        return { realizadas, fallidas, tasa, topWorker, viajes, flotaActiva };
+    }, [charts]);
+
+    const fmtDay = (v: any) => {
+        const d = new Date(v);
+        return isNaN(d.getTime()) ? v : d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+    };
+
+    const enter = (i: number) => ({
+        initial: { opacity: 0, y: 12 },
+        animate: { opacity: 1, y: 0 },
+        transition: { duration: 0.45, delay: i * 0.06, ease: [0.22, 1, 0.36, 1] as any },
+    });
+
     return (
-        <div className="space-y-6">
+        <div className="max-w-[1400px] mx-auto pb-6">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-7">
                 <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-400 bg-clip-text text-transparent">
-                        {t('reportes.titulo')}
-                    </h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">{t('reportes.titulo')}</h1>
+                    <p className="text-sm text-slate-400 mt-1">{t('reportes.evolucionSubtitulo')}</p>
                 </div>
-                <div className="flex gap-2 w-full md:w-auto">
+                <div className="flex items-center gap-2">
+                    {loading && <Loader2 size={16} className="animate-spin text-slate-400" />}
                     <DateRangePicker
                         className="w-full md:max-w-md"
                         value={dateRange}
@@ -87,109 +94,91 @@ export default function ReportesPage() {
                 </div>
             </div>
 
-            {/* KPI Cards Grid */}
-            <Grid numItems={1} numItemsSm={2} numItemsLg={4} className="gap-6">
-                <Card decoration="top" decorationColor="blue">
-                    <Flex justifyContent="start" className="space-x-4">
-                        <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400">
-                            <Receipt size={24} />
-                        </div>
-                        <div>
-                            <Text>{t('reportes.kpiRutasTotales')}</Text>
-                            <Metric>{kpis.total_routes}</Metric>
-                        </div>
-                    </Flex>
-                </Card>
-                <Card decoration="top" decorationColor="emerald">
-                    <Flex justifyContent="start" className="space-x-4">
-                        <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg text-emerald-600 dark:text-emerald-400">
-                            <Users size={24} />
-                        </div>
-                        <div>
-                            <Text>{t('reportes.kpiClientesActivos')}</Text>
-                            <Metric>{kpis.active_clients}</Metric>
-                        </div>
-                    </Flex>
-                </Card>
-                <Card decoration="top" decorationColor="amber">
-                    <Flex justifyContent="start" className="space-x-4">
-                        <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg text-amber-600 dark:text-amber-400">
-                            <Package size={24} />
-                        </div>
-                        <div>
-                            <Text>{t('reportes.kpiEntregasExitosas')}</Text>
-                            <Metric>{kpis.completed}</Metric>
-                        </div>
-                    </Flex>
-                </Card>
-                <Card decoration="top" decorationColor="indigo">
-                    <Flex justifyContent="start" className="space-x-4">
-                        <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg text-indigo-600 dark:text-indigo-400">
-                            <Calendar size={24} />
-                        </div>
-                        <div>
-                            <Text>{t('reportes.kpiIngresosEstimados')}</Text>
-                            <Metric>{format(kpis.income)}</Metric>
-                        </div>
-                    </Flex>
-                </Card>
-            </Grid>
-
-            {/* Main Charts Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Evolution Chart */}
-                <Card>
-                    <Title>{t('reportes.evolucionTitulo')}</Title>
-                    <Subtitle>{t('reportes.evolucionSubtitulo')}</Subtitle>
-                    <AreaChart
-                        className="h-72 mt-4"
-                        data={charts.evolution}
-                        index="date"
-                        categories={["Entregas Realizadas", "Entregas Fallidas"]}
-                        colors={["blue", "rose"]}
-                        valueFormatter={(number) => t('reportes.unidadesFormato', { n: number })}
-                        yAxisWidth={40}
-                        showAnimation={true}
-                    />
-                </Card>
-
-                {/* Vertical Bar Chart (Workers) */}
-                <Card>
-                    <Title>{t('reportes.rankingTitulo')}</Title>
-                    <Subtitle>{t('reportes.rankingSubtitulo')}</Subtitle>
-                    <BarChart
-                        className="h-72 mt-4"
-                        data={charts.workers}
-                        index="name"
-                        categories={["Entregas"]}
-                        colors={["blue"]}
-                        valueFormatter={(number) => `${number}`}
-                        yAxisWidth={110}
-                        layout="vertical"
-                        showLegend={false}
-                        showAnimation={true}
-                    />
-                </Card>
+            {/* KPI row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+                {[
+                    { icon: Receipt, tone: 'blue', label: t('reportes.kpiRutasTotales'), value: String(kpis.total_routes), sub: `${stats.tasa}% ${t('reportes.kpiEntregasExitosas').toLowerCase()}` },
+                    { icon: Users, tone: 'emerald', label: t('reportes.kpiClientesActivos'), value: String(kpis.active_clients), sub: t('reportes.rankingSubtitulo') },
+                    { icon: Package, tone: 'violet', label: t('reportes.kpiEntregasExitosas'), value: String(kpis.completed), sub: `${stats.fallidas} ${FALLIDAS.toLowerCase()}` },
+                    { icon: Calendar, tone: 'amber', label: t('reportes.kpiIngresosEstimados'), value: format(kpis.income), sub: t('reportes.flotaSubtitulo') },
+                ].map((k, i) => (
+                    <MotionDiv key={i} {...enter(i)}>
+                        <KpiCard {...k} />
+                    </MotionDiv>
+                ))}
             </div>
 
-            {/* Bottom Section */}
-            <Card>
-                <Title>{t('reportes.flotaTitulo')}</Title>
-                <Subtitle>{t('reportes.flotaSubtitulo')}</Subtitle>
-                <BarChart
-                    className="h-80 mt-6"
-                    data={charts.vehicles}
-                    index="name"
-                    categories={["Viajes"]}
-                    colors={["emerald"]}
-                    valueFormatter={(number) => t('reportes.viajesFormato', { n: number })}
-                    yAxisWidth={60}
-                    showAnimation={true}
-                />
-            </Card>
+            {/* Charts principales */}
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+                <MotionDiv className="lg:col-span-3" {...enter(4)}>
+                    <ChartCard
+                        title={t('reportes.evolucionTitulo')}
+                        subtitle={t('reportes.evolucionSubtitulo')}
+                        highlight={`${stats.tasa}%`}
+                        badge={t('reportes.kpiEntregasExitosas')}
+                        badgeTone="emerald"
+                        icon={TrendingUp}
+                    >
+                        <MonoAreaChart
+                            data={charts.evolution}
+                            index="date"
+                            height={252}
+                            xTickFormatter={fmtDay}
+                            categories={[
+                                { key: REALIZADAS, label: t('reportes.kpiEntregasExitosas'), accent: 'emerald', render: 'area' },
+                                { key: FALLIDAS, label: FALLIDAS, accent: 'rose', render: 'line' },
+                            ]}
+                            valueFormatter={(n) => t('reportes.unidadesFormato', { n })}
+                        />
+                    </ChartCard>
+                </MotionDiv>
+
+                <MotionDiv className="lg:col-span-2" {...enter(5)}>
+                    <ChartCard
+                        title={t('reportes.rankingTitulo')}
+                        subtitle={t('reportes.rankingSubtitulo')}
+                        highlight={stats.topWorker ? String(stats.topWorker.Entregas ?? '') : '—'}
+                        badge={stats.topWorker?.name || ''}
+                        badgeTone="violet"
+                        icon={Trophy}
+                    >
+                        <MonoBarChart
+                            data={charts.workers}
+                            index="name"
+                            height={252}
+                            horizontal
+                            highlightTop
+                            accent="violet"
+                            categories={[{ key: 'Entregas' }]}
+                            valueFormatter={(n) => `${n}`}
+                        />
+                    </ChartCard>
+                </MotionDiv>
+            </div>
+
+            {/* Flota */}
+            <MotionDiv className="mt-5" {...enter(6)}>
+                <ChartCard
+                    title={t('reportes.flotaTitulo')}
+                    subtitle={t('reportes.flotaSubtitulo')}
+                    highlight={String(stats.viajes)}
+                    badge={`${stats.flotaActiva} ${t('reportes.kpiRutasTotales').toLowerCase()}`}
+                    badgeTone="emerald"
+                    icon={Truck}
+                >
+                    <MonoBarChart
+                        data={charts.vehicles}
+                        index="name"
+                        height={300}
+                        accent="emerald"
+                        categories={[{ key: 'Viajes' }]}
+                        valueFormatter={(n) => t('reportes.viajesFormato', { n })}
+                    />
+                </ChartCard>
+            </MotionDiv>
 
             {/* Sección de Costos */}
-            <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
+            <div className="mt-8 pt-6 border-t border-slate-200/70 dark:border-slate-800">
                 <CostosReport />
             </div>
         </div>

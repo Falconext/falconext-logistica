@@ -62,8 +62,13 @@ export default function PeajeDetailModal({ item, onClose }: PeajeDetailModalProp
                         <Field label={t('peajes.detalle.numeroMancato')}>{item.numero_mancato || item.id_multa || '—'}</Field>
                         <Field label={t('peajes.detalle.linkPago')}>
                             {item.link_peaje ? (
-                                <a href={item.link_peaje} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 break-all">
-                                    <ExternalLink size={13} /> {t('peajes.detalle.abrirLink')}
+                                <a
+                                    href={/^https?:\/\//i.test(item.link_peaje) ? item.link_peaje : `https://${item.link_peaje}`}
+                                    target="_blank" rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 break-all"
+                                    title={item.link_peaje}
+                                >
+                                    <ExternalLink size={13} className="shrink-0" /> {String(item.link_peaje).replace(/^https?:\/\//i, '').replace(/\/+$/, '')}
                                 </a>
                             ) : '—'}
                         </Field>

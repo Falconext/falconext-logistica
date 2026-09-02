@@ -65,16 +65,16 @@ export default function MisConsegnasPage() {
     const soloItinerario = isChofer(user);
 
     return (
-        <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4">
+        <div className="p-4 md:p-6 w-full space-y-4">
             <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-xl bg-blue-50 grid place-items-center text-blue-600"><Package size={20} /></div>
                     <div>
-                        <h1 className="text-xl font-extrabold text-slate-800">Mis Consegnas</h1>
-                        <p className="text-sm text-slate-500">Las entregas asignadas a ti</p>
+                        <h1 className="text-xl font-extrabold text-slate-800 dark:text-slate-100">Mis Consegnas</h1>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">Las entregas asignadas a ti</p>
                     </div>
                 </div>
-                <button onClick={load} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50">
+                <button onClick={load} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 dark:bg-slate-800/50">
                     <RefreshCw size={15} /> Actualizar
                 </button>
             </div>
@@ -87,13 +87,13 @@ export default function MisConsegnasPage() {
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         placeholder="Buscar cliente, dirección, app…"
-                        className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                        className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                     />
                 </div>
                 <select
                     value={estado}
                     onChange={(e) => setEstado(e.target.value)}
-                    className="px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white"
+                    className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-900"
                 >
                     <option value="">Todos los estados</option>
                     {ESTADO_CONSEGNA_OPTIONS.map((o) => (
@@ -103,11 +103,11 @@ export default function MisConsegnasPage() {
             </div>
 
             {loading ? (
-                <div className="flex items-center gap-2 text-slate-500 p-6"><Loader2 className="animate-spin" size={18} /> Cargando…</div>
+                <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 p-6"><Loader2 className="animate-spin" size={18} /> Cargando…</div>
             ) : filtered.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
+                <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 p-10 text-center text-slate-500 dark:text-slate-400">
                     <Package className="mx-auto mb-2 text-slate-400" size={28} />
-                    <p className="font-semibold text-slate-700">Sin consegnas</p>
+                    <p className="font-semibold text-slate-700 dark:text-slate-200">Sin consegnas</p>
                     <p className="text-sm">No tienes consegnas que coincidan con el filtro.</p>
                 </div>
             ) : (
@@ -118,20 +118,20 @@ export default function MisConsegnasPage() {
                             <button
                                 key={r.id}
                                 onClick={() => setEditing(r)}
-                                className="w-full text-left rounded-2xl border border-slate-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm transition space-y-2"
+                                className="w-full text-left rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 hover:border-blue-300 hover:shadow-sm transition space-y-2"
                             >
                                 <div className="flex items-center justify-between gap-2">
-                                    <span className="font-bold text-slate-800 truncate">{r.cliente || 'Operación'}</span>
+                                    <span className="font-bold text-slate-800 dark:text-slate-100 truncate">{r.cliente || 'Operación'}</span>
                                     {meta && (
                                         <span className={`px-2 py-0.5 rounded-md text-[11px] font-medium border ${meta.badge}`}>{meta.label}</span>
                                     )}
                                 </div>
-                                <div className="text-sm text-slate-600 space-y-1">
+                                <div className="text-sm text-slate-600 dark:text-slate-400 space-y-1">
                                     <div className="flex items-center gap-2 truncate"><MapPin size={14} className="text-emerald-500 shrink-0" /> {(r as any).lugar_retiro || '—'}</div>
-                                    <div className="flex items-center gap-2 truncate"><MapPin size={14} className="text-slate-700 shrink-0" /> {(r as any).lugar_entrega || '—'}</div>
+                                    <div className="flex items-center gap-2 truncate"><MapPin size={14} className="text-slate-700 dark:text-slate-200 shrink-0" /> {(r as any).lugar_entrega || '—'}</div>
                                 </div>
                                 {(r.app || r.spedizione || r.ciudad) && (
-                                    <div className="flex flex-wrap gap-3 text-xs text-slate-500">
+                                    <div className="flex flex-wrap gap-3 text-xs text-slate-500 dark:text-slate-400">
                                         {r.app && <span className="flex items-center gap-1"><Smartphone size={12} /> {r.app}</span>}
                                         {r.spedizione && <span className="flex items-center gap-1"><Package size={12} /> {r.spedizione}</span>}
                                         {r.ciudad && <span>{r.ciudad}</span>}

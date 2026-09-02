@@ -5,7 +5,7 @@
 // columnas con semáforo, agrupados por área (Milano Nord/Sud, Personal, Roma).
 // Fuente: GET /alerts/scadenze. Pertenece al módulo Alertas.
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { CalendarClock, Search, Truck, Users, CheckCircle2, AlertCircle } from 'lucide-react';
 import api from '../../lib/api';
@@ -192,7 +192,7 @@ export default function ScadenzePage() {
                                     <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-400">{t('scadenze.vacio')}</td></tr>
                                 )}
                                 {gruposVeh.map(([area, items]) => (
-                                    <>
+                                    <Fragment key={area}>
                                         <AreaHeader key={`h-${area}`} nombre={area} count={items.length} cols={5} />
                                         {items.map((v) => (
                                             <tr key={v.id} className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
@@ -210,7 +210,7 @@ export default function ScadenzePage() {
                                                 <td className={tdCls}><FechaCell v={v.fecha_vencimiento_deroghe} /></td>
                                             </tr>
                                         ))}
-                                    </>
+                                    </Fragment>
                                 ))}
                             </tbody>
                         </table>
@@ -243,7 +243,7 @@ export default function ScadenzePage() {
                                     <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-400">{t('scadenze.vacio')}</td></tr>
                                 )}
                                 {gruposTrab.map(([area, items]) => (
-                                    <>
+                                    <Fragment key={area}>
                                         <AreaHeader key={`h-${area}`} nombre={area} count={items.length} cols={8} />
                                         {items.map((w) => (
                                             <tr key={w.id} className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
@@ -264,7 +264,7 @@ export default function ScadenzePage() {
                                                 <td className={tdCls}><FechaCell v={w.fecha_vencimiento_fiscal} /></td>
                                             </tr>
                                         ))}
-                                    </>
+                                    </Fragment>
                                 ))}
                             </tbody>
                         </table>
