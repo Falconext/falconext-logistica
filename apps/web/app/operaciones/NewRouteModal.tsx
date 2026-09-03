@@ -116,6 +116,8 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
     const [vehicles, setVehicles] = useState<any[]>([]);
     const [workers, setWorkers] = useState<any[]>([]);
     const [submitting, setSubmitting] = useState(false);
+    // Al editar: true cuando ya llegó GET /programacion/:id (registro completo con gastos/fotos).
+    const [fullLoaded, setFullLoaded] = useState(true);
     const [loading, setLoading] = useState(false); // Added
     // Tarifas de la empresa (factor €/km por categoría, mínimo <35km, navetta) para
     // autocompletar el ingreso EN VIVO mientras se escribe el km facturable.
@@ -302,12 +304,18 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
             // ellos los borraría. GET /programacion/:id trae todos los campos.
             let cancelled = false;
             populate(initialData);
+            setFullLoaded(false);
             api.get(`/programacion/${initialData.id}`)
                 .then((res) => {
-                    if (cancelled || !res.data) return;
-                    populate({ ...initialData, ...res.data });
+                    if (cancelled) return;
+                    if (res.data) populate({ ...initialData, ...res.data });
+                    setFullLoaded(true);
                 })
-                .catch(() => { /* se queda con los datos de la lista */ });
+                .catch(() => {
+                    // Sin el registro completo, guardar mandaría gastos: [] y borraría los
+                    // peajes/fotos de la operación. Se deja el botón bloqueado.
+                    if (!cancelled) toast.error('No se pudo cargar el detalle completo. Cierra y vuelve a abrir antes de guardar.');
+                });
             return () => { cancelled = true; };
         } else {
             setFormData({
@@ -1337,11 +1345,11 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                     <button
                         type="button"
                         onClick={() => handleSubmit()}
-                        disabled={submitting}
+                        disabled={submitting || (!!initialData?.id && !fullLoaded)}
                         className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition flex items-center gap-2 disabled:opacity-70 disabled:pointer-events-none"
                     >
-                        {submitting ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
-                        {initialData?.id ? 'Guardar Cambios' : 'Crear Ruta'}
+                        {submitting || (!!initialData?.id && !fullLoaded) ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
+                        {initialData?.id ? (fullLoaded ? 'Guardar Cambios' : 'Cargando detalle…') : 'Crear Ruta'}
                     </button>
                 </div>
             </div>

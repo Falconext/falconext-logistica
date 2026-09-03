@@ -411,18 +411,13 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
     if (!operacion?.id || !recorrido) return;
     setBusy(true);
     try {
-      // Si el recorrido tiene paradas, el chofer ya registró los gastos en cada
-      // una: los consolidamos para que el supervisor los vea a nivel de operación.
+      // Si el recorrido tiene paradas, los gastos ya viven en cada parada y el
+      // backend los consolida en la operación (por fusión) en cada llegada y al
+      // cerrar: NO mandamos `gastos` aquí, porque reemplazar la lista borraba los
+      // peajes que el supervisor cargó aparte y el estado de pago ya marcado.
       // Si no hay paradas (recorrido legacy), usamos la rendición editable del cierre.
-      const gastosConsolidados = paradas.length > 0
-        ? paradas.flatMap((p) => (Array.isArray(p.gastos) ? p.gastos : []).map((g: any) => ({
-          tipo: g.tipo, monto: Number(g.monto || 0), descripcion: g.descripcion || null,
-          numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null,
-          link_peaje: g.tipo === 'PEAJE' ? (g.link_peaje || null) : null,
-          comprobantes: Array.isArray(g.comprobantes) ? g.comprobantes : [],
-          pagado_por_chofer: g.pagado_por_chofer !== false,
-          parada: p.label || null,
-        })))
+      const gastosCierre = paradas.length > 0
+        ? undefined
         : form.gastos
           .filter((g) => g.tipo && (g.monto !== '' || g.comprobantes.length || g.descripcion || g.numero_mancato || g.link_peaje))
           .map((g) => ({ tipo: g.tipo, monto: g.monto !== '' ? parseNum(g.monto) : 0, descripcion: g.descripcion || null, numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null, link_peaje: g.tipo === 'PEAJE' ? (g.link_peaje || null) : null, comprobantes: g.comprobantes, pagado_por_chofer: GASTO_TIPOS_CON_PAGADOR.includes(g.tipo) ? g.pagado_por_chofer : true }));
@@ -432,7 +427,7 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
         // (evita que lo sobrescriba/borre al finalizar). Solo rinde sus gastos.
         attesa: form.attesa.trim() || null,
         attesa_horas: form.attesa_horas !== '' ? parseNum(form.attesa_horas) : 0,
-        gastos: gastosConsolidados,
+        ...(gastosCierre !== undefined ? { gastos: gastosCierre } : {}),
       });
       // El retorno va DESPUÉS de finalizar la consegna (pedido del cliente):
       // aquí solo marcamos entregado + rendición. El recorrido sigue en el

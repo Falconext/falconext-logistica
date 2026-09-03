@@ -274,6 +274,11 @@ model GastoOperacion {
   trabajador_id   String?
   targa           String?
 
+  // Parada del recorrido (RecorridoParada.id) de la que se consolidó este gasto.
+  // Null = cargado directo en la operación (supervisor/rendición de cierre). Permite
+  // re-consolidar por FUSIÓN al cerrar el recorrido sin borrar los demás gastos.
+  parada_id       String?
+
   tenant_id       String
 
   creado_en       DateTime @default(now())

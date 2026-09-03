@@ -1,5 +1,6 @@
 
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { GASTO_SYNC_SELECT, aplicarPlanGastos, planificarSyncGastos } from '../../common/gastos-sync.util';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { num, horasDeRecorrido, tarifasFromTenant, TARIFAS_TENANT_SELECT, TarifasChofer } from '../../common/tarifas-chofer.util';
@@ -415,8 +416,11 @@ export class ProgramacionService {
             programacion_id: op.id,
             tipo: String(g.tipo || 'OTRO'),
             monto: g.monto != null && g.monto !== '' ? Number(g.monto) : 0,
-            // Sin fecha propia usa la de la operación, para que ordene con su fecha en los módulos.
-            fecha: g.fecha ? new Date(g.fecha) : (op.fecha_entrega || op.fecha_retiro || op.fecha || null),
+            // Sin fecha propia usa la de la operación, para que ordene con su fecha en los
+            // módulos. Último respaldo: HOY (nunca null — un gasto sin fecha quedaba fuera
+            // de cualquier filtro por rango en Peajes/Combustible y "desaparecía").
+            fecha: g.fecha ? new Date(g.fecha) : (op.fecha_entrega || op.fecha_retiro || op.fecha || new Date()),
+            fecha_explicita: !!g.fecha,
             descripcion: g.descripcion || null,
             numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null,
             link_peaje: g.tipo === 'PEAJE' ? (g.link_peaje || null) : null,
@@ -424,6 +428,8 @@ export class ProgramacionService {
             // Por defecto lo paga el chofer (comportamiento histórico). Solo es false
             // cuando se marca explícitamente como pagado por la empresa (mancato/código).
             pagado_por_chofer: g.pagado_por_chofer !== false,
+            // Parada del recorrido de la que salió (la app nueva lo manda; null si es manual).
+            parada_id: typeof g.parada_id === 'string' && g.parada_id ? g.parada_id : null,
             trabajador_id: op.trabajador_id || null,
             targa: op.vehiculo_id || null,
             tenant_id: tenantId,
@@ -523,9 +529,11 @@ export class ProgramacionService {
         });
 
         if (Array.isArray(gastos) && gastos.length) {
-            await this.prisma.gastoOperacion.createMany({
-                data: gastos.map((g) => this.normalizeGasto(g, created, resolvedTenant)),
-            });
+            await aplicarPlanGastos(this.prisma, planificarSyncGastos(
+                [],
+                gastos.map((g) => this.normalizeGasto(g, created, resolvedTenant)),
+                () => false,
+            ));
         }
         return this.findOne(created.id);
     }
@@ -551,16 +559,16 @@ export class ProgramacionService {
             data: rest,
         });
 
-        // Si el cliente envía `gastos`, reemplazamos la lista completa de la operación.
+        // Si el cliente envía `gastos`, la lista del formulario es la lista completa de la
+        // operación — pero se aplica por FUSIÓN (no delete+create): un gasto que sigue en la
+        // lista conserva su id, su fecha real y el estado de pago/fecha límite que el admin
+        // ya marcó en Peajes. Solo se borra lo que el usuario quitó del formulario.
         if (gastos !== undefined) {
-            await this.prisma.$transaction([
-                this.prisma.gastoOperacion.deleteMany({ where: { programacion_id: id } }),
-                ...(Array.isArray(gastos) && gastos.length
-                    ? [this.prisma.gastoOperacion.createMany({
-                        data: gastos.map((g) => this.normalizeGasto(g, updated, updated.tenant_id)),
-                    })]
-                    : []),
-            ]);
+            const existentes = await this.prisma.gastoOperacion.findMany({
+                where: { programacion_id: id }, select: GASTO_SYNC_SELECT, orderBy: { creado_en: 'asc' },
+            });
+            const entrantes = Array.isArray(gastos) ? gastos.map((g) => this.normalizeGasto(g, updated, updated.tenant_id)) : [];
+            await aplicarPlanGastos(this.prisma, planificarSyncGastos(existentes, entrantes, () => true));
         }
         return this.findOne(id);
     }

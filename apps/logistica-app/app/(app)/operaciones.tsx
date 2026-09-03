@@ -299,6 +299,8 @@ export default function OperacionesScreen() {
   const [editing, setEditing] = useState<Programacion | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
   const [saving, setSaving] = useState(false);
+  // true cuando ya llegó GET /programacion/:id (registro completo) al editar.
+  const [fullLoaded, setFullLoaded] = useState(true);
 
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
   const [trabajadores, setTrabajadores] = useState<Trabajador[]>([]);
@@ -625,12 +627,17 @@ export default function OperacionesScreen() {
     populate(r); // precarga rápida con lo que trae la lista
     setDetail(null);
     setFormVisible(true);
+    setFullLoaded(false);
     loadResources();
     // Registro COMPLETO: la lista no trae nota/otros_datos/foto_bolla/gastos, y guardar
-    // sin ellos los borraría. GET /programacion/:id trae todos los campos.
+    // sin ellos los borraría (mandaba `gastos: []` y se perdían los peajes). Hasta que
+    // llegue, el botón Guardar queda bloqueado (fullLoaded).
     api.get(`/programacion/${r.id}`).then((res) => {
       if (res.data) populate({ ...r, ...res.data });
-    }).catch(() => {});
+      setFullLoaded(true);
+    }).catch(() => {
+      Alert.alert('Sin conexión', 'No se pudo cargar el detalle completo de la operación. Vuelve a abrirla antes de guardar para no perder gastos ni fotos.');
+    });
   };
 
   // Eliminar operación (solo responsables/admins). Corrige entregas hechas por error.
@@ -705,6 +712,12 @@ export default function OperacionesScreen() {
   const saldo = recibidoNum - gastadoChofer;
 
   const save = async () => {
+    // Defensa: sin el registro completo, guardar reemplazaría gastos/fotos/nota
+    // con la versión resumida de la lista (vacía) y los borraría.
+    if (editing && !fullLoaded) {
+      Alert.alert('Un momento', 'Todavía se está cargando el detalle completo de la operación. Intenta de nuevo en un instante.');
+      return;
+    }
     // Defensa: no permitir al chofer guardar cambios sobre una consegna ya
     // realizada (supervisores/admins sí pueden).
     if (isChofer(user) && editing && isConsegnaRealizada(editing)) {
@@ -1323,7 +1336,7 @@ export default function OperacionesScreen() {
         visible={formVisible}
         onClose={() => setFormVisible(false)}
         title={editing ? 'Editar operación' : 'Nueva operación'}
-        footer={<Button title={editing ? 'Guardar cambios' : 'Crear operación'} loading={saving} onPress={save} />}
+        footer={<Button title={editing && !fullLoaded ? 'Cargando detalle…' : (editing ? 'Guardar cambios' : 'Crear operación')} loading={saving} disabled={!!editing && !fullLoaded} onPress={save} />}
       >
         {lockOthers && (
           <View style={styles.roleBanner}>

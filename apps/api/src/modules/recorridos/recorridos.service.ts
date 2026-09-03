@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { GASTO_SYNC_SELECT, GastoEntrante, aplicarPlanGastos, planificarSyncGastos } from '../../common/gastos-sync.util';
 import { PrismaService } from '../../prisma.service';
 import { GpsService } from '../gps/gps.service';
 
@@ -251,6 +252,14 @@ export class RecorridosService {
             return this.finalizar(tenantId, r.id, trabajadorId);
         }
 
+        // Los gastos (peajes mancato, combustible…) que el chofer rinde en la parada se
+        // reflejan EN EL ACTO en la operación → aparecen en el panel de Peajes/Combustible
+        // sin esperar al cierre del recorrido (antes solo se consolidaban al finalizar, y
+        // si el recorrido quedaba sin cerrar el mancato no llegaba nunca al panel).
+        if (r.programacion_id) {
+            await this.consolidarGastosDesdeParadas(tenantId, r, now);
+        }
+
         // ¿Quedan paradas de ENTREGA pendientes? (la de retorno no cuenta para la ida).
         // Si esta era la última entrega, cerramos el tramo de ida.
         const pendientes = await this.prisma.recorridoParada.count({
@@ -422,6 +431,57 @@ export class RecorridosService {
         });
     }
 
+    /**
+     * Consolida los gastos rendidos en las paradas del recorrido dentro de la
+     * operación (GastoOperacion) por FUSIÓN — nunca delete+create:
+     *  - un gasto ya consolidado conserva su fila (id, fecha real, estado de pago y
+     *    fecha límite que el admin marcó en Peajes) aunque se vuelva a consolidar;
+     *  - los gastos cargados directo en la operación (supervisor / rendición de
+     *    cierre) NO se tocan;
+     *  - solo se borra un gasto consolidado cuya parada ya no lo contiene (el chofer
+     *    lo quitó al reabrir la parada).
+     * Es idempotente: se llama en cada llegada a parada y al finalizar.
+     */
+    private async consolidarGastosDesdeParadas(
+        tenantId: string,
+        r: { id: string; programacion_id: string | null; trabajador_id: string | null; vehiculo_id: string | null },
+        now: Date,
+    ): Promise<{ abonosRuta: number }> {
+        const paradas = await this.prisma.recorridoParada.findMany({
+            where: { recorrido_id: r.id, tenant_id: tenantId },
+            orderBy: { orden: 'asc' },
+        });
+        const abonosRuta = paradas.reduce((s, p) => s + (Number(p.anticipo) || 0), 0);
+        // Recorrido legacy sin paradas: conserva los gastos que rindió el chofer al cierre.
+        if (!r.programacion_id || paradas.length === 0) return { abonosRuta };
+        const progId = r.programacion_id;
+
+        const entrantes: GastoEntrante[] = paradas.flatMap((p) =>
+            (Array.isArray(p.gastos) ? (p.gastos as any[]) : []).map((g: any) => ({
+                programacion_id: progId,
+                tipo: String(g.tipo || 'OTRO'),
+                monto: Number(g.monto) || 0,
+                // Fecha REAL del gasto = cuando el chofer llegó a esa parada (no la de cierre).
+                fecha: p.llegada_en ?? now,
+                descripcion: g.descripcion || (p.label ? `Parada · ${p.label}` : null),
+                numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null,
+                link_peaje: g.tipo === 'PEAJE' ? (g.link_peaje || null) : null,
+                comprobantes: Array.isArray(g.comprobantes) ? g.comprobantes.filter(Boolean) : [],
+                pagado_por_chofer: g.pagado_por_chofer !== false,
+                parada_id: p.id,
+                trabajador_id: r.trabajador_id || null,
+                targa: r.vehiculo_id || null,
+                tenant_id: tenantId,
+            })));
+        const existentes = await this.prisma.gastoOperacion.findMany({
+            where: { programacion_id: progId }, select: GASTO_SYNC_SELECT, orderBy: { creado_en: 'asc' },
+        });
+        const paradaIds = new Set(paradas.map((p) => p.id));
+        const plan = planificarSyncGastos(existentes, entrantes, (row) => !!row.parada_id && paradaIds.has(row.parada_id));
+        await aplicarPlanGastos(this.prisma, plan);
+        return { abonosRuta };
+    }
+
     /** Finalizar: cierra el recorrido, marca la operación entregada y libera al chofer. */
     async finalizar(tenantId: string, id: string, trabajadorId: string) {
         const r = await this.getOwned(tenantId, id, trabajadorId);
@@ -467,39 +527,9 @@ export class RecorridosService {
             const progId = r.programacion_id;
             // ----- Consolidación FIEL desde las paradas (fuente de verdad) -----
             // Los abonos en ruta y el gasto del RETORNO ocurren DESPUÉS del CONSEGNATO,
-            // así que la operación solo queda consistente si reconsolidamos aquí, al
-            // cierre. Reemplaza la lista de gastos de la operación con la de todas las
-            // paradas (entrega + retorno) y suma los abonos recibidos en ruta.
-            const paradas = await this.prisma.recorridoParada.findMany({
-                where: { recorrido_id: r.id, tenant_id: tenantId },
-                orderBy: { orden: 'asc' },
-            });
-            const abonosRuta = paradas.reduce((s, p) => s + (Number(p.anticipo) || 0), 0);
-            if (paradas.length > 0) {
-                // Solo cuando el recorrido tuvo paradas (multi-destino / con retorno); un
-                // recorrido legacy sin paradas conserva los gastos que rindió el chofer.
-                const gastosConsolidados = paradas.flatMap((p) =>
-                    (Array.isArray(p.gastos) ? (p.gastos as any[]) : []).map((g: any) => ({
-                        programacion_id: progId,
-                        tipo: String(g.tipo || 'OTRO'),
-                        monto: Number(g.monto) || 0,
-                        fecha: now,
-                        descripcion: g.descripcion || (p.label ? `Parada · ${p.label}` : null),
-                        numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null,
-                        link_peaje: g.tipo === 'PEAJE' ? (g.link_peaje || null) : null,
-                        comprobantes: Array.isArray(g.comprobantes) ? g.comprobantes.filter(Boolean) : [],
-                        pagado_por_chofer: g.pagado_por_chofer !== false,
-                        trabajador_id: r.trabajador_id || null,
-                        targa: r.vehiculo_id || null,
-                        tenant_id: tenantId,
-                    })));
-                await this.prisma.$transaction([
-                    this.prisma.gastoOperacion.deleteMany({ where: { programacion_id: progId } }),
-                    ...(gastosConsolidados.length
-                        ? [this.prisma.gastoOperacion.createMany({ data: gastosConsolidados })]
-                        : []),
-                ]);
-            }
+            // así que aquí, al cierre, se vuelve a consolidar (por FUSIÓN, ver
+            // consolidarGastosDesdeParadas) y se suman los abonos recibidos en ruta.
+            const { abonosRuta } = await this.consolidarGastosDesdeParadas(tenantId, r, now);
             // Estampa el km/tiempo FIEL + los abonos de ruta en la operación (su detalle).
             await this.prisma.programacion.updateMany({
                 where: { id: progId, tenant_id: tenantId },
