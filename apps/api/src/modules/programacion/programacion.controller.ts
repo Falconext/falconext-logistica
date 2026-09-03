@@ -39,6 +39,14 @@ export class ProgramacionController {
         return this.programacionService.findGastosByTipo(req.user.tenantId, tipo);
     }
 
+    // Sustento posterior de un gasto (comprobantes / nº mancato / link). El chofer solo
+    // sobre sus propios gastos; supervisores/admins sobre cualquiera del tenant.
+    // Va antes de ':id' para que 'gastos' no se interprete como un id.
+    @Patch('gastos/:gastoId/sustento')
+    sustentarGasto(@Param('gastoId') gastoId: string, @Body() body: any, @Req() req) {
+        return this.programacionService.sustentarGasto(gastoId, req.user.tenantId, req.user, body || {});
+    }
+
     // Panel financiero (Fase C): rentabilidad por operación. Solo roles con
     // ve_finanzas — mismo patrón que /registros/direccion/resumen.
     @Get('financiero')

@@ -6,6 +6,7 @@ import api from '../../lib/api';
 import { Receipt, Plus, Search, ArrowLeft, ArrowRight, Pencil, Trash2, Paperclip, Loader2, SlidersHorizontal, Eye, FileSpreadsheet, ExternalLink } from 'lucide-react';
 import PeajeModal from './PeajeModal';
 import PeajeDetailModal from './PeajeDetailModal';
+import GastoSustentoModal from '../../components/GastoSustentoModal';
 import Select from '../../components/Select';
 import DatePicker from '../../components/DatePicker';
 import { useCurrency } from '../../lib/useCurrency';
@@ -74,6 +75,10 @@ export default function PeajesPage() {
     const [deleting, setDeleting] = useState<any | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [viewing, setViewing] = useState<any | null>(null);
+    // Sustento posterior de un peaje "Desde operación" (foto / nº mancato / link).
+    // Supervisores sobre cualquiera; el chofer solo sobre los suyos (el backend lo valida).
+    const [sustentando, setSustentando] = useState<any | null>(null);
+    const puedeSustentar = (item: any) => item?._origen === 'operacion' && (canEdit || (!!item.trabajador_id && [user?.trabajador_id, (user as any)?.trabajador_codigo].filter(Boolean).includes(item.trabajador_id)));
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [busyEstado, setBusyEstado] = useState<Set<string>>(new Set());
@@ -232,6 +237,7 @@ export default function PeajesPage() {
 
             <PeajeModal isOpen={isModalOpen} onClose={closeModal} onSuccess={fetchItems} record={editing} />
             <PeajeDetailModal item={viewing} onClose={() => setViewing(null)} />
+            <GastoSustentoModal item={sustentando} tipo="PEAJE" onClose={() => setSustentando(null)} onSaved={fetchItems} />
 
             {/* Search */}
             <div className="relative mb-2">
@@ -403,6 +409,15 @@ export default function PeajesPage() {
                                             >
                                                 <Eye size={15} />
                                             </button>
+                                            {puedeSustentar(item) && (
+                                                <button
+                                                    onClick={() => setSustentando(item)}
+                                                    title={t('componentes.sustento.accion')}
+                                                    className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-blue-50 hover:border-blue-200 flex items-center justify-center text-slate-500 hover:text-blue-600 transition"
+                                                >
+                                                    <Paperclip size={15} />
+                                                </button>
+                                            )}
                                             {canEdit && (item._origen === 'operacion' ? (
                                                 <span className="text-xs text-slate-400 italic whitespace-nowrap px-1">{t('peajes.desdeOperacion')}</span>
                                             ) : (

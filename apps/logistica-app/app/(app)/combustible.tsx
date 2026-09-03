@@ -19,7 +19,10 @@ import {
 } from '../../components/ui';
 import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
+import MultiFileUpload from '../../components/MultiFileUpload';
+import ImageUpload from '../../components/ImageUpload';
 import api from '../../services/api';
+import { isChofer } from '../../constants/modules';
 import { formatMoney } from '../../constants/currency';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -39,6 +42,7 @@ type Combustible = {
   area?: string | null;
   mes?: string | null;
   archivo?: string | null;
+  comprobantes?: string[];
   _origen?: string | null;
 };
 
@@ -73,6 +77,7 @@ type FormState = {
   area: string;
   fecha: string;
   trabajador_id: string;
+  archivo: string;
 };
 
 const emptyForm: FormState = {
@@ -82,6 +87,7 @@ const emptyForm: FormState = {
   area: '',
   fecha: todayISO(),
   trabajador_id: '',
+  archivo: '',
 };
 
 export default function CombustibleScreen() {
@@ -167,9 +173,35 @@ export default function CombustibleScreen() {
       area: c.area || '',
       fecha: c.fecha ? String(c.fecha).split('T')[0] : todayISO(),
       trabajador_id: c.trabajador_id || '',
+      archivo: c.archivo || '',
     });
     setDetail(null);
     setFormVisible(true);
+  };
+
+  // Sustento posterior de un combustible de operación (foto del ticket/código).
+  const [sust, setSust] = useState<string[]>([]);
+  const [savingSust, setSavingSust] = useState(false);
+  const myCodes = [user?.trabajador_id, (user as any)?.trabajador_codigo].filter(Boolean) as string[];
+  const canEditAll = !!user && !isChofer(user);
+  const canSustentar = (c: Combustible | null) =>
+    !!c && c._origen === 'operacion' && (canEditAll || (!!c.trabajador_id && myCodes.includes(c.trabajador_id)));
+  const openDetail = (c: Combustible) => {
+    setSust(c.comprobantes || []);
+    setDetail(c);
+  };
+  const saveSustento = async () => {
+    if (!detail) return;
+    setSavingSust(true);
+    try {
+      await api.patch(`/programacion/gastos/${detail.id.replace(/^gasto:/, '')}/sustento`, { comprobantes: sust });
+      setDetail(null);
+      load();
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.message || 'No se pudo guardar el sustento.');
+    } finally {
+      setSavingSust(false);
+    }
   };
 
   const save = async () => {
@@ -185,7 +217,10 @@ export default function CombustibleScreen() {
         metodo: form.metodo,
         area: form.area,
         fecha: form.fecha,
-        trabajador_id: form.trabajador_id || undefined,
+        // Un chofer sin selector de conductor queda como dueño del registro (si no,
+        // el backend lo guarda sin trabajador y él mismo deja de verlo en su lista).
+        trabajador_id: form.trabajador_id || (isChofer(user) ? user?.trabajador_id : undefined) || undefined,
+        archivo: form.archivo || null,
       };
       if (editing) {
         await api.patch(`/combustible/${editing.id}`, payload);
@@ -224,10 +259,9 @@ export default function CombustibleScreen() {
     const isOperacion = c._origen === 'operacion';
     return (
       <TouchableOpacity
-        activeOpacity={isOperacion ? 1 : 0.7}
-        disabled={isOperacion}
+        activeOpacity={0.7}
         style={styles.card}
-        onPress={isOperacion ? undefined : () => setDetail(c)}
+        onPress={() => openDetail(c)}
       >
         <View style={styles.cardIcon}>
           <Fuel size={20} color={C.textMuted} />
@@ -297,12 +331,14 @@ export default function CombustibleScreen() {
         onClose={() => setDetail(null)}
         title={detail?.targa || 'Detalle'}
         footer={
-          detail && (
+          canSustentar(detail) ? (
+            <Button title="Guardar sustento" loading={savingSust} onPress={saveSustento} />
+          ) : detail && detail._origen !== 'operacion' ? (
             <View style={{ flexDirection: 'row', gap: S.sm }}>
               <Button title="Editar" icon={Pencil} variant="secondary" style={{ flex: 1 }} onPress={() => detail && openEdit(detail)} />
               <Button title="Eliminar" icon={Trash2} variant="danger" style={{ flex: 1 }} onPress={() => detail && remove(detail)} />
             </View>
-          )
+          ) : null
         }
       >
         {detail && (
@@ -318,6 +354,19 @@ export default function CombustibleScreen() {
             <InfoRow label="Área" value={detail.area} />
             <InfoRow label="Fecha" value={formatDate(detail.fecha)} />
             <InfoRow label="Trabajador" value={trabajadorLabel(detail.trabajador_id)} />
+            {detail._origen === 'operacion' ? (
+              canSustentar(detail) ? (
+                <View style={{ marginTop: S.md }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: C.textMuted, marginBottom: S.xs }}>Sustento del combustible</Text>
+                  <Text style={{ fontSize: 13, color: C.textMuted, marginBottom: S.sm }}>Agrega la foto del ticket. El monto lo maneja el supervisor.</Text>
+                  <MultiFileUpload value={sust} onChange={setSust} label="Agregar foto / comprobante" />
+                </View>
+              ) : (
+                <InfoRow label="Comprobantes" value={`${(detail.comprobantes || []).length}`} />
+              )
+            ) : detail.archivo ? (
+              <InfoRow label="Comprobante" value="Adjunto" />
+            ) : null}
           </View>
         )}
       </FormModal>
@@ -375,6 +424,7 @@ export default function CombustibleScreen() {
           placeholder="Selecciona un trabajador"
           searchable
         />
+        <ImageUpload label="Foto del ticket / comprobante" value={form.archivo || null} onChange={(url) => setForm({ ...form, archivo: url })} />
       </FormModal>
     </Screen>
   );

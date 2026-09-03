@@ -1,5 +1,5 @@
 
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { GASTO_SYNC_SELECT, aplicarPlanGastos, planificarSyncGastos } from '../../common/gastos-sync.util';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
@@ -444,6 +444,62 @@ export class ProgramacionService {
             orderBy: { fecha: 'desc' },
             include: { programacion: { select: { id: true, id_programacion: true, cliente: true } } },
         });
+    }
+
+    /**
+     * Sustento posterior de un gasto de operación (pedido de Gamonal, audio 2026-09-03):
+     * el chofer suele registrar el peaje/combustible sin foto por el apuro, y luego el
+     * panel solo le dejaba VER. Aquí puede completar comprobantes (+ nº de mancato y link
+     * si es PEAJE) de SUS propios gastos; supervisores/admins de cualquiera del tenant.
+     * No permite tocar monto/tipo/estado (eso sigue siendo del supervisor/admin).
+     */
+    async sustentarGasto(
+        gastoId: string,
+        tenantId: string,
+        user: { soloPropios?: boolean; trabajadorId?: string | null; trabajadorCodigo?: string | null },
+        body: { comprobantes?: string[]; numero_mancato?: string | null; link_peaje?: string | null },
+    ) {
+        const gasto = await this.prisma.gastoOperacion.findFirst({ where: { id: gastoId, tenant_id: tenantId } });
+        if (!gasto) throw new NotFoundException('Gasto no encontrado.');
+        if (!['PEAJE', 'COMBUSTIBLE'].includes(gasto.tipo)) {
+            throw new BadRequestException('Solo se pueden sustentar peajes y combustibles.');
+        }
+        if (user.soloPropios) {
+            const mios = [user.trabajadorId, user.trabajadorCodigo].filter(Boolean);
+            if (!gasto.trabajador_id || !mios.includes(gasto.trabajador_id)) {
+                throw new ForbiddenException('Solo puedes sustentar tus propios gastos.');
+            }
+        }
+        const data: any = {};
+        if (Array.isArray(body.comprobantes)) {
+            data.comprobantes = body.comprobantes.filter((u) => typeof u === 'string' && u.trim()).map((u) => u.trim());
+        }
+        if (gasto.tipo === 'PEAJE') {
+            if (body.numero_mancato !== undefined) data.numero_mancato = String(body.numero_mancato || '').trim() || null;
+            if (body.link_peaje !== undefined) data.link_peaje = String(body.link_peaje || '').trim() || null;
+        }
+        if (!Object.keys(data).length) throw new BadRequestException('Nada que actualizar.');
+
+        const updated = await this.prisma.gastoOperacion.update({ where: { id: gasto.id }, data });
+
+        // Espejo en la parada de origen (RecorridoParada.gastos JSON): si el recorrido
+        // sigue activo y se vuelve a consolidar, la parada es la fuente de verdad y
+        // pisaría los comprobantes recién agregados. Se actualiza la entrada equivalente.
+        if (gasto.parada_id) {
+            const parada = await this.prisma.recorridoParada.findFirst({ where: { id: gasto.parada_id, tenant_id: tenantId } });
+            if (parada && Array.isArray(parada.gastos)) {
+                const clave = (g: any) => `${String(g?.tipo || 'OTRO').toUpperCase()}|${(Number(g?.monto) || 0).toFixed(2)}|${String(g?.numero_mancato || '').trim().toLowerCase()}`;
+                const objetivo = clave({ tipo: gasto.tipo, monto: gasto.monto, numero_mancato: gasto.numero_mancato });
+                let hecho = false;
+                const gastos = (parada.gastos as any[]).map((g) => {
+                    if (hecho || clave(g) !== objetivo) return g;
+                    hecho = true;
+                    return { ...g, ...data };
+                });
+                if (hecho) await this.prisma.recorridoParada.update({ where: { id: parada.id }, data: { gastos } });
+            }
+        }
+        return updated;
     }
 
     async findByVehicleId(id_furgon_or_placa: string) {

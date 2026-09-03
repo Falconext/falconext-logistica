@@ -19,6 +19,7 @@ import {
 } from '../../components/ui';
 import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
+import MultiFileUpload from '../../components/MultiFileUpload';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -48,9 +49,13 @@ interface Peaje {
   id_multa?: string | null;
   link_peaje?: string | null;
   archivo?: string | null;
-  // Filas que provienen de gastos de operación (solo lectura).
+  comprobantes?: string[];
+  // Filas que provienen de gastos de operación: no se editan aquí (monto/estado),
+  // pero el chofer SÍ puede sustentarlas después (fotos, nº mancato, link).
   _origen?: string | null;
 }
+
+type Sustento = { comprobantes: string[]; numero_mancato: string; link_peaje: string };
 
 const ESTADOS = ['PENDIENTE', 'PAGADO', 'ANULADO'] as const;
 type Estado = (typeof ESTADOS)[number];
@@ -138,6 +143,35 @@ export default function PeajesScreen() {
   const [formVisible, setFormVisible] = useState(false);
   const [detail, setDetail] = useState<Peaje | null>(null);
   const [editing, setEditing] = useState<Peaje | null>(null);
+  // Sustento posterior de un peaje de operación (pedido de Gamonal: muchos mancatos
+  // quedan sin foto y sin ella no se puede pagar). El chofer completa SUS gastos.
+  const [sust, setSust] = useState<Sustento>({ comprobantes: [], numero_mancato: '', link_peaje: '' });
+  const [savingSust, setSavingSust] = useState(false);
+  const myCodes = [user?.trabajador_id, (user as any)?.trabajador_codigo].filter(Boolean) as string[];
+  const canSustentar = (p: Peaje | null) =>
+    !!p && p._origen === 'operacion' && (canEditAll || (!!p.trabajador_id && myCodes.includes(p.trabajador_id)));
+  const openDetail = (p: Peaje) => {
+    setSust({ comprobantes: p.comprobantes || [], numero_mancato: p.numero_mancato || '', link_peaje: p.link_peaje || '' });
+    setDetail(p);
+  };
+  const saveSustento = async () => {
+    if (!detail) return;
+    setSavingSust(true);
+    try {
+      const gastoId = detail.id.replace(/^gasto:/, '');
+      await api.patch(`/programacion/gastos/${gastoId}/sustento`, {
+        comprobantes: sust.comprobantes,
+        numero_mancato: sust.numero_mancato.trim() || null,
+        link_peaje: sust.link_peaje.trim() || null,
+      });
+      setDetail(null);
+      load();
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.message || 'No se pudo guardar el sustento.');
+    } finally {
+      setSavingSust(false);
+    }
+  };
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
 
@@ -280,10 +314,9 @@ export default function PeajesScreen() {
     const isOperacion = p._origen === 'operacion';
     return (
     <TouchableOpacity
-      activeOpacity={isOperacion ? 1 : 0.7}
-      disabled={isOperacion}
+      activeOpacity={0.7}
       style={styles.card}
-      onPress={isOperacion ? undefined : () => setDetail(p)}
+      onPress={() => openDetail(p)}
     >
       <View style={styles.cardIcon}>
         <Receipt size={20} color={C.warning} />
@@ -365,12 +398,14 @@ export default function PeajesScreen() {
         onClose={() => setDetail(null)}
         title={detail?.targa || 'Detalle'}
         footer={
-          canEditAll && detail && detail._origen !== 'operacion' && (
+          canSustentar(detail) ? (
+            <Button title="Guardar sustento" loading={savingSust} onPress={saveSustento} />
+          ) : canEditAll && detail && detail._origen !== 'operacion' ? (
             <View style={{ flexDirection: 'row', gap: S.sm }}>
               <Button title="Editar" icon={Pencil} variant="secondary" style={{ flex: 1 }} onPress={() => detail && openEdit(detail)} />
               <Button title="Eliminar" icon={Trash2} variant="danger" style={{ flex: 1 }} onPress={() => detail && remove(detail)} />
             </View>
-          )
+          ) : null
         }
       >
         {detail && (
@@ -399,6 +434,21 @@ export default function PeajesScreen() {
               <Text style={styles.detailDescLabel}>Comentarios</Text>
               <Text style={styles.detailDescText}>{detail.comentarios || '—'}</Text>
             </View>
+            {detail._origen === 'operacion' && (
+              canSustentar(detail) ? (
+                <View style={{ marginTop: S.md }}>
+                  <Text style={styles.detailDescLabel}>Sustento del peaje</Text>
+                  <Text style={[styles.detailDescText, { marginBottom: S.sm }]}>
+                    Agrega la foto del ticket/mancato y, si es mancato, el número y el link de pago. El monto y el estado los maneja el supervisor.
+                  </Text>
+                  <FormField label="Nº de mancato" value={sust.numero_mancato} onChangeText={(t) => setSust({ ...sust, numero_mancato: t })} placeholder="Número del ticket" />
+                  <FormField label="Link de pago" value={sust.link_peaje} onChangeText={(t) => setSust({ ...sust, link_peaje: t })} placeholder="https://…" />
+                  <MultiFileUpload value={sust.comprobantes} onChange={(urls) => setSust({ ...sust, comprobantes: urls })} label="Agregar foto / comprobante" />
+                </View>
+              ) : (
+                <InfoRow label="Comprobantes" value={`${(detail.comprobantes || []).length}`} />
+              )
+            )}
           </View>
         )}
       </FormModal>

@@ -5,6 +5,9 @@ import { createPortal } from 'react-dom';
 import api from '../../lib/api';
 import { Fuel, Plus, Search, ArrowLeft, ArrowRight, Pencil, Trash2, Paperclip, Loader2, SlidersHorizontal, FileSpreadsheet, Check, X } from 'lucide-react';
 import CombustibleModal from './CombustibleModal';
+import GastoSustentoModal from '../../components/GastoSustentoModal';
+import { useAuthStore } from '../../lib/store';
+import { isChofer as checkIsChofer } from '../../lib/modules';
 import Select from '../../components/Select';
 import DatePicker from '../../components/DatePicker';
 import { useCurrency } from '../../lib/useCurrency';
@@ -77,6 +80,10 @@ export default function CombustiblePage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editing, setEditing] = useState<any | null>(null);
     const [deleting, setDeleting] = useState<any | null>(null);
+    // Sustento posterior de un combustible "Desde operación" (foto del ticket).
+    const user = useAuthStore((s) => s.user);
+    const [sustentando, setSustentando] = useState<any | null>(null);
+    const puedeSustentar = (item: any) => item?._origen === 'operacion' && (!checkIsChofer(user) || (!!item.trabajador_id && [user?.trabajador_id, (user as any)?.trabajador_codigo].filter(Boolean).includes(item.trabajador_id)));
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
@@ -211,6 +218,7 @@ export default function CombustiblePage() {
             </div>
 
             <CombustibleModal isOpen={isModalOpen} onClose={closeModal} onSuccess={fetchItems} record={editing} />
+            <GastoSustentoModal item={sustentando} tipo="COMBUSTIBLE" onClose={() => setSustentando(null)} onSaved={fetchItems} />
 
             {/* Search */}
             <div className="relative mb-2">
@@ -337,7 +345,18 @@ export default function CombustiblePage() {
                                     </td>
                                     <td className="px-5 py-3.5">
                                         {item._origen === 'operacion' ? (
-                                            <span className="block text-right text-xs text-slate-400 italic whitespace-nowrap">Desde operación</span>
+                                            <div className="flex items-center justify-end gap-1.5">
+                                                {puedeSustentar(item) && (
+                                                    <button
+                                                        onClick={() => setSustentando(item)}
+                                                        title={t('componentes.sustento.accion')}
+                                                        className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-blue-50 hover:border-blue-200 flex items-center justify-center text-slate-500 hover:text-blue-600 transition"
+                                                    >
+                                                        <Paperclip size={15} />
+                                                    </button>
+                                                )}
+                                                <span className="text-xs text-slate-400 italic whitespace-nowrap">Desde operación</span>
+                                            </div>
                                         ) : (
                                             <div className="flex items-center justify-end gap-1.5">
                                                 <button

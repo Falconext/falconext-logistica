@@ -1,6 +1,19 @@
 // Namespace de traducción: componentes (piezas compartidas: documentos, inputs,
 // tipos de documento y mapas de rastreo).
 export const es = {
+    sustento: {
+        titulo: 'Sustentar gasto',
+        subtitulo: 'Agrega la foto del ticket y, si es mancato, el número y el link de pago. El monto y el estado se manejan desde la operación.',
+        numeroMancato: 'Nº de mancato',
+        linkPago: 'Link de pago',
+        comprobantes: 'Comprobantes',
+        agregar: 'Agregar foto / comprobante',
+        cancelar: 'Cancelar',
+        guardar: 'Guardar sustento',
+        guardado: 'Sustento guardado',
+        error: 'No se pudo guardar el sustento.',
+        accion: 'Agregar comprobante',
+    },
     documentos: {
         sinFecha: 'Sin fecha',
         vencido: 'Vencido',
@@ -151,6 +164,19 @@ export const es = {
 };
 
 export const it: typeof es = {
+    sustento: {
+        titulo: 'Giustificare spesa',
+        subtitulo: 'Aggiungi la foto dello scontrino e, se è un mancato, il numero e il link di pagamento. Importo e stato si gestiscono dall\'operazione.',
+        numeroMancato: 'N. mancato',
+        linkPago: 'Link di pagamento',
+        comprobantes: 'Ricevute',
+        agregar: 'Aggiungi foto / ricevuta',
+        cancelar: 'Annulla',
+        guardar: 'Salva',
+        guardado: 'Giustificativo salvato',
+        error: 'Impossibile salvare il giustificativo.',
+        accion: 'Aggiungi ricevuta',
+    },
     documentos: {
         sinFecha: 'Nessuna data',
         vencido: 'Scaduto',
