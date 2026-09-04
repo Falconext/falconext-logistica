@@ -3,7 +3,7 @@ import { Modal, View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet,
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  X, ChevronLeft, ChevronRight, Check, Package, FileText, MapPin, Flag, Plus, Trash2, Navigation, Truck, User, Clock, Smartphone, Play, CornerUpLeft, Coffee, AlarmClock, Lock,
+  X, ChevronLeft, ChevronRight, Check, Package, FileText, MapPin, Flag, Plus, Trash2, Navigation, Truck, User, Clock, Smartphone, Play, CornerUpLeft, Coffee, AlarmClock, Lock, AlertTriangle,
 } from 'lucide-react-native';
 import { useSafeAreaInsets, initialWindowMetrics } from 'react-native-safe-area-context';
 import { Theme } from './ui';
@@ -11,7 +11,7 @@ import Select from './Select';
 import MultiFileUpload from './MultiFileUpload';
 import MapboxWebView from './MapboxWebView';
 import api, { DEVICE_TOKEN_KEY } from '../services/api';
-import { startTracking, stopTracking, isBackgroundGranted } from '../services/LocationService';
+import { startTracking, stopTracking, isBackgroundGranted, getSecondsSinceLastPosition } from '../services/LocationService';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { formatMoney } from '../constants/currency';
@@ -116,6 +116,30 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
   }, [enDestino, recorrido?.llegada_en]);
   const attesaMin = recorrido?.llegada_en ? (nowTs - new Date(recorrido.llegada_en).getTime()) / 60000 : 0;
   const attesaLabel = fmtEspera(attesaMin);
+
+  // Aviso "sin señal GPS" EN VIVO (pedido de Diego, 2026-09-03: casi la mitad de
+  // los recorridos de la semana no midieron nada de km porque el rastreo se cortó
+  // a mitad de viaje sin que nadie lo notara). Solo tiene sentido mientras se
+  // espera movimiento real (yendo o volviendo); en destino/descanso parado es
+  // normal que no lleguen puntos nuevos. Umbral 8 min: más que el intervalo del
+  // GPS (~3s) pero corto para que el chofer aún pueda corregirlo en la ruta.
+  const GPS_STALE_MIN = 8;
+  const enMovimientoEsperado = phase === 'tracking' && !!recorrido
+    && (recorrido.estado === 'EN_RUTA_IDA' || recorrido.estado === 'EN_RUTA_VUELTA')
+    && !recorrido.descanso_desde;
+  const [gpsStaleMin, setGpsStaleMin] = useState<number | null>(null);
+  useEffect(() => {
+    if (!enMovimientoEsperado) { setGpsStaleMin(null); return; }
+    let cancelled = false;
+    const check = async () => {
+      const secs = await getSecondsSinceLastPosition();
+      if (!cancelled) setGpsStaleMin(secs == null ? null : Math.floor(secs / 60));
+    };
+    check();
+    const t = setInterval(check, 30000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [enMovimientoEsperado]);
+  const gpsSinSenal = enMovimientoEsperado && gpsStaleMin != null && gpsStaleMin >= GPS_STALE_MIN;
 
   const loadRecorrido = async (): Promise<any | null> => {
     try {
@@ -772,6 +796,14 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                       );
                     })()}
                     <Text style={styles.shareNote}>Tu ubicación se comparte con la central mientras la ruta está activa.</Text>
+                    {gpsSinSenal && (
+                      <TouchableOpacity style={styles.gpsWarnBox} onPress={() => Linking.openSettings()} activeOpacity={0.8}>
+                        <AlertTriangle size={16} color={C.warning} />
+                        <Text style={styles.gpsWarnText}>
+                          Sin señal GPS hace {gpsStaleMin} min. Tu km de este viaje puede quedar mal. Revisa que la ubicación esté en "Permitir siempre" — toca aquí para abrir Ajustes.
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
 
                   {/* Info de la consegna durante la ruta: el chofer necesita a la mano
@@ -1359,6 +1391,8 @@ const makeStyles = () => StyleSheet.create({
   trackHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: S.sm },
   trackTitle: { fontSize: 17, fontWeight: '800', color: C.text },
   shareNote: { fontSize: 12, color: C.textMuted, marginTop: S.sm },
+  gpsWarnBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: S.sm, padding: S.sm, borderRadius: Theme.radius.sm, backgroundColor: C.warning + '1a', borderWidth: 1, borderColor: C.warning + '55' },
+  gpsWarnText: { flex: 1, fontSize: 12, fontWeight: '600', color: C.warning, lineHeight: 17 },
   bigBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16, borderRadius: Theme.radius.md, marginBottom: S.sm },
   bigBtnText: { fontSize: 16, fontWeight: '800' },
   footer: { flexDirection: 'row', alignItems: 'center', gap: S.md, padding: S.lg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border, backgroundColor: C.surface },

@@ -133,12 +133,13 @@ export class ProgramacionService {
             include: { gastos: { orderBy: { creado_en: 'asc' } } },
         });
         if (!op) return op;
-        const [costo_chofer, ingreso_sugerido, paradas_recorrido] = await Promise.all([
+        const [costo_chofer, ingreso_sugerido, paradas_recorrido, km_fuente] = await Promise.all([
             this.costoChofer(op),
             this.ingresoSugerido(op),
             this.paradasDeRuta(op),
+            this.kmFuente(op),
         ]);
-        return { ...op, costo_chofer, ingreso_sugerido, paradas_recorrido };
+        return { ...op, costo_chofer, ingreso_sugerido, paradas_recorrido, km_fuente };
     }
 
     // Paradas del recorrido MÁS RECIENTE ligado a esta operación, con su km/min real
@@ -156,6 +157,32 @@ export class ProgramacionService {
             },
         });
         return recorrido?.paradas ?? null;
+    }
+
+    /**
+     * De dónde salió `Programacion.km` (audio de Diego, 2026-09-03: "¿está jalando
+     * bien los km?"). Se compara contra el recorrido más reciente de la operación:
+     *  - 'gps'      — coincide con el total real medido por GPS del recorrido.
+     *  - 'estimado' — coincide con el estimado de Google (el GPS captó <15% de la
+     *                 ruta y el backend usó el respaldo). Mismo número que 'gps' en
+     *                 pantalla, pero NO es lo que el chofer manejó.
+     *  - 'manual'   — no hay recorrido, o alguien escribió un km distinto al del
+     *                 recorrido (edición a mano en el formulario, que pisa el GPS).
+     *  - null       — la operación no tiene km cargado.
+     * Auditoría sobre 60 recorridos de la última semana: 42 cayeron en 'estimado'
+     * (22 de ellos con GPS en cero durante todo un viaje real, no solo un tramo).
+     */
+    private async kmFuente(op: { id: string; tenant_id: string; km: number | null }): Promise<'gps' | 'estimado' | 'manual' | null> {
+        if (op.km == null) return null;
+        const recorrido = await this.prisma.recorrido.findFirst({
+            where: { tenant_id: op.tenant_id, programacion_id: op.id, estado: 'COMPLETADO' },
+            orderBy: { finalizado_en: 'desc' },
+            select: { total_km: true, esperado_km: true },
+        });
+        if (!recorrido || recorrido.total_km == null) return 'manual';
+        if (Math.abs(op.km - recorrido.total_km) > 0.15) return 'manual';
+        if (recorrido.esperado_km != null && Math.abs(recorrido.total_km - recorrido.esperado_km) < 0.05) return 'estimado';
+        return 'gps';
     }
 
     // Panel financiero (Fase C): rentabilidad por operación en un período —

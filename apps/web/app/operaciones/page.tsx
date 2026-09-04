@@ -121,7 +121,12 @@ function RouteDetailCard({ selected, format, onEdit, onDelete, canDelete = true 
             </div>
             {(selected.km || selected.tiempo_min || selected.ciudad || selected.app || selected.spedizione || selected.compactado || selected.attesa) && (
                 <div className="mt-2 pt-2 border-t border-slate-100 flex items-center gap-4 text-xs text-slate-500 flex-wrap">
-                    {selected.km ? <span className="flex items-center gap-1.5"><Route size={13} /> {selected.km} km</span> : null}
+                    {selected.km ? (
+                        <span className="flex items-center gap-1.5">
+                            <Route size={13} /> {selected.km} km
+                            {kmFuenteBadge(selected.km_fuente)}
+                        </span>
+                    ) : null}
                     {selected.tiempo_min ? <span className="flex items-center gap-1.5"><Clock size={13} /> {selected.tiempo_min >= 60 ? `${Math.floor(selected.tiempo_min / 60)}h ${selected.tiempo_min % 60}m` : `${selected.tiempo_min} min`}</span> : null}
                     {selected.ciudad ? <span className="flex items-center gap-1.5"><MapPinned size={13} /> {selected.ciudad}</span> : null}
                     {selected.app ? <span className="flex items-center gap-1.5"><Smartphone size={13} /> {selected.app}</span> : null}
@@ -150,6 +155,18 @@ function RouteDetailCard({ selected, format, onEdit, onDelete, canDelete = true 
             )}
         </div>
     );
+}
+
+// De dónde salió el km real de la operación (audio de Diego, 2026-09-03).
+function kmFuenteBadge(fuente?: string | null) {
+    if (!fuente || fuente === 'gps') return null; // GPS real: es el caso normal, sin ruido visual.
+    const map: Record<string, { label: string; cls: string }> = {
+        estimado: { label: 'Estimado', cls: 'text-amber-600 bg-amber-50 border-amber-200' },
+        manual: { label: 'Manual', cls: 'text-slate-500 bg-slate-50 border-slate-200' },
+    };
+    const m = map[fuente];
+    if (!m) return null;
+    return <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium border ${m.cls}`} title={fuente === 'estimado' ? 'El GPS no captó suficiente movimiento: este km es una estimación de Google, no lo que se manejó realmente.' : 'Este km fue editado a mano.'}>{m.label}</span>;
 }
 
 export default function OperacionesPage() {

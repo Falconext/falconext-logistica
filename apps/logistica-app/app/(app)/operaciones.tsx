@@ -1168,7 +1168,12 @@ export default function OperacionesScreen() {
             })()}
             <InfoRow label="Vehículo" value={detail.vehiculo_id} />
             <InfoRow label="Conductor" value={detail.trabajador_nombre || trabajadorNombre(detail.trabajador_id) || 'Sin asignar'} />
-            {detail.km != null && detail.km !== 0 ? <InfoRow label="KM (real, GPS)" value={`${detail.km} km`} /> : null}
+            {detail.km != null && detail.km !== 0 ? (
+              <InfoRow
+                label="KM (real, GPS)"
+                value={detail.km_fuente && detail.km_fuente !== 'gps' ? `${detail.km} km · ${detail.km_fuente === 'estimado' ? 'ESTIMADO (no real)' : 'editado a mano'}` : `${detail.km} km`}
+              />
+            ) : null}
             {detail.km_facturable != null ? <InfoRow label="Km facturable (ida)" value={`${detail.km_facturable} km`} /> : null}
             {detail.ingreso_estimado != null && detail.ingreso_estimado !== 0 ? <InfoRow label="Ingreso" value={formatMoney(detail.ingreso_estimado, moneda)} /> : null}
             {Array.isArray(detail.paradas_recorrido) && detail.paradas_recorrido.length > 0 ? (

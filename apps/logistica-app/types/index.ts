@@ -92,6 +92,9 @@ export interface Programacion {
   // Km de IDA que factura el cliente (DHL/AB Servis, informado por mensaje) —
   // distinto del `km` real (GPS). Con la categoría del vehículo arma el ingreso.
   km_facturable?: number | null;
+  // De dónde salió `km`: 'gps' (real), 'estimado' (Google, GPS insuficiente —
+  // NO es lo que se manejó) o 'manual' (editado a mano / sin recorrido detrás).
+  km_fuente?: 'gps' | 'estimado' | 'manual' | null;
   // Sugerencia calculada por el backend (GET /programacion/:id): null si falta
   // km_facturable/categoría o si la spedizione se cobra manual (Extras).
   ingreso_sugerido?: { monto: number; factor: number | null; categoria: string | null; aplicaMinimo: boolean; esNavetta: boolean } | null;

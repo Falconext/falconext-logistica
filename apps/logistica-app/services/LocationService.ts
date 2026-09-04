@@ -9,6 +9,11 @@ const LOCATION_TASK_NAME = 'background-location-task';
 // Intención del usuario: "quiero estar rastreando". Persiste para reanudar el
 // servicio tras cerrar la app, cambiar de pantalla o reabrir el teléfono.
 const TRACKING_ENABLED_KEY = 'tracking_enabled';
+// Última vez que el SO nos entregó un punto GPS (llegue o no a enviarse al
+// servidor). Sirve para el aviso "sin señal GPS hace X min" durante la ruta:
+// si esto deja de moverse, el rastreo se cortó (permiso revocado a mitad de
+// viaje, app matada en segundo plano, etc.) — ver ChoferWizard.tsx.
+const LAST_POSITION_AT_KEY = 'last_position_at';
 
 // Buffer de puntos pendientes de enviar. En vez de 1 request HTTP por cada punto
 // GPS (cada ~3 s → decenas de miles de requests/día por chofer, lo que agota el
@@ -68,6 +73,10 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: any) => {
 // en primer plano y en segundo plano (el task de expo despierta el JS por cada
 // punto, así que el flush por tamaño/tiempo se evalúa sin depender de timers).
 const processLocation = async (location: Location.LocationObject) => {
+    // Se registra ANTES del early-return: es la señal de que el SO SÍ está
+    // entregando ubicación, independiente de si hay token o falla el envío.
+    AsyncStorage.setItem(LAST_POSITION_AT_KEY, String(Date.now())).catch(() => { });
+
     const token = await AsyncStorage.getItem(DEVICE_TOKEN_KEY);
     if (!token) return;
 
@@ -198,6 +207,20 @@ export const isBackgroundGranted = async (): Promise<boolean> => {
         return status === 'granted';
     } catch {
         return false;
+    }
+};
+
+// Segundos desde el último punto GPS que el sistema operativo nos entregó
+// (haya podido enviarse o no). null si nunca hubo uno registrado en este
+// dispositivo. Usado para avisar al chofer EN VIVO si el rastreo se cortó a
+// mitad de ruta, en vez de descubrirlo al final cuando ya no tiene remedio.
+export const getSecondsSinceLastPosition = async (): Promise<number | null> => {
+    try {
+        const v = await AsyncStorage.getItem(LAST_POSITION_AT_KEY);
+        if (!v) return null;
+        return Math.max(0, Math.floor((Date.now() - Number(v)) / 1000));
+    } catch {
+        return null;
     }
 };
 
