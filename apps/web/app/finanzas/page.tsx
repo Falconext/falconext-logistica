@@ -6,8 +6,9 @@
 // Solo roles con ve_finanzas; el backend bloquea GET /programacion/financiero.
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import * as XLSX from 'xlsx';
-import { TrendingUp, TrendingDown, Wallet, Percent, Download, RefreshCw, Search, Lock } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, Percent, Download, RefreshCw, Search, Lock, ArrowUpRight } from 'lucide-react';
 import api from '../../lib/api';
 import { useT } from '../../lib/i18n';
 import { useCurrency } from '../../lib/useCurrency';
@@ -129,6 +130,7 @@ export default function FinanzasPage() {
         const rows = data.items.map((it) => ({
             Fecha: fmtFecha(it.fecha),
             Cliente: it.cliente || '',
+            Autista: it.trabajador_nombre || '',
             Spedizione: it.spedizione || '',
             Destino: it.lugar_entrega || '',
             Vehiculo: it.vehiculo_placa || '',
@@ -239,6 +241,7 @@ export default function FinanzasPage() {
                                 <tr className="border-b border-slate-100 dark:border-slate-800">
                                     <th className={thCls}>{t('finanzas.col.fecha')}</th>
                                     <th className={thCls}>{t('finanzas.col.cliente')}</th>
+                                    <th className={thCls}>{t('finanzas.col.autista')}</th>
                                     <th className={thCls}>{t('finanzas.col.spedizione')}</th>
                                     <th className={thCls}>{t('finanzas.col.destino')}</th>
                                     <th className={thCls}>{t('finanzas.col.vehiculo')}</th>
@@ -247,11 +250,12 @@ export default function FinanzasPage() {
                                     <th className={`${thCls} text-right`}>{t('finanzas.col.gastado')}</th>
                                     <th className={`${thCls} text-right`}>{t('finanzas.col.rentabilidad')}</th>
                                     <th className={`${thCls} text-right`}>{t('finanzas.col.rentabilidadPct')}</th>
+                                    <th className={`${thCls} text-right`}>{t('finanzas.col.acciones')}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {grupos.length === 0 && (
-                                    <tr><td colSpan={10} className="px-4 py-10 text-center text-sm text-slate-400">{t('finanzas.vacio')}</td></tr>
+                                    <tr><td colSpan={12} className="px-4 py-10 text-center text-sm text-slate-400">{t('finanzas.vacio')}</td></tr>
                                 )}
                                 {grupos.map(([fecha, filas]) => {
                                     const subIngreso = filas.reduce((s, f) => s + (f.ingreso ?? 0), 0);
@@ -263,6 +267,7 @@ export default function FinanzasPage() {
                                                 <tr key={it.id} className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
                                                     <td className={tdCls}>{fmtFecha(it.fecha)}</td>
                                                     <td className={`${tdCls} font-medium text-slate-800 dark:text-slate-100`}>{it.cliente || '—'}</td>
+                                                    <td className={`${tdCls} whitespace-nowrap`}>{it.trabajador_nombre || '—'}</td>
                                                     <td className={tdCls}>{it.spedizione || '—'}</td>
                                                     <td className={tdCls}>{it.lugar_entrega || '—'}</td>
                                                     <td className={tdCls}>
@@ -276,13 +281,23 @@ export default function FinanzasPage() {
                                                         {it.rentabilidad != null ? format(it.rentabilidad) : '—'}
                                                     </td>
                                                     <td className={`${tdCls} text-right`}>{pctFmt(it.rentabilidad_pct)}</td>
+                                                    <td className={`${tdCls} text-right whitespace-nowrap`}>
+                                                        <Link
+                                                            href={`/operaciones?op=${it.id}`}
+                                                            title={t('finanzas.irAConsegnaTip')}
+                                                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition"
+                                                        >
+                                                            <ArrowUpRight size={13} /> {t('finanzas.irAConsegna')}
+                                                        </Link>
+                                                    </td>
                                                 </tr>
                                             ))}
                                             <tr className="bg-slate-50 dark:bg-slate-800/60 text-xs font-bold">
-                                                <td className={tdCls} colSpan={6}>{fmtFecha(fecha)} · {t('finanzas.totales')}</td>
+                                                <td className={tdCls} colSpan={7}>{fmtFecha(fecha)} · {t('finanzas.totales')}</td>
                                                 <td className={`${tdCls} text-right`}>{format(subIngreso)}</td>
                                                 <td className={`${tdCls} text-right`}>{format(subCosto)}</td>
                                                 <td className={`${tdCls} text-right ${subRent < 0 ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>{format(subRent)}</td>
+                                                <td className={tdCls}></td>
                                                 <td className={tdCls}></td>
                                             </tr>
                                         </Fragment>
@@ -290,11 +305,12 @@ export default function FinanzasPage() {
                                 })}
                                 {grupos.length > 0 && data && (
                                     <tr className="bg-slate-100 dark:bg-slate-800 font-bold border-t-2 border-slate-200 dark:border-slate-700">
-                                        <td className={`${tdCls} font-bold text-slate-900 dark:text-white`} colSpan={6}>{t('finanzas.totales')}</td>
+                                        <td className={`${tdCls} font-bold text-slate-900 dark:text-white`} colSpan={7}>{t('finanzas.totales')}</td>
                                         <td className={`${tdCls} text-right`}>{format(data.resumen.ingreso)}</td>
                                         <td className={`${tdCls} text-right`}>{format(data.resumen.costo)}</td>
                                         <td className={`${tdCls} text-right ${data.resumen.rentabilidad < 0 ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>{format(data.resumen.rentabilidad)}</td>
                                         <td className={`${tdCls} text-right`}>{pctFmt(data.resumen.rentabilidad_pct)}</td>
+                                        <td className={tdCls}></td>
                                     </tr>
                                 )}
                             </tbody>

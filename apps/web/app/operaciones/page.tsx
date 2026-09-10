@@ -325,13 +325,16 @@ export default function OperacionesPage() {
         if (el.scrollHeight - el.scrollTop - el.clientHeight < 300) loadMore();
     }, [loadMore]);
 
-    // Deep-link ?op=<id> desde el Panel de Control: carga esa operación puntual
-    // (puede estar fuera de la primera página/ventana) y la selecciona.
-    const deepLinkOp = useRef<string | null>(
-        typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('op') : null
-    );
+    // Deep-link ?op=<id> desde el Panel de Control y Finanzas: carga esa operación
+    // puntual (puede estar fuera de la primera página/ventana) y la selecciona.
+    // Se lee en un efecto y NO en el inicializador de un useRef: al llegar por
+    // <Link> (navegación interna de Next) la URL se actualiza después del primer
+    // render, así que el ref capturaba la URL anterior sin ?op, el deep-link se
+    // ignoraba y quedaba seleccionada la primera ruta de la lista.
+    const [deepLinkOp, setDeepLinkOp] = useState<string | null>(null);
     useEffect(() => {
-        const op = deepLinkOp.current;
+        const op = new URLSearchParams(window.location.search).get('op');
+        setDeepLinkOp(op);
         if (!op) return;
         api.get(`/programacion/${op}`)
             .then((res) => { if (res.data) setSelected(res.data); })
@@ -340,9 +343,9 @@ export default function OperacionesPage() {
 
     // Auto-select primera ruta (salvo que haya un deep-link resolviéndose o ya haya selección).
     useEffect(() => {
-        if (selected || rutas.length === 0 || deepLinkOp.current) return;
+        if (selected || rutas.length === 0 || deepLinkOp) return;
         setSelected(rutas[0]);
-    }, [rutas, selected]);
+    }, [rutas, selected, deepLinkOp]);
 
     const toggleEstado = (e: string) => {
         setVisibleEstados(prev => {
