@@ -338,6 +338,9 @@ export default function PeajesScreen() {
 
   const renderCard = ({ item: p }: { item: Peaje }) => {
     const isOperacion = p._origen === 'operacion';
+    // Límite efectivo: el guardado o fecha + 14 (los anteriores al cambio no lo traen).
+    const limiteP = p.fecha_limite_pago
+      || (p.fecha ? sumarDias(String(p.fecha).split('T')[0], PLAZO_PAGO_DIAS) : null);
     return (
     <TouchableOpacity
       activeOpacity={0.7}
@@ -366,11 +369,11 @@ export default function PeajesScreen() {
           </View>
           {p.trabajador_id ? <Text style={styles.meta}>· {trabajadorLabel(p.trabajador_id)}</Text> : null}
         </View>
-        {p.fecha_limite_pago ? (
+        {limiteP ? (
           <View style={[styles.metaItem, { marginTop: 4 }]}>
-            <Clock size={13} color={esVencido(p.fecha_limite_pago, p.estado) ? C.danger : C.textFaint} />
-            <Text style={[styles.meta, esVencido(p.fecha_limite_pago, p.estado) && styles.metaVencido]}>
-              Límite: {formatDate(p.fecha_limite_pago)}
+            <Clock size={13} color={esVencido(limiteP, p.estado) ? C.danger : C.textFaint} />
+            <Text style={[styles.meta, esVencido(limiteP, p.estado) && styles.metaVencido]}>
+              Límite: {formatDate(limiteP)}
             </Text>
           </View>
         ) : null}
@@ -445,7 +448,7 @@ export default function PeajesScreen() {
             <InfoRow label="Monto" value={formatMoney(detail.monto, moneda)} />
             <InfoRow label="Estado" value={detail.estado} />
             <InfoRow label="Fecha" value={formatDate(detail.fecha)} />
-            <InfoRow label="Fecha límite" value={formatDate(detail.fecha_limite_pago)} />
+            <InfoRow label="Fecha límite" value={formatDate(detail.fecha_limite_pago || (detail.fecha ? sumarDias(String(detail.fecha).split('T')[0], PLAZO_PAGO_DIAS) : null))} />
             <InfoRow label="Trabajador" value={trabajadorLabel(detail.trabajador_id)} />
             {(detail.link_peaje || detail.archivo) ? (
               <TouchableOpacity

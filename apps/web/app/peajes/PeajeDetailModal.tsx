@@ -6,6 +6,15 @@ import { X, ExternalLink, Paperclip } from 'lucide-react';
 import { useCurrency } from '../../lib/useCurrency';
 import { useT, useDateLocale } from '../../lib/i18n';
 
+// Sin límite guardado se muestra fecha + 14 días (regla de la empresa).
+const sumarDiasIso = (iso?: string | null, dias = 14): string | null => {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return null;
+    d.setDate(d.getDate() + dias);
+    return d.toISOString();
+};
+
 interface PeajeDetailModalProps {
     item: any | null;
     onClose: () => void;
@@ -53,7 +62,7 @@ export default function PeajeDetailModal({ item, onClose }: PeajeDetailModalProp
                         <Field label="Spedizione">{item.spedizione || '—'}</Field>
                         <Field label="Cliente">{item.cliente || '—'}</Field>
                         <Field label={t('peajes.columnas.fecha')}>{fmtDate(item.fecha)}</Field>
-                        <Field label={t('peajes.detalle.fechaLimitePago')}>{fmtDate(item.fecha_limite_pago)}</Field>
+                        <Field label={t('peajes.detalle.fechaLimitePago')}>{fmtDate(item.fecha_limite_pago || sumarDiasIso(item.fecha, 14))}</Field>
                         <Field label={t('peajes.columnas.monto')}>{format(item.monto || 0)}</Field>
                         <Field label={t('peajes.detalle.pagadoPorChofer')}>{item.pagado_por_chofer === false ? t('peajes.detalle.no') : t('peajes.detalle.si')}</Field>
                     </div>

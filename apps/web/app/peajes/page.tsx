@@ -16,6 +16,19 @@ import { isChofer as checkIsChofer } from '../../lib/modules';
 import { SPEDIZIONE_OPTIONS } from '../operaciones/constants';
 import { toast } from 'sonner';
 
+// Fecha límite EFECTIVA: la guardada o, si no hay, fecha + 14 días (regla de la
+// empresa, la misma que aplica el backend al crear). Así los peajes anteriores al
+// cambio y los mancatos que llegan sin límite se ven y se marcan vencidos igual.
+const PLAZO_PAGO_DIAS = 14;
+function limiteEfectivo(r: { fecha?: string | null; fecha_limite_pago?: string | null }): { fecha: Date | null; calculada: boolean } {
+    if (r.fecha_limite_pago) return { fecha: new Date(r.fecha_limite_pago), calculada: false };
+    if (!r.fecha) return { fecha: null, calculada: false };
+    const d = new Date(r.fecha);
+    if (Number.isNaN(d.getTime())) return { fecha: null, calculada: false };
+    d.setDate(d.getDate() + PLAZO_PAGO_DIAS);
+    return { fecha: d, calculada: true };
+}
+
 const ESTADOS = ['Todos', 'PENDIENTE', 'PAGADO', 'ANULADO'] as const;
 
 const ESTADO_LABEL_KEY: Record<string, string> = {
@@ -177,7 +190,7 @@ export default function PeajesPage() {
                 Spedizione: r.spedizione || '—',
                 [t('peajes.columnas.comentario')]: r.comentarios || '',
                 [t('peajes.columnas.fecha')]: r.fecha ? new Date(r.fecha).toLocaleDateString() : '',
-                [t('peajes.detalle.fechaLimitePago')]: r.fecha_limite_pago ? new Date(r.fecha_limite_pago).toLocaleDateString() : '',
+                [t('peajes.detalle.fechaLimitePago')]: limiteEfectivo(r).fecha?.toLocaleDateString() ?? '',
                 [t('peajes.detalle.numeroMancato')]: r.numero_mancato || r.id_multa || '',
                 [t('peajes.columnas.monto')]: r.monto || 0,
             })));
@@ -331,7 +344,7 @@ export default function PeajesPage() {
                             ) : items.length === 0 ? (
                                 <tr><td colSpan={9} className="text-center py-16 text-slate-400">{t('peajes.vacio')}</td></tr>
                             ) : pageRows.map((item) => {
-                                const limite = item.fecha_limite_pago ? new Date(item.fecha_limite_pago) : null;
+                                const { fecha: limite, calculada: limiteCalculada } = limiteEfectivo(item);
                                 const bucket = bucketOfEstado(item.estado);
                                 const vencido = !!limite && limite.getTime() < Date.now() && bucket === 'PENDIENTE';
                                 const nroMancato = item.numero_mancato || item.id_multa || null;
@@ -394,8 +407,10 @@ export default function PeajesPage() {
                                         {item.fecha ? new Date(item.fecha).toLocaleDateString(dateLocale, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                                     </td>
                                     {/* Fecha límite */}
-                                    <td className={`px-3.5 py-3 whitespace-nowrap ${vencido ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>
+                                    <td className={`px-3.5 py-3 whitespace-nowrap ${vencido ? 'text-red-600 font-semibold' : 'text-slate-600'}`}
+                                        title={limiteCalculada ? `Fecha + ${PLAZO_PAGO_DIAS} días (no guardada aún)` : undefined}>
                                         {limite ? limite.toLocaleDateString(dateLocale, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                                        {limiteCalculada && <span className="ml-1 text-[10px] text-slate-400 align-middle">+{PLAZO_PAGO_DIAS}</span>}
                                     </td>
                                     {/* Monto */}
                                     <td className="px-3.5 py-3 text-right font-bold text-slate-900 tabular-nums whitespace-nowrap">{format(item.monto || 0)}</td>
