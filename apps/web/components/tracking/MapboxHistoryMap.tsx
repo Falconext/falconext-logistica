@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
-import { Play, Pause, FastForward, Calendar as CalendarIcon, RotateCcw, Route, Clock, Gauge, TrendingUp, MapPin, Timer, Navigation } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Play, Pause, FastForward, Calendar as CalendarIcon, RotateCcw, Route, Clock, Gauge, TrendingUp, MapPin, Timer, Navigation, AlertTriangle, Zap, Eye } from 'lucide-react';
 import api from '../../lib/api';
 import { toast } from 'sonner';
 import { useGoogleMaps, GOOGLE_MAPS_KEY } from './googleMaps';
@@ -75,6 +75,106 @@ function fmtHora(iso: string | null): string {
     return new Date(iso).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
 }
 
+// "95" -> "1m 35s" ; "40" -> "40 s"
+function fmtSeg(seg: number): string {
+    if (seg < 60) return `${Math.round(seg)} s`;
+    const m = Math.floor(seg / 60);
+    const r = Math.round(seg % 60);
+    return r === 0 ? `${m} min` : `${m}m ${r}s`;
+}
+
+// ── Velocidad instantánea ──────────────────────────────────────────────────
+// Igual que el backend (gps.service computeMovingStats): la velocidad viene del
+// dispositivo en m/s y se descartan lecturas absurdas (>= 200 km/h). Cuando el
+// equipo no reporta velocidad (manda 0) se estima con distancia/tiempo entre
+// puntos consecutivos, marcada como estimada para no venderla como exacta.
+const MAX_KMH_VALIDA = 200;
+const MAX_GAP_ESTIMACION_MS = 5 * 60 * 1000; // sin datos por más de 5 min no se estima
+
+interface Velocidad {
+    kmh: number;
+    estimada: boolean;
+}
+
+function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+    const R = 6371;
+    const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+    const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+    const x = Math.sin(dLat / 2) ** 2 + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(x));
+}
+
+function calcularVelocidades(history: Position[]): Velocidad[] {
+    return history.map((p, i) => {
+        const dev = p.speed * 3.6;
+        if (p.speed > 0 && dev < MAX_KMH_VALIDA) return { kmh: dev, estimada: false };
+        if (i === 0) return { kmh: 0, estimada: false };
+        const prev = history[i - 1];
+        const dtMs = p.timestamp.getTime() - prev.timestamp.getTime();
+        if (dtMs < 1000 || dtMs > MAX_GAP_ESTIMACION_MS) return { kmh: 0, estimada: false };
+        const kmh = haversineKm(prev, p) / (dtMs / 3600000);
+        if (!Number.isFinite(kmh) || kmh >= MAX_KMH_VALIDA) return { kmh: 0, estimada: false };
+        return { kmh, estimada: true };
+    });
+}
+
+// Bandas de color relativas al umbral: por encima es exceso (rojo), desde el
+// 75% del umbral es alta (ámbar), en movimiento normal (verde), parado (gris).
+// Una velocidad ESTIMADA nunca llega a "exceso": un salto de GPS entre dos
+// puntos produce picos de 150-180 km/h que no existieron, y en la revisión de
+// un incidente eso sería acusar al chofer con un dato inventado. Se pinta
+// como alta y se deja la marca "≈ estimada" en el panel.
+type Banda = 'parado' | 'normal' | 'alta' | 'exceso';
+const COLOR_BANDA: Record<Banda, string> = {
+    parado: '#94A3B8',
+    normal: '#16A34A',
+    alta: '#F59E0B',
+    exceso: '#DC2626',
+};
+function bandaDe(kmh: number, umbral: number, estimada = false): Banda {
+    if (kmh > umbral) return estimada ? 'alta' : 'exceso';
+    if (kmh > umbral * 0.75) return 'alta';
+    if (kmh > 2) return 'normal';
+    return 'parado';
+}
+
+// Tramo continuo por encima del umbral: sirve para listar los "eventos" y
+// saltar con el cursor al punto de mayor velocidad de cada uno.
+interface Exceso {
+    startIdx: number;
+    endIdx: number;
+    maxIdx: number;
+    maxKmh: number;
+    startTime: Date;
+    endTime: Date;
+    duracionSeg: number;
+}
+
+function detectarExcesos(history: Position[], vel: Velocidad[], umbral: number): Exceso[] {
+    const out: Exceso[] = [];
+    let cur: Exceso | null = null;
+    vel.forEach((v, i) => {
+        if (v.kmh > umbral && !v.estimada) {
+            if (!cur) {
+                cur = { startIdx: i, endIdx: i, maxIdx: i, maxKmh: v.kmh, startTime: history[i].timestamp, endTime: history[i].timestamp, duracionSeg: 0 };
+            } else {
+                cur.endIdx = i;
+                cur.endTime = history[i].timestamp;
+                if (v.kmh > cur.maxKmh) { cur.maxKmh = v.kmh; cur.maxIdx = i; }
+            }
+        } else if (cur) {
+            out.push(cur);
+            cur = null;
+        }
+    });
+    if (cur) out.push(cur);
+    out.forEach(e => { e.duracionSeg = Math.max(0, (e.endTime.getTime() - e.startTime.getTime()) / 1000); });
+    return out;
+}
+
+const UMBRAL_STORAGE_KEY = 'historyMap.umbralKmh';
+const UMBRAL_DEFAULT = 130; // autostrada
+
 export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: HistoryMapProps) {
     const t = useT();
     const { isLoaded } = useGoogleMaps();
@@ -85,6 +185,10 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
     const startRef = useRef<google.maps.Marker | null>(null);
     const endRef = useRef<google.maps.Marker | null>(null);
     const stopMarkersRef = useRef<google.maps.Marker[]>([]);
+    const speedLinesRef = useRef<google.maps.Polyline[]>([]);
+    const maxMarkerRef = useRef<google.maps.Marker | null>(null);
+    const maxInfoRef = useRef<google.maps.InfoWindow | null>(null);
+    const excesoMarkersRef = useRef<google.maps.Marker[]>([]);
     const playbackTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const [history, setHistory] = useState<Position[]>([]);
@@ -94,6 +198,48 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
     const [isPlaying, setIsPlaying] = useState(false);
     const [playbackSpeed, setPlaybackSpeed] = useState(1);
     const [preset, setPreset] = useState<MapPreset>('day');
+    // Umbral de exceso (km/h). Se recuerda por navegador; no es el límite legal de
+    // cada vía (eso requiere un servicio de mapas de pago), es el tope que la
+    // empresa decide vigilar.
+    const [umbral, setUmbral] = useState<number>(UMBRAL_DEFAULT);
+    useEffect(() => {
+        try {
+            const v = Number(localStorage.getItem(UMBRAL_STORAGE_KEY));
+            if (Number.isFinite(v) && v >= 30 && v <= 200) setUmbral(v);
+        } catch { /* sin storage: queda el default */ }
+    }, []);
+    const cambiarUmbral = (v: number) => {
+        const n = Math.min(200, Math.max(30, Math.round(v) || UMBRAL_DEFAULT));
+        setUmbral(n);
+        try { localStorage.setItem(UMBRAL_STORAGE_KEY, String(n)); } catch { /* ignorar */ }
+    };
+
+    const velocidades = useMemo(() => calcularVelocidades(history), [history]);
+    const excesos = useMemo(() => detectarExcesos(history, velocidades, umbral), [history, velocidades, umbral]);
+    // Punto de velocidad máxima del día: se prefiere una lectura real del equipo;
+    // solo si no hay ninguna se toma la mayor estimada.
+    const maxIdx = useMemo(() => {
+        let best = -1;
+        let bestKmh = 0;
+        let bestEstimada = true;
+        velocidades.forEach((v, i) => {
+            if (v.kmh <= 0) return;
+            const mejor = (!v.estimada && bestEstimada) || (v.estimada === bestEstimada && v.kmh > bestKmh);
+            if (best === -1 || mejor) { best = i; bestKmh = v.kmh; bestEstimada = v.estimada; }
+        });
+        return best;
+    }, [velocidades]);
+
+    // Saltar el cursor a un punto (desde la lista de excesos o el marcador de máxima).
+    const irAlPunto = useCallback((idx: number) => {
+        setIsPlaying(false);
+        setCurrentIndex(idx);
+        const p = history[idx];
+        if (p && mapRef.current) {
+            mapRef.current.panTo({ lat: p.lat, lng: p.lng });
+            if ((mapRef.current.getZoom() ?? 0) < 14) mapRef.current.setZoom(14);
+        }
+    }, [history]);
 
     // Inicializar el mapa.
     useEffect(() => {
@@ -155,22 +301,101 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
         const map = mapRef.current;
         if (!map || !isLoaded) return;
 
-        // Ruta pegada a las calles (Map Matching) si el backend la devolvió; si no, los puntos crudos.
+        // Ruta pegada a las calles (Map Matching) si el backend la devolvió: va debajo,
+        // fina y gris, como guía del camino real. Encima, los puntos crudos coloreados
+        // por velocidad (los únicos que tienen velocidad por punto).
         // matchedGeometry.coordinates[i] = [lng, lat]; history[i] = { lng, lat }. En Google todo es { lat, lng }.
-        const routePath: google.maps.LatLngLiteral[] = trip?.matchedGeometry?.coordinates?.length
+        const basePath: google.maps.LatLngLiteral[] = trip?.matchedGeometry?.coordinates?.length
             ? trip.matchedGeometry.coordinates.map(([lng, lat]) => ({ lat, lng }))
-            : history.map(p => ({ lat: p.lat, lng: p.lng }));
+            : [];
         if (!routeLineRef.current) {
             routeLineRef.current = new google.maps.Polyline({
-                path: routePath,
-                strokeColor: '#3B82F6',
-                strokeWeight: 4,
-                strokeOpacity: 0.85,
+                path: basePath,
+                strokeColor: '#94A3B8',
+                strokeWeight: 3,
+                strokeOpacity: 0.55,
                 map,
             });
         } else {
-            routeLineRef.current.setPath(routePath);
+            routeLineRef.current.setPath(basePath);
         }
+
+        // Segmentos por banda de velocidad: puntos consecutivos con la misma banda se
+        // agrupan en una sola polilínea (una por punto sería inviable con miles de
+        // posiciones). Cada tramo incluye el punto siguiente para no dejar huecos.
+        speedLinesRef.current.forEach(l => l.setMap(null));
+        speedLinesRef.current = [];
+        if (history.length > 1) {
+            let i = 0;
+            while (i < history.length - 1) {
+                const banda = bandaDe(velocidades[i]?.kmh ?? 0, umbral, velocidades[i]?.estimada);
+                let j = i;
+                while (j < history.length - 1 && bandaDe(velocidades[j]?.kmh ?? 0, umbral, velocidades[j]?.estimada) === banda) j++;
+                const path = history.slice(i, j + 1).map(p => ({ lat: p.lat, lng: p.lng }));
+                speedLinesRef.current.push(new google.maps.Polyline({
+                    path,
+                    strokeColor: COLOR_BANDA[banda],
+                    strokeWeight: banda === 'exceso' ? 6 : 5,
+                    strokeOpacity: 0.95,
+                    zIndex: banda === 'exceso' ? 6 : 5,
+                    map,
+                }));
+                i = j;
+            }
+        }
+
+        // Marcador de la velocidad máxima del día (clic = llevar el cursor ahí).
+        maxMarkerRef.current?.setMap(null); maxMarkerRef.current = null;
+        maxInfoRef.current?.close();
+        if (maxIdx >= 0 && history[maxIdx]) {
+            const p = history[maxIdx];
+            const v = velocidades[maxIdx];
+            const marker = new google.maps.Marker({
+                position: { lat: p.lat, lng: p.lng },
+                map,
+                zIndex: 50,
+                title: t('componentes.historyMap.maxEnPunto'),
+                label: { text: 'MAX', color: '#fff', fontWeight: '800', fontSize: '9px' },
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 13,
+                    fillColor: '#DC2626',
+                    fillOpacity: 1,
+                    strokeColor: '#fff',
+                    strokeWeight: 3,
+                },
+            });
+            const info = new google.maps.InfoWindow({
+                content: `<div style="font-family:system-ui;font-size:12px"><b>${t('componentes.historyMap.maxEnPunto')}</b><br/>${Math.round(v.kmh)} km/h${v.estimada ? ` <i>(${t('componentes.historyMap.estimada')})</i>` : ''} · ${p.timestamp.toLocaleTimeString()}</div>`,
+            });
+            marker.addListener('click', () => { irAlPunto(maxIdx); info.open({ map, anchor: marker }); });
+            maxMarkerRef.current = marker;
+            maxInfoRef.current = info;
+        }
+
+        // Un marcador por exceso, en su punto de mayor velocidad.
+        excesoMarkersRef.current.forEach(m => m.setMap(null));
+        excesoMarkersRef.current = [];
+        excesos.forEach((e, n) => {
+            if (e.maxIdx === maxIdx) return; // ya lo cubre el marcador MAX
+            const p = history[e.maxIdx];
+            const marker = new google.maps.Marker({
+                position: { lat: p.lat, lng: p.lng },
+                map,
+                zIndex: 40,
+                title: `${t('componentes.historyMap.exceso')} ${n + 1} · ${Math.round(e.maxKmh)} km/h`,
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 6,
+                    fillColor: '#DC2626',
+                    fillOpacity: 1,
+                    strokeColor: '#fff',
+                    strokeWeight: 2,
+                },
+            });
+            marker.addListener('click', () => irAlPunto(e.maxIdx));
+            excesoMarkersRef.current.push(marker);
+        });
 
         // Marcadores inicio (A) / fin (B)
         startRef.current?.setMap(null); endRef.current?.setMap(null); startRef.current = null; endRef.current = null;
@@ -219,7 +444,7 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
             marker.addListener('click', () => infoWindow.open({ map, anchor: marker }));
             stopMarkersRef.current.push(marker);
         });
-    }, [history, trip, isLoaded]);
+    }, [history, trip, isLoaded, velocidades, excesos, maxIdx, umbral, irAlPunto, t]);
 
     // Mover el cursor de reproducción.
     useEffect(() => {
@@ -262,6 +487,14 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
 
     const toggleSpeed = () => setPlaybackSpeed(prev => (prev === 1 ? 5 : prev === 5 ? 10 : 1));
     const currentPos = history[currentIndex];
+    const velActual = velocidades[currentIndex];
+    const bandaActual: Banda = velActual ? bandaDe(velActual.kmh, umbral, velActual.estimada) : 'parado';
+    const claseBanda: Record<Banda, string> = {
+        parado: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+        normal: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+        alta: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+        exceso: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
+    };
 
     if (!GOOGLE_MAPS_KEY) return <div className="h-full flex items-center justify-center text-slate-400">{t('componentes.historyMap.configurarMapa')}</div>;
 
@@ -348,11 +581,36 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
                         >
                             <RotateCcw size={16} />
                         </button>
-                        <div className="flex-1 text-center">
-                            <p className="text-xs text-slate-500 font-mono">
+                        <div className="flex-1 flex items-center justify-center gap-3 min-w-0">
+                            <p className="text-xs text-slate-500 font-mono shrink-0">
                                 {currentPos ? currentPos.timestamp.toLocaleTimeString() : '--:--:--'}
                             </p>
+                            {/* Velocidad en el instante del cursor: es lo que se necesita para
+                                revisar un incidente (a qué velocidad iba justo ahí). */}
+                            <div
+                                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-bold text-sm tabular-nums ${claseBanda[bandaActual]}`}
+                                title={velActual?.estimada ? t('componentes.historyMap.estimadaTip') : t('componentes.historyMap.velActual')}
+                            >
+                                <Gauge size={14} />
+                                {velActual ? `${Math.round(velActual.kmh)} km/h` : '— km/h'}
+                                {velActual?.estimada && <span className="text-[10px] font-medium opacity-80">≈ {t('componentes.historyMap.estimada')}</span>}
+                                {bandaActual === 'exceso' && <AlertTriangle size={13} />}
+                            </div>
                         </div>
+                        <label className="flex items-center gap-1.5 text-xs text-slate-500 shrink-0" title={t('componentes.historyMap.umbralTip')}>
+                            <AlertTriangle size={13} className="text-rose-500" />
+                            {t('componentes.historyMap.umbral')}
+                            <input
+                                type="number"
+                                min={30}
+                                max={200}
+                                step={5}
+                                value={umbral}
+                                onChange={(e) => cambiarUmbral(Number(e.target.value))}
+                                className="w-16 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold text-xs text-right tabular-nums outline-none focus:ring-2 focus:ring-rose-500/30"
+                            />
+                            km/h
+                        </label>
                     </div>
                     <input
                         type="range"
@@ -363,8 +621,67 @@ export function MapboxHistoryMap({ deviceId, deviceName, vehiclePlate }: History
                         className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
                         disabled={history.length === 0}
                     />
+                    {/* Leyenda de colores de la ruta */}
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                        {([
+                            ['normal', t('componentes.historyMap.leyendaNormal')],
+                            ['alta', `${t('componentes.historyMap.leyendaAlta')} ≥ ${Math.round(umbral * 0.75)}`],
+                            ['exceso', `${t('componentes.historyMap.leyendaExceso')} > ${umbral}`],
+                            ['parado', t('componentes.historyMap.leyendaParado')],
+                        ] as [Banda, string][]).map(([b, label]) => (
+                            <span key={b} className="inline-flex items-center gap-1.5">
+                                <span className="inline-block w-4 h-1.5 rounded-full" style={{ backgroundColor: COLOR_BANDA[b] }} />
+                                {label}
+                            </span>
+                        ))}
+                        {excesos.length > 0 && (
+                            <span className="ml-auto inline-flex items-center gap-1 font-semibold text-rose-600 dark:text-rose-400">
+                                <AlertTriangle size={12} /> {t('componentes.historyMap.excesosBadge', { n: excesos.length })}
+                            </span>
+                        )}
+                    </div>
                 </div>
             </div>
+
+            {/* Excesos de velocidad (eventos) — solo cuando hay recorrido cargado */}
+            {history.length > 0 && (
+                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
+                    <h3 className="font-bold text-slate-900 dark:text-white mb-1 flex flex-wrap items-center gap-2">
+                        <Zap size={18} className="text-rose-600 dark:text-rose-400" />
+                        {t('componentes.historyMap.excesosTitulo')}
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${excesos.length ? 'text-rose-600 bg-rose-50 dark:bg-rose-900/20' : 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20'}`}>
+                            {excesos.length}
+                        </span>
+                    </h3>
+                    <p className="text-xs text-slate-500 mb-3">{t('componentes.historyMap.excesosSub', { umbral })}</p>
+                    {excesos.length === 0 ? (
+                        <p className="text-sm text-slate-500">{t('componentes.historyMap.sinExcesos', { umbral })}</p>
+                    ) : (
+                        <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                            {excesos.map((e, n) => {
+                                const activo = currentIndex >= e.startIdx && currentIndex <= e.endIdx;
+                                return (
+                                    <div key={e.startIdx} className={`flex flex-wrap items-center gap-x-4 gap-y-1 py-2 text-sm ${activo ? 'bg-rose-50/60 dark:bg-rose-900/10 -mx-2 px-2 rounded-lg' : ''}`}>
+                                        <span className="w-6 h-6 rounded-full bg-rose-600 text-white text-[11px] font-bold flex items-center justify-center shrink-0">{n + 1}</span>
+                                        <span className="font-mono text-xs text-slate-500">{e.startTime.toLocaleTimeString()} – {e.endTime.toLocaleTimeString()}</span>
+                                        <span className="inline-flex items-center gap-1 text-xs text-slate-500"><Clock size={12} /> {fmtSeg(e.duracionSeg)}</span>
+                                        <span className="inline-flex items-center gap-1 font-bold text-rose-600 dark:text-rose-400 tabular-nums">
+                                            <TrendingUp size={13} /> {Math.round(e.maxKmh)} km/h
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => irAlPunto(e.maxIdx)}
+                                            className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+                                        >
+                                            <Eye size={13} /> {t('componentes.historyMap.verEnMapa')}
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Tramos y paradas (timeline del día) */}
             {trip && trip.legs.length > 0 && (
