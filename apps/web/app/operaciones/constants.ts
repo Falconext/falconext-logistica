@@ -20,12 +20,18 @@ export const APP_OPTIONS: { value: string; label: string }[] = [
 ];
 
 // Opciones del campo SPEDIZIONE (expedición/cliente). Debe coincidir con
-// SPEDIZIONE_OPTIONS del app (apps/logistica-app/constants/operaciones.ts).
+// SPEDIZIONE_OPTIONS del app (apps/logistica-app/constants/operaciones.ts) y
+// con SPEDIZIONI_SIN_AUTOCALCULO del backend (common/ingreso-vehiculo.util.ts).
+// El value es el texto persistido en RegistroServicio/Programacion.spedizione;
+// los valores anteriores (AB, DHL, EXTRAS ALFREDO, EXTRAS ESTEFANIA) se
+// migraron en la base para que los filtros sigan encontrando lo histórico.
 export const SPEDIZIONE_OPTIONS: { value: string; label: string }[] = [
-    { value: 'AB', label: 'Ab Servis' },
-    { value: 'DHL', label: 'DHL' },
-    { value: 'EXTRAS ALFREDO', label: 'Extras Alfredo' },
-    { value: 'EXTRAS ESTEFANIA', label: 'Extras Estefanía' },
+    { value: 'EXTRAS PIAZZA MILANO', label: 'Extras Piazza Milano' },
+    { value: 'EXTRAS PIAZZA ROMA', label: 'Extras Piazza Roma' },
+    { value: 'DHL MILANO', label: 'DHL Milano' },
+    { value: 'DHL ROMA', label: 'DHL Roma' },
+    { value: 'AB SERVICE', label: 'AB Service' },
+    { value: 'EXTRAS STEFFANIA', label: 'Extras Steffania' },
 ];
 
 // Estados de consegna (italiano). El value es el código canónico persistido.
@@ -95,7 +101,7 @@ export const categoriaVehiculoLabel = (v?: string | null): string => (v && CATEG
 
 // Spedizioni cuyo costo lo confirma el cliente DESPUÉS del servicio: no hay
 // tabla de km, se deja en blanco para que el supervisor lo llene a mano.
-export const SPEDIZIONI_SIN_AUTOCALCULO = ['EXTRAS ALFREDO', 'EXTRAS ESTEFANIA'];
+export const SPEDIZIONI_SIN_AUTOCALCULO = ['EXTRAS PIAZZA MILANO', 'EXTRAS PIAZZA ROMA', 'EXTRAS STEFFANIA'];
 
 // Tarifas de la empresa para el ingreso sugerido (GET /registros/config).
 export interface TarifasIngreso {

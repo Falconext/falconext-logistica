@@ -174,7 +174,7 @@ model Programacion {
   
   // Route Info
   cliente          String?  // 'CLIENTE'
-  spedizione       String?  // 'SPEDIZIONE' — expedición/cliente (AB, DHL, Extras Alfredo, Extras Estefanía)
+  spedizione       String?  // 'SPEDIZIONE' — expedición/cliente (ver SPEDIZIONE_OPTIONS en apps/web/app/operaciones/constants.ts)
   reperibilita     Boolean? @default(false) // Reperibilità (disponibilidad on-call) marcada por el supervisor
   // Navetta: traslado/lanzadera entre almacenes (no una entrega normal). El
   // ingreso sugerido pasa a ser SIEMPRE el fijo de Tenant.pago_navetta, sin

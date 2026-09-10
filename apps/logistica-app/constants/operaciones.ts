@@ -27,12 +27,16 @@ export const AREAS_TRABAJO: { value: string; label: string }[] = [
     { value: 'Milano Management', label: 'Milano Management' },
 ];
 
-// Opciones del campo SPEDIZIONE (cliente/expedición). Las 4 fijas del negocio.
+// Opciones del campo SPEDIZIONE (cliente/expedición). Mismos values y labels
+// que el web (apps/web/app/operaciones/constants.ts): si divergen, el chofer y
+// el supervisor ven nombres distintos para la misma consegna.
 export const SPEDIZIONE_OPTIONS: { value: string; label: string }[] = [
-    { value: 'AB', label: 'AB' },
-    { value: 'DHL', label: 'DHL' },
-    { value: 'EXTRAS ALFREDO', label: 'Extras Alfredo' },
-    { value: 'EXTRAS ESTEFANIA', label: 'Extras Estefanía' },
+    { value: 'EXTRAS PIAZZA MILANO', label: 'Extras Piazza Milano' },
+    { value: 'EXTRAS PIAZZA ROMA', label: 'Extras Piazza Roma' },
+    { value: 'DHL MILANO', label: 'DHL Milano' },
+    { value: 'DHL ROMA', label: 'DHL Roma' },
+    { value: 'AB SERVICE', label: 'AB Service' },
+    { value: 'EXTRAS STEFFANIA', label: 'Extras Steffania' },
 ];
 
 // Tipos de gasto de la rendición.
@@ -56,7 +60,7 @@ export const categoriaVehiculoLabel = (v?: string | null): string =>
 
 // Spedizioni cuyo costo lo confirma el cliente DESPUÉS del servicio: no hay
 // tabla de km, se deja en blanco para que el supervisor lo llene a mano.
-export const SPEDIZIONI_SIN_AUTOCALCULO = ['EXTRAS ALFREDO', 'EXTRAS ESTEFANIA'];
+export const SPEDIZIONI_SIN_AUTOCALCULO = ['EXTRAS PIAZZA MILANO', 'EXTRAS PIAZZA ROMA', 'EXTRAS STEFFANIA'];
 
 // Tarifas de la empresa para el ingreso sugerido (GET /registros/config).
 export interface TarifasIngreso {

@@ -40,7 +40,7 @@ export function tarifasIngresoFromTenant(t: {
 
 // Spedizioni cuyo costo lo confirma el cliente DESPUÉS del servicio: no hay
 // tabla de km, así que se deja en blanco para que el supervisor lo llene.
-const SPEDIZIONI_SIN_AUTOCALCULO = ['EXTRAS ALFREDO', 'EXTRAS ESTEFANIA'];
+const SPEDIZIONI_SIN_AUTOCALCULO = ['EXTRAS PIAZZA MILANO', 'EXTRAS PIAZZA ROMA', 'EXTRAS STEFFANIA'];
 
 // Ingreso sugerido de una operación: km_facturable × factor(categoría del
 // vehículo), o el fijo `minimo` si el km es corto (< umbral). null si falta

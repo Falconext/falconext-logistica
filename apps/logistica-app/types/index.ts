@@ -69,7 +69,7 @@ export interface Programacion {
   trabajador_id?: string;
   trabajador_nombre?: string | null;
   cliente?: string;
-  spedizione?: string | null; // AB | DHL | EXTRAS ALFREDO | … (cliente/expedición)
+  spedizione?: string | null; // ver SPEDIZIONE_OPTIONS en constants/operaciones (cliente/expedición)
   lugar_retiro?: string;
   fecha_retiro?: string;
   retiros?: string[]; // Retiros/orígenes adicionales (almacenes) tras lugar_retiro
