@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
+import { fechaLimitePago } from '../../common/plazo-pago.util';
 
 @Injectable()
 export class PeajesService {
@@ -24,7 +25,10 @@ export class PeajesService {
                 fecha_recepcion: data.fecha_recepcion ? new Date(data.fecha_recepcion) : null,
                 peaje_salida: data.peaje_salida || null,
                 nota_autista: data.nota_autista || null,
-                fecha_limite_pago: data.fecha_limite_pago ? new Date(data.fecha_limite_pago) : null,
+                // Sin límite explícito: fecha + 14 días (regla de la empresa).
+                fecha_limite_pago: data.fecha_limite_pago
+                    ? new Date(data.fecha_limite_pago)
+                    : fechaLimitePago(data.fecha),
                 tenant_id: tenantId,
             }
         });
@@ -198,7 +202,7 @@ export class PeajesService {
         return { items: itemsConAutista, total, counts };
     }
 
-    update(id: string, data: any, tenantId?: string) {
+    async update(id: string, data: any, tenantId?: string) {
         // Los peajes "mancato" (registrados desde una operación) usan el id prefijado
         // "gasto:<id>" — viven en GastoOperacion, no en Peaje. Solo se les permite
         // editar estado de pago y fecha límite (lo que pide el admin al liquidarlos).
@@ -211,6 +215,16 @@ export class PeajesService {
                     fecha_limite_pago: data.fecha_limite_pago ? new Date(data.fecha_limite_pago) : undefined,
                 },
             });
+        }
+        // Si cambia la fecha y el registro aún no tiene límite, se calcula (fecha +
+        // 14). Un límite ya guardado no se pisa: pudo haberlo corregido el admin.
+        let limiteAuto: Date | null | undefined;
+        if (data.fecha && data.fecha_limite_pago === undefined) {
+            const actual = await this.prisma.peaje.findFirst({
+                where: tenantId ? { id, tenant_id: tenantId } : { id },
+                select: { fecha_limite_pago: true },
+            });
+            if (actual && !actual.fecha_limite_pago) limiteAuto = fechaLimitePago(data.fecha);
         }
         // updateMany permite filtrar por tenant además del id (aislamiento multi-empresa):
         // sólo actualiza si el peaje pertenece al tenant del usuario.
@@ -232,7 +246,7 @@ export class PeajesService {
                 fecha_recepcion: data.fecha_recepcion ? new Date(data.fecha_recepcion) : undefined,
                 peaje_salida: data.peaje_salida,
                 nota_autista: data.nota_autista,
-                fecha_limite_pago: data.fecha_limite_pago ? new Date(data.fecha_limite_pago) : undefined,
+                fecha_limite_pago: data.fecha_limite_pago ? new Date(data.fecha_limite_pago) : (limiteAuto ?? undefined),
             }
         });
     }

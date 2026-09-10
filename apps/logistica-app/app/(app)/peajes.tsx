@@ -106,9 +106,21 @@ type FormState = {
   estado: Estado;
   tipo: string;
   fecha: string;
+  fecha_limite_pago: string;
   trabajador_id: string;
   comentarios: string;
 };
+
+// Regla de la empresa: plazo de pago = fecha + 14 días. Se autocompleta al
+// elegir la fecha y sigue siendo editable; el backend aplica el mismo default.
+const PLAZO_PAGO_DIAS = 14;
+function sumarDias(ymd: string, dias: number): string {
+  if (!ymd) return '';
+  const d = new Date(ymd + 'T00:00:00');
+  if (Number.isNaN(d.getTime())) return '';
+  d.setDate(d.getDate() + dias);
+  return d.toISOString().split('T')[0];
+}
 
 const emptyForm: FormState = {
   targa: '',
@@ -116,6 +128,7 @@ const emptyForm: FormState = {
   estado: 'PENDIENTE',
   tipo: '',
   fecha: todayISO(),
+  fecha_limite_pago: sumarDias(todayISO(), PLAZO_PAGO_DIAS),
   trabajador_id: '',
   comentarios: '',
 };
@@ -173,6 +186,8 @@ export default function PeajesScreen() {
     }
   };
   const [form, setForm] = useState<FormState>(emptyForm);
+  // Mientras el usuario no toque el límite a mano, sigue a la fecha (+14 días).
+  const [limiteManual, setLimiteManual] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -236,7 +251,15 @@ export default function PeajesScreen() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ ...emptyForm, trabajador_id: hideConductor ? resolvedMyWorkerId : '' });
+    // Formulario nuevo: fecha de hoy y límite recalculado (no el que quedó fijo al
+    // cargar el módulo), sin la marca de "editado a mano" del registro anterior.
+    setLimiteManual(false);
+    setForm({
+      ...emptyForm,
+      fecha: todayISO(),
+      fecha_limite_pago: sumarDias(todayISO(), PLAZO_PAGO_DIAS),
+      trabajador_id: hideConductor ? resolvedMyWorkerId : '',
+    });
     setFormVisible(true);
   };
 
@@ -252,9 +275,11 @@ export default function PeajesScreen() {
         : 'PENDIENTE'),
       tipo: p.tipo || '',
       fecha: p.fecha ? String(p.fecha).split('T')[0] : todayISO(),
+      fecha_limite_pago: p.fecha_limite_pago ? String(p.fecha_limite_pago).split('T')[0] : '',
       trabajador_id: hideConductor ? resolvedMyWorkerId : (p.trabajador_id || ''),
       comentarios: p.comentarios || '',
     });
+    setLimiteManual(!!p.fecha_limite_pago);
     setDetail(null);
     setFormVisible(true);
   };
@@ -272,6 +297,7 @@ export default function PeajesScreen() {
         estado: form.estado,
         tipo: form.tipo || undefined,
         fecha: form.fecha || undefined,
+        fecha_limite_pago: form.fecha_limite_pago || undefined,
         trabajador_id: form.trabajador_id || undefined,
         comentarios: form.comentarios || undefined,
       };
@@ -505,7 +531,17 @@ export default function PeajesScreen() {
         <DatePicker
           label="Fecha"
           value={form.fecha}
-          onChange={(v) => setForm({ ...form, fecha: v })}
+          onChange={(v) => setForm({
+            ...form,
+            fecha: v,
+            // Sigue a la fecha mientras no se haya tocado a mano.
+            fecha_limite_pago: limiteManual ? form.fecha_limite_pago : sumarDias(v, PLAZO_PAGO_DIAS),
+          })}
+        />
+        <DatePicker
+          label={`Fecha límite de pago (fecha + ${PLAZO_PAGO_DIAS} días)`}
+          value={form.fecha_limite_pago}
+          onChange={(v) => { setLimiteManual(true); setForm({ ...form, fecha_limite_pago: v }); }}
         />
         {!hideConductor && (
           <Select

@@ -35,6 +35,7 @@ export type GastoExistente = {
 };
 
 export type GastoEntrante = {
+    fecha_limite_pago?: Date | null; // plazo de pago del mancato (solo PEAJE, al crear)
     programacion_id: string;
     tipo: string;
     monto: number;

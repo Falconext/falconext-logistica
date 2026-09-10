@@ -3,6 +3,7 @@ import { Injectable, BadRequestException, NotFoundException, ForbiddenException 
 import { GASTO_SYNC_SELECT, aplicarPlanGastos, planificarSyncGastos } from '../../common/gastos-sync.util';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
+import { fechaLimitePago } from '../../common/plazo-pago.util';
 import { num, horasDeRecorrido, tarifasFromTenant, TARIFAS_TENANT_SELECT, TarifasChofer } from '../../common/tarifas-chofer.util';
 import { ingresoSugerido, tarifasIngresoFromTenant, TARIFAS_INGRESO_TENANT_SELECT } from '../../common/ingreso-vehiculo.util';
 
@@ -439,6 +440,7 @@ export class ProgramacionService {
     // Normaliza un gasto del frontend a la forma de la BD, denormalizando chofer/vehículo
     // desde la operación para poder listarlo luego en los módulos de Peaje/Combustible.
     private normalizeGasto(g: any, op: { id: string; trabajador_id?: string | null; vehiculo_id?: string | null; fecha?: Date | null; fecha_retiro?: Date | null; fecha_entrega?: Date | null }, tenantId: string) {
+        const fechaGasto: Date = g.fecha ? new Date(g.fecha) : (op.fecha_entrega || op.fecha_retiro || op.fecha || new Date());
         return {
             programacion_id: op.id,
             tipo: String(g.tipo || 'OTRO'),
@@ -446,11 +448,17 @@ export class ProgramacionService {
             // Sin fecha propia usa la de la operación, para que ordene con su fecha en los
             // módulos. Último respaldo: HOY (nunca null — un gasto sin fecha quedaba fuera
             // de cualquier filtro por rango en Peajes/Combustible y "desaparecía").
-            fecha: g.fecha ? new Date(g.fecha) : (op.fecha_entrega || op.fecha_retiro || op.fecha || new Date()),
+            fecha: fechaGasto,
             fecha_explicita: !!g.fecha,
             descripcion: g.descripcion || null,
             numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null,
             link_peaje: g.tipo === 'PEAJE' ? (g.link_peaje || null) : null,
+            // Plazo de pago del mancato: fecha + 14. Solo entra al CREAR el gasto; al
+            // fusionar con uno existente `datosActualizacion` no toca este campo, así
+            // que un límite corregido por el admin en Peajes se conserva.
+            fecha_limite_pago: g.tipo === 'PEAJE'
+                ? (g.fecha_limite_pago ? new Date(g.fecha_limite_pago) : fechaLimitePago(fechaGasto))
+                : null,
             comprobantes: Array.isArray(g.comprobantes) ? g.comprobantes.filter(Boolean) : [],
             // Por defecto lo paga el chofer (comportamiento histórico). Solo es false
             // cuando se marca explícitamente como pagado por la empresa (mancato/código).

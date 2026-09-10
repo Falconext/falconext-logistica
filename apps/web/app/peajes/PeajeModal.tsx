@@ -1,6 +1,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+
+// Regla de la empresa: el plazo de pago es la fecha del peaje + 14 días. Se
+// autocompleta al elegir la fecha; el backend aplica el mismo default si llega vacío.
+const PLAZO_PAGO_DIAS = 14;
+const sumarDias = (ymd: string, dias: number): string => {
+    if (!ymd) return '';
+    const d = new Date(ymd + 'T00:00:00');
+    if (Number.isNaN(d.getTime())) return '';
+    d.setDate(d.getDate() + dias);
+    return d.toISOString().split('T')[0];
+};
 import { createPortal } from 'react-dom';
 import { X, Save, Loader2 } from 'lucide-react';
 import api from '../../lib/api';
@@ -27,7 +38,7 @@ const emptyForm = () => ({
     tipo: '',
     mes: '',
     fecha_recepcion: '',
-    fecha_limite_pago: '',
+    fecha_limite_pago: sumarDias(new Date().toISOString().split('T')[0], PLAZO_PAGO_DIAS),
     peaje_salida: '',
     recibo_pago: '',
     comentarios: '',
@@ -53,12 +64,16 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [formData, setFormData] = useState(emptyForm());
+    // Mientras el usuario no toque la fecha límite a mano, sigue a la fecha (+14 días).
+    const [limiteManual, setLimiteManual] = useState(false);
 
     useEffect(() => {
         if (!isOpen) return;
         api.get('/vehiculos').then(res => setVehicles(res.data)).catch(() => setVehicles([]));
         api.get('/trabajadores').then(res => setWorkers(res.data)).catch(() => setWorkers([]));
         setError('');
+        // Un registro que ya trae límite se respeta tal cual; uno nuevo arranca con +14.
+        setLimiteManual(!!record?.fecha_limite_pago);
         if (record) {
             setFormData({
                 estado: record.estado || 'PENDIENTE',
@@ -185,7 +200,11 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
                         <div className="space-y-2">
                             <DatePicker label="Fecha"
                                 value={formData.fecha}
-                                onChange={(v) => setFormData({ ...formData, fecha: v })} />
+                                onChange={(v) => setFormData({
+                                    ...formData,
+                                    fecha: v,
+                                    fecha_limite_pago: limiteManual ? formData.fecha_limite_pago : sumarDias(v, PLAZO_PAGO_DIAS),
+                                })} />
                         </div>
 
                         <div className="space-y-2">
@@ -211,7 +230,10 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
                         <div className="space-y-2">
                             <DatePicker label="Fecha límite de pago"
                                 value={formData.fecha_limite_pago}
-                                onChange={(v) => setFormData({ ...formData, fecha_limite_pago: v })} />
+                                onChange={(v) => { setLimiteManual(true); setFormData({ ...formData, fecha_limite_pago: v }); }} />
+                            <p className="text-[11px] text-slate-400">
+                                {limiteManual ? 'Editada a mano.' : `Se calcula sola: fecha + ${PLAZO_PAGO_DIAS} días. Puedes cambiarla.`}
+                            </p>
                         </div>
 
                         <div className="space-y-2">
