@@ -36,6 +36,10 @@ export const es = {
         errorSubir: 'Error al subir',
         maxTamano: 'Máx 5MB',
         guardando: 'Guardando…',
+        anverso: 'Anverso',
+        reverso: 'Reverso (opcional)',
+        subirReverso: 'Subir reverso',
+        reversoSufijo: 'Reverso',
     },
     datePicker: {
         placeholder: 'Seleccionar fecha',
@@ -215,6 +219,10 @@ export const it: typeof es = {
         errorSubir: 'Errore nel caricamento',
         maxTamano: 'Max 5MB',
         guardando: 'Salvataggio…',
+        anverso: 'Fronte',
+        reverso: 'Retro (opzionale)',
+        subirReverso: 'Carica retro',
+        reversoSufijo: 'Retro',
     },
     datePicker: {
         placeholder: 'Seleziona data',

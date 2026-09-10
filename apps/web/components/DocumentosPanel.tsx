@@ -26,6 +26,10 @@ export interface DocType {
     muted?: boolean;    // color gris (documentos secundarios)
 }
 
+// Cambios que puede pedir una casilla: anverso, reverso (null = quitar) y fecha.
+type SlotPatch = { url?: string | null; url_reverso?: string | null; fecha?: string | null };
+type Lado = 'url' | 'url_reverso';
+
 // --- Previsualización ---------------------------------------------------
 const isPdf = (url?: string | null) => !!url && /\.pdf(\?|$)/i.test(url);
 // Renderiza una página de un PDF de Cloudinary como JPG (sin libs). Cloudinary
@@ -84,31 +88,35 @@ export default function DocumentosPanel({
      * Guarda una casilla (upsert). `patch` puede traer url y/o fecha (null = quitar).
      * Si la casilla queda sin url y sin fecha, se elimina el registro.
      */
-    const saveSlot = async (dt: DocType, patch: { url?: string | null; fecha?: string | null }) => {
+    const saveSlot = async (dt: DocType, patch: SlotPatch) => {
         const existing = docsByTipo[dt.key];
         const nextUrl = patch.url !== undefined ? patch.url : existing?.url ?? null;
+        const nextReverso = patch.url_reverso !== undefined ? patch.url_reverso : existing?.url_reverso ?? null;
         const nextFecha =
             patch.fecha !== undefined ? patch.fecha : (existing ? toDateInput(existing.fecha_vencimiento) : null);
 
         setBusy((b) => ({ ...b, [dt.key]: true }));
         try {
             if (existing) {
-                if (!nextUrl && !nextFecha) {
+                // Sin anverso, sin reverso y sin fecha la casilla queda vacía: se borra la fila.
+                if (!nextUrl && !nextReverso && !nextFecha) {
                     await api.delete(`/documentos/${existing.id}`);
                 } else {
                     await api.patch(`/documentos/${existing.id}`, {
                         url: nextUrl,
+                        url_reverso: nextReverso,
                         fecha_vencimiento: nextFecha || null,
                     });
                 }
             } else {
-                if (!nextUrl && !nextFecha) return;
+                if (!nextUrl && !nextReverso && !nextFecha) return;
                 await api.post('/documentos', {
                     entidad,
                     entidad_id: entidadId,
                     tipo: dt.key,
                     nombre: dt.label,
                     url: nextUrl,
+                    url_reverso: nextReverso,
                     fecha_vencimiento: nextFecha || null,
                 });
             }
@@ -134,7 +142,7 @@ export default function DocumentosPanel({
                         doc={docsByTipo[dt.key]}
                         busy={!!busy[dt.key]}
                         onSave={(patch) => saveSlot(dt, patch)}
-                        onPreview={(url) => setPreview({ url, label: dt.label })}
+                        onPreview={(url, label) => setPreview({ url, label: label ?? dt.label })}
                     />
                 ))}
             </div>
@@ -232,39 +240,12 @@ function DocCard({
     dt: DocType;
     doc?: Documento;
     busy: boolean;
-    onSave: (patch: { url?: string | null; fecha?: string | null }) => void | Promise<void>;
-    onPreview: (url: string) => void;
+    onSave: (patch: SlotPatch) => void | Promise<void>;
+    onPreview: (url: string, label?: string) => void;
 }) {
     const t = useT();
     const Icon = dt.icon;
-    const inputRef = useRef<HTMLInputElement>(null);
-    const [uploading, setUploading] = useState(false);
-    const [error, setError] = useState('');
-    const [thumbError, setThumbError] = useState(false);
     const status = checkExpiration(t, doc?.fecha_vencimiento);
-    const hasFile = !!doc?.url;
-    const fileUrl = doc?.url || '';
-    const thumbSrc = isPdf(fileUrl) ? pdfThumb(fileUrl) : fileUrl;
-    useEffect(() => { setThumbError(false); }, [fileUrl]);
-
-    const handleFile = async (file: File) => {
-        if (!file) return;
-        if (file.size > 5 * 1024 * 1024) { setError(t('componentes.documentos.maxTamano')); return; }
-        setError('');
-        setUploading(true);
-        try {
-            const fd = new FormData();
-            fd.append('file', file);
-            const res = await api.post('/files/upload', fd, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-            });
-            await onSave({ url: res.data.url });
-        } catch {
-            setError(t('componentes.documentos.errorSubir'));
-        } finally {
-            setUploading(false);
-        }
-    };
 
     const iconWrap = dt.muted
         ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
@@ -293,18 +274,91 @@ function DocCard({
                 onChange={(v) => onSave({ fecha: v || null })}
             />
 
-            {/* Archivo (PDF / escaneo) — miniatura con previsualización */}
+            {/* Anverso y reverso: dos zonas independientes sobre la misma casilla.
+                El reverso es opcional (DNI, patente, libretto…). */}
+            <FileSlot
+                titulo={t('componentes.documentos.anverso')}
+                url={doc?.url}
+                busy={busy}
+                onUploaded={(url) => onSave({ url })}
+                onRemove={() => onSave({ url: null })}
+                onPreview={(u) => onPreview(u, dt.label)}
+                alt={dt.label}
+            />
+            <FileSlot
+                titulo={t('componentes.documentos.reverso')}
+                url={doc?.url_reverso}
+                busy={busy}
+                compact
+                onUploaded={(url) => onSave({ url_reverso: url })}
+                onRemove={() => onSave({ url_reverso: null })}
+                onPreview={(u) => onPreview(u, `${dt.label} · ${t('componentes.documentos.reversoSufijo')}`)}
+                alt={`${dt.label} · ${t('componentes.documentos.reversoSufijo')}`}
+            />
+
+            {busy && <p className="text-xs text-slate-400 flex items-center gap-1"><Loader2 className="animate-spin" size={12} /> {t('componentes.documentos.guardando')}</p>}
+        </div>
+    );
+}
+
+// Una zona de archivo (anverso o reverso): miniatura con Cambiar/Quitar si hay
+// archivo, zona de subida si no. Cada una sube por su cuenta a /files/upload y
+// avisa la URL resultante; el padre decide en qué campo va.
+function FileSlot({
+    titulo, url, busy, compact, alt, onUploaded, onRemove, onPreview,
+}: {
+    titulo: string;
+    url?: string | null;
+    busy: boolean;
+    compact?: boolean;
+    alt: string;
+    onUploaded: (url: string) => void | Promise<void>;
+    onRemove: () => void;
+    onPreview: (url: string) => void;
+}) {
+    const t = useT();
+    const inputRef = useRef<HTMLInputElement>(null);
+    const [uploading, setUploading] = useState(false);
+    const [error, setError] = useState('');
+    const [thumbError, setThumbError] = useState(false);
+    const fileUrl = url || '';
+    const hasFile = !!fileUrl;
+    const thumbSrc = isPdf(fileUrl) ? pdfThumb(fileUrl) : fileUrl;
+    useEffect(() => { setThumbError(false); }, [fileUrl]);
+
+    const handleFile = async (file: File) => {
+        if (!file) return;
+        if (file.size > 5 * 1024 * 1024) { setError(t('componentes.documentos.maxTamano')); return; }
+        setError('');
+        setUploading(true);
+        try {
+            const fd = new FormData();
+            fd.append('file', file);
+            const res = await api.post('/files/upload', fd, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            await onUploaded(res.data.url);
+        } catch {
+            setError(t('componentes.documentos.errorSubir'));
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    return (
+        <div className="space-y-1.5">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{titulo}</p>
             {hasFile ? (
                 <div className="space-y-2">
                     <button type="button" onClick={() => onPreview(fileUrl)}
-                        className="relative w-full h-36 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 group">
+                        className={`relative w-full ${compact ? 'h-28' : 'h-36'} rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 group`}>
                         {thumbError ? (
                             <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-slate-400">
                                 <FileText size={28} /> <span className="text-xs">{t('componentes.documentos.documento')}</span>
                             </span>
                         ) : (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={thumbSrc} alt={dt.label} onError={() => setThumbError(true)}
+                            <img src={thumbSrc} alt={alt} onError={() => setThumbError(true)}
                                 className="w-full h-full object-cover object-top" />
                         )}
                         {isPdf(fileUrl) && (
@@ -318,24 +372,23 @@ function DocCard({
                     </button>
                     <div className="flex items-center gap-2">
                         <button type="button" onClick={() => inputRef.current?.click()} disabled={uploading || busy}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-50">
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition">
                             {uploading ? <Loader2 className="animate-spin" size={14} /> : <UploadCloud size={14} />} {t('componentes.documentos.cambiar')}
                         </button>
-                        <button type="button" onClick={() => onSave({ url: null })} disabled={busy}
-                            className="flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-500 hover:text-red-500 hover:border-red-200 transition disabled:opacity-50">
+                        <button type="button" onClick={onRemove} disabled={busy}
+                            className="flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-500 hover:text-red-600 hover:border-red-200 dark:hover:border-red-900/50 disabled:opacity-50 transition">
                             <Trash2 size={14} /> {t('componentes.documentos.quitar')}
                         </button>
                     </div>
                 </div>
             ) : (
                 <button type="button" onClick={() => inputRef.current?.click()} disabled={uploading || busy}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-500 hover:text-blue-600 hover:border-blue-400 transition text-sm font-medium disabled:opacity-50">
+                    className={`w-full flex items-center justify-center gap-2 ${compact ? 'py-2' : 'py-3'} rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-500 hover:text-blue-600 hover:border-blue-400 dark:hover:border-blue-500 text-xs font-medium disabled:opacity-50 transition`}>
                     {uploading ? <Loader2 className="animate-spin" size={16} /> : <UploadCloud size={16} />}
-                    {uploading ? t('componentes.documentos.subiendo') : t('componentes.documentos.subirPdf')}
+                    {uploading ? t('componentes.documentos.subiendo') : compact ? t('componentes.documentos.subirReverso') : t('componentes.documentos.subirPdf')}
                 </button>
             )}
             {error && <p className="text-xs text-red-500">{error}</p>}
-            {busy && !uploading && <p className="text-xs text-slate-400 flex items-center gap-1"><Loader2 className="animate-spin" size={12} /> {t('componentes.documentos.guardando')}</p>}
 
             <input ref={inputRef} type="file" accept="image/*,application/pdf" className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }} />

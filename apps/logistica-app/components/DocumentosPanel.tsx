@@ -24,6 +24,10 @@ const S = Theme.spacing;
 // Tipo de documento genérico (las listas por entidad viven en ./documentTypes).
 export interface DocType { key: string; label: string; sub: string; icon: LucideIcon; muted?: boolean; }
 
+// Cambios que puede pedir una casilla: anverso, reverso (null = quitar), fecha, candado.
+type SlotPatch = { url?: string | null; url_reverso?: string | null; fecha?: string | null; bloqueado?: boolean };
+type Lado = 'url' | 'url_reverso';
+
 // --- Previsualización -------------------------------------------------------
 const isPdf = (url?: string | null) => !!url && /\.pdf(\?|$)/i.test(url);
 // El almacenamiento es AWS S3 (no Cloudinary): las transformaciones de página de
@@ -118,26 +122,28 @@ export default function DocumentosPanel({ visible, onClose, entidad, entidadId, 
     if (visible) { setLoading(true); fetchDocs(); }
   }, [visible, fetchDocs]);
 
-  const saveSlot = async (dt: DocType, patch: { url?: string | null; fecha?: string | null; bloqueado?: boolean }) => {
+  const saveSlot = async (dt: DocType, patch: SlotPatch) => {
     const existing = docsByTipo[dt.key];
     const nextUrl = patch.url !== undefined ? patch.url : existing?.url ?? null;
+    const nextReverso = patch.url_reverso !== undefined ? patch.url_reverso : existing?.url_reverso ?? null;
     const nextFecha = patch.fecha !== undefined ? patch.fecha : (existing ? toDateInput(existing.fecha_vencimiento) : null);
     setBusy((b) => ({ ...b, [dt.key]: true }));
     try {
       if (existing) {
-        if (!nextUrl && !nextFecha && patch.bloqueado === undefined) {
+        // Sin anverso, sin reverso y sin fecha la casilla queda vacía: se borra la fila.
+        if (!nextUrl && !nextReverso && !nextFecha && patch.bloqueado === undefined) {
           await api.delete(`/documentos/${existing.id}`);
         } else {
           await api.patch(`/documentos/${existing.id}`, {
-            url: nextUrl, fecha_vencimiento: nextFecha || null,
+            url: nextUrl, url_reverso: nextReverso, fecha_vencimiento: nextFecha || null,
             ...(patch.bloqueado !== undefined ? { bloqueado: patch.bloqueado } : {}),
           });
         }
       } else {
-        if (!nextUrl && !nextFecha) return;
+        if (!nextUrl && !nextReverso && !nextFecha) return;
         await api.post('/documentos', {
           entidad, entidad_id: entidadId, tipo: dt.key,
-          nombre: dt.label, url: nextUrl, fecha_vencimiento: nextFecha || null,
+          nombre: dt.label, url: nextUrl, url_reverso: nextReverso, fecha_vencimiento: nextFecha || null,
         });
       }
       await fetchDocs();
@@ -163,7 +169,7 @@ export default function DocumentosPanel({ visible, onClose, entidad, entidadId, 
               chofer={chofer}
               styles={styles}
               onSave={(patch) => saveSlot(dt, patch)}
-              onPreview={(url) => setPreview({ url, label: dt.label })}
+              onPreview={(url, label) => setPreview({ url, label: label ?? dt.label })}
             />
           ))}
         </View>
@@ -184,19 +190,15 @@ function DocCard({
   busy: boolean;
   chofer?: boolean;
   styles: ReturnType<typeof makeStyles>;
-  onSave: (patch: { url?: string | null; fecha?: string | null; bloqueado?: boolean }) => void | Promise<void>;
-  onPreview: (url: string) => void;
+  onSave: (patch: SlotPatch) => void | Promise<void>;
+  onPreview: (url: string, label?: string) => void;
 }) {
   const Icon = dt.icon;
-  const [uploading, setUploading] = useState(false);
-  const [thumbError, setThumbError] = useState(false);
+  // Qué lado se está subiendo (para el spinner de esa zona y no de la otra).
+  const [uploading, setUploading] = useState<Lado | null>(null);
   const status = checkExpiration(doc?.fecha_vencimiento);
-  const fileUrl = doc?.url || '';
-  const hasFile = !!fileUrl;
-  // PDF en S3 (no Cloudinary): se previsualiza con WebView (iOS nativo / Android Google Docs).
-  const pdfS3 = isPdf(fileUrl) && !isCloudinary(fileUrl);
-  const thumbSrc = isPdf(fileUrl) ? pdfThumb(fileUrl) : fileUrl; // solo para imágenes / PDF de Cloudinary
-  useEffect(() => { setThumbError(false); }, [fileUrl]);
+  // "Tiene archivo" sigue siendo el anverso: es lo mínimo para confirmar.
+  const hasFile = !!doc?.url;
 
   // Candado del chofer: si el documento está bloqueado, es de solo lectura para él.
   const locked = !!chofer && !!doc?.bloqueado;
@@ -213,51 +215,52 @@ function DocCard({
     );
   };
 
-  const doUpload = async (asset: { uri: string; name: string; type: string }) => {
-    setUploading(true);
+  const doUpload = async (lado: Lado, asset: { uri: string; name: string; type: string }) => {
+    setUploading(lado);
     try {
       const url = await uploadAsset(asset);
-      await onSave({ url });
+      await onSave({ [lado]: url });
     } catch (e: any) {
       Alert.alert('Error', e?.response?.data?.message || 'No se pudo subir el archivo.');
     } finally {
-      setUploading(false);
+      setUploading(null);
     }
   };
 
-  const fromCamera = async () => {
+  const sufijo = (lado: Lado) => (lado === 'url_reverso' ? '_reverso' : '');
+  const fromCamera = async (lado: Lado) => {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) { Alert.alert('Permiso requerido', 'Necesitamos la cámara para escanear el documento.'); return; }
     const res = await ImagePicker.launchCameraAsync({ quality: 0.6 });
     if (!res.canceled && res.assets?.[0]) {
       const a = res.assets[0];
-      const name = a.fileName || `escaneo_${dt.key}.jpg`;
-      doUpload({ uri: a.uri, name, type: a.mimeType || 'image/jpeg' });
+      const name = a.fileName || `escaneo_${dt.key}${sufijo(lado)}.jpg`;
+      doUpload(lado, { uri: a.uri, name, type: a.mimeType || 'image/jpeg' });
     }
   };
-  const fromLibrary = async () => {
+  const fromLibrary = async (lado: Lado) => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) { Alert.alert('Permiso requerido', 'Necesitamos acceso a la galería.'); return; }
     const res = await ImagePicker.launchImageLibraryAsync({ quality: 0.6, mediaTypes: ImagePicker.MediaTypeOptions.Images });
     if (!res.canceled && res.assets?.[0]) {
       const a = res.assets[0];
-      const name = a.fileName || `imagen_${dt.key}.jpg`;
-      doUpload({ uri: a.uri, name, type: a.mimeType || 'image/jpeg' });
+      const name = a.fileName || `imagen_${dt.key}${sufijo(lado)}.jpg`;
+      doUpload(lado, { uri: a.uri, name, type: a.mimeType || 'image/jpeg' });
     }
   };
-  const fromDocument = async () => {
+  const fromDocument = async (lado: Lado) => {
     const res = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], copyToCacheDirectory: true });
     if (!res.canceled && res.assets?.[0]) {
       const a = res.assets[0];
-      doUpload({ uri: a.uri, name: a.name || `documento_${dt.key}.pdf`, type: a.mimeType || 'application/pdf' });
+      doUpload(lado, { uri: a.uri, name: a.name || `documento_${dt.key}${sufijo(lado)}.pdf`, type: a.mimeType || 'application/pdf' });
     }
   };
 
-  const pick = () => {
-    Alert.alert(dt.label, 'Adjuntar documento', [
-      { text: 'Tomar foto', onPress: fromCamera },
-      { text: 'Elegir de galería', onPress: fromLibrary },
-      { text: 'Archivo PDF', onPress: fromDocument },
+  const pick = (lado: Lado) => {
+    Alert.alert(lado === 'url' ? dt.label : `${dt.label} · Reverso`, 'Adjuntar documento', [
+      { text: 'Tomar foto', onPress: () => fromCamera(lado) },
+      { text: 'Elegir de galería', onPress: () => fromLibrary(lado) },
+      { text: 'Archivo PDF', onPress: () => fromDocument(lado) },
       { text: 'Cancelar', style: 'cancel' },
     ]);
   };
@@ -291,45 +294,31 @@ function DocCard({
         />
       )}
 
-      {/* Archivo */}
-      {hasFile ? (
-        <View style={{ gap: S.sm, marginTop: S.sm }}>
-          <TouchableOpacity activeOpacity={0.85} onPress={() => onPreview(fileUrl)} style={styles.thumbWrap}>
-            {thumbError ? (
-              <View style={styles.thumbFallback}>
-                <FileText size={28} color={isPdf(fileUrl) ? C.danger : C.textFaint} />
-                <Text style={styles.thumbFallbackText}>{isPdf(fileUrl) ? 'PDF adjuntado ✓' : 'Documento'}</Text>
-              </View>
-            ) : pdfS3 ? (
-              <PdfThumbView url={fileUrl} styles={styles} />
-            ) : (
-              <Image source={{ uri: thumbSrc }} style={styles.thumb} contentFit="cover" onError={() => setThumbError(true)} />
-            )}
-            {isPdf(fileUrl) && <View style={styles.pdfBadge}><Text style={styles.pdfBadgeText}>PDF</Text></View>}
-            <View style={styles.thumbOverlay}>
-              <Eye size={16} color="#fff" />
-              <Text style={styles.thumbOverlayText}>Previsualizar</Text>
-            </View>
-          </TouchableOpacity>
-          {!locked && (
-            <View style={{ flexDirection: 'row', gap: S.sm }}>
-              <TouchableOpacity onPress={pick} disabled={uploading || busy} style={[styles.smallBtn, { flex: 1 }]}>
-                {uploading ? <ActivityIndicator size="small" color={C.textMuted} /> : <UploadCloud size={15} color={C.textMuted} />}
-                <Text style={styles.smallBtnText}>Cambiar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => onSave({ url: null })} disabled={busy} style={styles.smallBtn}>
-                <Trash2 size={15} color={C.danger} />
-                <Text style={[styles.smallBtnText, { color: C.danger }]}>Quitar</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-      ) : !locked ? (
-        <TouchableOpacity onPress={pick} disabled={uploading || busy} style={styles.dropzone} activeOpacity={0.7}>
-          {uploading ? <ActivityIndicator color={C.primary} /> : <UploadCloud size={20} color={C.textFaint} />}
-          <Text style={styles.dropText}>{uploading ? 'Subiendo...' : 'Subir PDF o foto'}</Text>
-        </TouchableOpacity>
-      ) : null}
+      {/* Anverso y reverso: dos zonas independientes sobre la misma casilla. El
+          reverso es opcional (DNI, patente, libretto…) y no condiciona el candado. */}
+      <ArchivoSlot
+        titulo="Anverso"
+        url={doc?.url}
+        uploading={uploading === 'url'}
+        busy={busy || uploading !== null}
+        locked={locked}
+        styles={styles}
+        onPick={() => pick('url')}
+        onRemove={() => onSave({ url: null })}
+        onPreview={(u) => onPreview(u, dt.label)}
+      />
+      <ArchivoSlot
+        titulo="Reverso (opcional)"
+        url={doc?.url_reverso}
+        uploading={uploading === 'url_reverso'}
+        busy={busy || uploading !== null}
+        locked={locked}
+        styles={styles}
+        compact
+        onPick={() => pick('url_reverso')}
+        onRemove={() => onSave({ url_reverso: null })}
+        onPreview={(u) => onPreview(u, `${dt.label} · Reverso`)}
+      />
 
       {/* Nota de candado / botón de confirmar (modo chofer) */}
       {locked && (
@@ -348,11 +337,83 @@ function DocCard({
         <Text style={styles.confirmHint}>Sube el archivo y pon la fecha para poder confirmar.</Text>
       )}
 
-      {busy && !uploading && (
+      {busy && uploading === null && (
         <View style={styles.savingRow}>
           <ActivityIndicator size="small" color={C.textFaint} />
           <Text style={styles.savingText}>Guardando…</Text>
         </View>
+      )}
+    </View>
+  );
+}
+
+// Una zona de archivo (anverso o reverso): miniatura + Cambiar/Quitar si hay
+// archivo, zona de subida si no. Bloqueada y vacía no pinta nada (un reverso
+// que nunca se subió no tiene por qué ocupar espacio en un documento cerrado).
+function ArchivoSlot({
+  titulo, url, uploading, busy, locked, styles, compact, onPick, onRemove, onPreview,
+}: {
+  titulo: string;
+  url?: string | null;
+  uploading: boolean;
+  busy: boolean;
+  locked: boolean;
+  styles: ReturnType<typeof makeStyles>;
+  compact?: boolean;
+  onPick: () => void;
+  onRemove: () => void;
+  onPreview: (url: string) => void;
+}) {
+  const [thumbError, setThumbError] = useState(false);
+  const fileUrl = url || '';
+  const hasFile = !!fileUrl;
+  // PDF en S3 (no Cloudinary): se previsualiza con WebView (iOS nativo / Android Google Docs).
+  const pdfS3 = isPdf(fileUrl) && !isCloudinary(fileUrl);
+  const thumbSrc = isPdf(fileUrl) ? pdfThumb(fileUrl) : fileUrl; // solo para imágenes / PDF de Cloudinary
+  useEffect(() => { setThumbError(false); }, [fileUrl]);
+
+  if (!hasFile && locked) return null;
+
+  return (
+    <View style={{ marginTop: S.sm, gap: S.xs }}>
+      <Text style={{ fontSize: 11, fontWeight: '700', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.4 }}>{titulo}</Text>
+      {hasFile ? (
+        <View style={{ gap: S.sm }}>
+          <TouchableOpacity activeOpacity={0.85} onPress={() => onPreview(fileUrl)} style={[styles.thumbWrap, compact && { height: 110 }]}>
+            {thumbError ? (
+              <View style={styles.thumbFallback}>
+                <FileText size={28} color={isPdf(fileUrl) ? C.danger : C.textFaint} />
+                <Text style={styles.thumbFallbackText}>{isPdf(fileUrl) ? 'PDF adjuntado ✓' : 'Documento'}</Text>
+              </View>
+            ) : pdfS3 ? (
+              <PdfThumbView url={fileUrl} styles={styles} />
+            ) : (
+              <Image source={{ uri: thumbSrc }} style={styles.thumb} contentFit="cover" onError={() => setThumbError(true)} />
+            )}
+            {isPdf(fileUrl) && <View style={styles.pdfBadge}><Text style={styles.pdfBadgeText}>PDF</Text></View>}
+            <View style={styles.thumbOverlay}>
+              <Eye size={16} color="#fff" />
+              <Text style={styles.thumbOverlayText}>Previsualizar</Text>
+            </View>
+          </TouchableOpacity>
+          {!locked && (
+            <View style={{ flexDirection: 'row', gap: S.sm }}>
+              <TouchableOpacity onPress={onPick} disabled={busy} style={[styles.smallBtn, { flex: 1 }]}>
+                {uploading ? <ActivityIndicator size="small" color={C.textMuted} /> : <UploadCloud size={15} color={C.textMuted} />}
+                <Text style={styles.smallBtnText}>Cambiar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={onRemove} disabled={busy} style={styles.smallBtn}>
+                <Trash2 size={15} color={C.danger} />
+                <Text style={[styles.smallBtnText, { color: C.danger }]}>Quitar</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      ) : (
+        <TouchableOpacity onPress={onPick} disabled={busy} style={[styles.dropzone, compact && { paddingVertical: 12 }]} activeOpacity={0.7}>
+          {uploading ? <ActivityIndicator color={C.primary} /> : <UploadCloud size={compact ? 16 : 20} color={C.textFaint} />}
+          <Text style={styles.dropText}>{uploading ? 'Subiendo...' : compact ? 'Subir reverso' : 'Subir PDF o foto'}</Text>
+        </TouchableOpacity>
       )}
     </View>
   );

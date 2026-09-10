@@ -371,6 +371,9 @@ model Documento {
   nombre      String?
   url         String? // URL de Cloudinary (imagen o PDF). Opcional: se puede
                       // registrar solo la fecha de vencimiento antes de subir el escaneo.
+  // Reverso del mismo documento (DNI, patente, libretto…). Va en la misma fila
+  // porque comparte vencimiento, candado y alertas con el anverso. Opcional.
+  url_reverso String?
   fecha_vencimiento DateTime?
   // Candado del auto-servicio del chofer: cuando el chofer sube/confirma su
   // documento, queda BLOQUEADO y solo el supervisor puede renovarlo/editarlo.

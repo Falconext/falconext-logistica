@@ -23,6 +23,7 @@ export class DocumentosService {
                 tipo: data.tipo,
                 nombre: data.nombre,
                 url: data.url ?? null,
+                url_reverso: data.url_reverso ?? null,
                 fecha_vencimiento: data.fecha_vencimiento ? new Date(data.fecha_vencimiento) : null,
                 bloqueado: false,
                 tenant_id: tenantId,
@@ -52,6 +53,7 @@ export class DocumentosService {
         if (data.tipo !== undefined) patch.tipo = data.tipo;
         if (data.nombre !== undefined) patch.nombre = data.nombre;
         if (data.url !== undefined) patch.url = data.url ?? null;
+        if (data.url_reverso !== undefined) patch.url_reverso = data.url_reverso ?? null;
         if (data.fecha_vencimiento !== undefined) {
             patch.fecha_vencimiento = data.fecha_vencimiento ? new Date(data.fecha_vencimiento) : null;
         }

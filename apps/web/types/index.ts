@@ -60,6 +60,7 @@ export interface Documento {
     tipo: string;
     nombre?: string;
     url?: string | null;
+    url_reverso?: string | null; // reverso del mismo documento (opcional)
     fecha_vencimiento?: string;
 }
 
