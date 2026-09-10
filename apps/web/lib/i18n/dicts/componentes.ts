@@ -56,6 +56,12 @@ export const es = {
         buscar: 'Buscar...',
         sinResultados: 'Sin resultados',
     },
+    autoScroll: {
+        titulo: 'Desplazamiento rápido',
+        inicio: 'Ir al inicio',
+        fin: 'Ir al final',
+        aria: 'Desplazar tabla horizontalmente',
+    },
     fileUpload: {
         subirArchivo: 'Subir archivo',
         errorTamano: 'El archivo supera 5MB',
@@ -238,6 +244,12 @@ export const it: typeof es = {
         placeholder: 'Seleziona...',
         buscar: 'Cerca...',
         sinResultados: 'Nessun risultato',
+    },
+    autoScroll: {
+        titulo: 'Scorrimento rapido',
+        inicio: 'Vai all\'inizio',
+        fin: 'Vai alla fine',
+        aria: 'Scorri la tabella orizzontalmente',
     },
     fileUpload: {
         subirArchivo: 'Carica file',

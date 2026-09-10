@@ -14,6 +14,9 @@ import { useT } from '../../lib/i18n';
 import { useCurrency } from '../../lib/useCurrency';
 import { useAuthStore } from '../../lib/store';
 import { SPEDIZIONE_OPTIONS } from '../operaciones/constants';
+import DatePicker from '../../components/DatePicker';
+import Select from '../../components/Select';
+import AutoScrollTable from '../../components/AutoScrollTable';
 
 interface FilaFinanciero {
     id: string;
@@ -204,30 +207,33 @@ export default function FinanzasPage() {
             </div>
 
             {/* Filtros */}
-            <div className="flex flex-col md:flex-row md:items-center gap-3 flex-wrap">
-                <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 dark:border-slate-700 px-2 py-1.5">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase">{t('finanzas.filtros.desde')}</span>
-                    <input type="date" value={fFrom} onChange={(e) => setFFrom(e.target.value)} className="bg-transparent text-sm text-slate-700 dark:text-slate-200 outline-none" />
-                </div>
-                <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 dark:border-slate-700 px-2 py-1.5">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase">{t('finanzas.filtros.hasta')}</span>
-                    <input type="date" value={fTo} onChange={(e) => setFTo(e.target.value)} className="bg-transparent text-sm text-slate-700 dark:text-slate-200 outline-none" />
-                </div>
+            {/* Filtros: mismos DatePicker/Select del resto del panel (no los nativos del navegador). */}
+            <div className="flex flex-col md:flex-row md:items-end gap-3 flex-wrap">
+                <DatePicker label={t('finanzas.filtros.desde')} value={fFrom} onChange={setFFrom} clearable={false} className="w-full md:w-44" />
+                <DatePicker label={t('finanzas.filtros.hasta')} value={fTo} onChange={setFTo} clearable={false} className="w-full md:w-44" />
                 <div className="relative">
                     <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input value={fCliente} onChange={(e) => setFCliente(e.target.value)} placeholder={t('finanzas.filtros.cliente')}
                         className="pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-800 dark:text-slate-200 w-full md:w-56" />
                 </div>
-                <select value={fSpedizione} onChange={(e) => setFSpedizione(e.target.value)}
-                    className="px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-200">
-                    <option value="">{t('finanzas.filtros.todas')}</option>
-                    {SPEDIZIONE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-                <select value={fTrabajador} onChange={(e) => setFTrabajador(e.target.value)}
-                    className="px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-200">
-                    <option value="">{t('finanzas.filtros.todos')}</option>
-                    {trabajadores.map((w) => <option key={w.id} value={w.id}>{w.nombre_completo}</option>)}
-                </select>
+                <Select
+                    label={t('finanzas.col.spedizione')}
+                    value={fSpedizione}
+                    onChange={setFSpedizione}
+                    options={SPEDIZIONE_OPTIONS}
+                    placeholder={t('finanzas.filtros.todas')}
+                    clearable
+                    className="w-full md:w-52"
+                />
+                <Select
+                    label={t('finanzas.col.autista')}
+                    value={fTrabajador}
+                    onChange={setFTrabajador}
+                    options={trabajadores.map((w) => ({ value: w.id, label: w.nombre_completo }))}
+                    placeholder={t('finanzas.filtros.todos')}
+                    clearable
+                    className="w-full md:w-60"
+                />
             </div>
 
             {/* Tabla */}
@@ -235,7 +241,7 @@ export default function FinanzasPage() {
                 {loading ? (
                     <div className="py-16 flex justify-center"><div className="h-9 w-9 rounded-full border-4 border-amber-500/30 border-t-amber-500 animate-spin" /></div>
                 ) : (
-                    <div className="overflow-x-auto">
+                    <AutoScrollTable>
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b border-slate-100 dark:border-slate-800">
@@ -315,7 +321,7 @@ export default function FinanzasPage() {
                                 )}
                             </tbody>
                         </table>
-                    </div>
+                    </AutoScrollTable>
                 )}
             </div>
         </div>

@@ -1,0 +1,69 @@
+/* Portado de vendify-pos (components/Autoscrolltable). Contenedor con scroll
+   horizontal + scrubber sincronizado; la barra de controles flota cuando el
+   pie de la tabla queda por debajo del viewport. */
+.autoScrollTable {
+    position: relative;
+}
+
+.tableContainer {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: visible;
+    white-space: nowrap;
+    scroll-behavior: auto;
+}
+
+.scrubber {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    border-radius: 9999px;
+    background: #e5e7eb;
+    cursor: pointer;
+    outline: none;
+}
+:global(.dark) .scrubber {
+    background: #334155;
+}
+.scrubber::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 9999px;
+    background: #2563eb;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    cursor: grab;
+}
+.scrubber::-webkit-slider-thumb:active {
+    cursor: grabbing;
+}
+.scrubber::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 9999px;
+    background: #2563eb;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    cursor: grab;
+}
+
+.tableContainer::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+}
+.tableContainer::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+:global(.dark) .tableContainer::-webkit-scrollbar-track {
+    background: #1e293b;
+}
+.tableContainer::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+.tableContainer::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
