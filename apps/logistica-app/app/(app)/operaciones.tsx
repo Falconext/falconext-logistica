@@ -123,7 +123,7 @@ const monthRangeISO = () => {
   };
 };
 
-type GastoRow = { tipo: string; monto: string; descripcion: string; numero_mancato: string; comprobantes: string[]; pagado_por_chofer: boolean };
+type GastoRow = { id?: string | null; tipo: string; monto: string; descripcion: string; numero_mancato: string; comprobantes: string[]; pagado_por_chofer: boolean };
 
 // Fecha/hora de un retiro adicional (paralelo a `retiros[]` por índice).
 type RetiroDetalleRow = { fecha: string; hora: string };
@@ -606,6 +606,7 @@ export default function OperacionesScreen() {
     anticipo: src.anticipo != null ? String(src.anticipo) : '',
     abonos_ruta: Number(src.abonos_ruta) || 0,
     gastos: Array.isArray(src.gastos) ? src.gastos.map((g: any) => ({
+      id: typeof g.id === 'string' ? g.id : null,
       tipo: g.tipo || 'OTRO',
       monto: g.monto != null ? String(g.monto) : '',
       descripcion: g.descripcion || '',
@@ -783,6 +784,7 @@ export default function OperacionesScreen() {
         gastos: form.gastos
           .filter((g) => g.tipo && (g.monto !== '' || g.comprobantes.length || g.descripcion || g.numero_mancato))
           .map((g) => ({
+            id: g.id ?? null,
             tipo: g.tipo,
             monto: g.monto !== '' ? Number(g.monto) : 0,
             descripcion: g.descripcion || null,

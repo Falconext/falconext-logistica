@@ -14,7 +14,9 @@ import { useGoogleMaps } from '../../components/tracking/googleMaps';
 import { fmtMin } from '../../components/tracking/MapboxRouteMap';
 
 // Fila de gasto en el formulario (monto como string para el input).
-type GastoRow = { tipo: string; monto: string; descripcion: string; numero_mancato: string; link_peaje: string; comprobantes: string[]; pagado_por_chofer: boolean };
+// `id`: fila existente cargada del detalle; se devuelve al guardar para que el backend
+// empareje exacto y sepa que omitirla es un borrado deliberado (protege recibos).
+type GastoRow = { id?: string | null; tipo: string; monto: string; descripcion: string; numero_mancato: string; link_peaje: string; comprobantes: string[]; pagado_por_chofer: boolean };
 
 // Fecha/hora de un retiro adicional (paralelo a `retiros[]` por índice).
 type RetiroDetalleRow = { fecha: string; hora: string };
@@ -289,6 +291,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 foto_bolla: Array.isArray(src.foto_bolla) ? src.foto_bolla : (src.foto_bolla ? [src.foto_bolla] : []),
                 anticipo: src.anticipo != null ? String(src.anticipo) : '',
                 gastos: Array.isArray(src.gastos) ? src.gastos.map((g: any) => ({
+                    id: typeof g.id === 'string' ? g.id : null,
                     tipo: g.tipo || 'OTRO',
                     monto: g.monto != null ? String(g.monto) : '',
                     descripcion: g.descripcion || '',
@@ -436,6 +439,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 gastos: formData.gastos
                     .filter((g) => g.tipo && (g.monto !== '' || g.comprobantes.length || g.descripcion || g.numero_mancato || g.link_peaje))
                     .map((g) => ({
+                        id: g.id ?? null,
                         tipo: g.tipo,
                         monto: g.monto !== '' ? Number(g.monto) : 0,
                         descripcion: g.descripcion || null,

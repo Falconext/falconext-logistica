@@ -35,6 +35,10 @@ export type GastoExistente = {
 };
 
 export type GastoEntrante = {
+    /** id del GastoOperacion existente cuando el cliente cargó el detalle completo
+     *  (web y app lo mandan de vuelta). Permite emparejar con exactitud y es la
+     *  prueba de que una omisión en la lista es un borrado deliberado. */
+    id?: string | null;
     fecha_limite_pago?: Date | null; // plazo de pago del mancato (solo PEAJE, al crear)
     programacion_id: string;
     tipo: string;
@@ -102,6 +106,8 @@ export function planificarSyncGastos(
         }
     };
 
+    // 0) mismo id (el cliente cargó el detalle y devolvió la fila tal cual)
+    emparejar((ex, inc) => !!inc.id && ex.id === inc.id);
     // 1) misma parada + misma clave
     emparejar((ex, inc) => !!inc.parada_id && ex.parada_id === inc.parada_id && claveDe(ex) === claveDe(inc));
     // 2) misma clave, sin importar la parada (filas viejas sin parada_id, rendición de cierre, etc.)
@@ -116,6 +122,20 @@ export function planificarSyncGastos(
     };
 }
 
+/**
+ * Regla de borrado que protege los recibos. Un gasto existente sin pareja se
+ * borra si NO tiene comprobante, o si el cliente demostró que mandó la lista
+ * completa (alguna fila entrante trae `id`): en ese caso omitirlo fue un
+ * "Quitar gasto" deliberado. Si el cliente mandó filas sin ids (versión vieja de
+ * la app, lista parcial, formulario cargado a medias), los gastos con recibo se
+ * conservan aunque no vengan: perder un recibo rendido es peor que dejar un
+ * gasto de más, que el supervisor puede quitar a mano.
+ */
+export function borradoProtegiendoRecibos(entrantes: GastoEntrante[]): (row: GastoExistente) => boolean {
+    const clienteMandoIds = entrantes.some((e) => !!e.id);
+    return (row) => !(row.comprobantes && row.comprobantes.length) || clienteMandoIds;
+}
+
 /** Campos que hay que leer de GastoOperacion para poder planificar la fusión. */
 export const GASTO_SYNC_SELECT = {
     id: true, tipo: true, monto: true, fecha: true, descripcion: true, numero_mancato: true,
@@ -126,7 +146,8 @@ export const GASTO_SYNC_SELECT = {
 /** Aplica el plan en una sola transacción. `prisma` es el PrismaService/PrismaClient. */
 export async function aplicarPlanGastos(prisma: any, plan: PlanGastos): Promise<void> {
     const limpiar = (g: Partial<GastoEntrante>) => {
-        const { fecha_explicita, ...data } = g;
+        // `id` es solo para emparejar: nunca se escribe (crear con un id ajeno chocaría).
+        const { fecha_explicita, id, ...data } = g;
         return data;
     };
     const ops: any[] = [];

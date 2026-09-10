@@ -30,6 +30,14 @@ interface FilaFinanciero {
     km_facturable?: number | null;
     ingreso: number | null;
     costo_chofer: number;
+    // Desglose del costo (el backend lo manda desde esta versión; opcional por
+    // si el panel corre contra una API vieja).
+    gastos_chofer?: number;
+    pago_horas?: number;
+    pago_reperibilita?: number;
+    pago_attesa?: number;
+    horas_dia?: number;
+    horas_noche?: number;
     rentabilidad: number | null;
     rentabilidad_pct: number | null;
 }
@@ -39,6 +47,7 @@ interface Resumen {
     operaciones_con_ingreso: number;
     ingreso: number;
     costo: number;
+    gastos?: number;
     rentabilidad: number;
     rentabilidad_pct: number | null;
 }
@@ -140,7 +149,9 @@ export default function FinanzasPage() {
             Categoria: it.vehiculo_categoria ? (CATEGORIA_LABEL[it.vehiculo_categoria] || it.vehiculo_categoria) : '',
             'Km ida': it.km_facturable ?? '',
             Ingreso: it.ingreso ?? '',
-            Gastado: it.costo_chofer,
+            'Gastos rendidos': it.gastos_chofer ?? '',
+            'Horas manejo': it.pago_horas != null ? Number((Number(it.horas_dia ?? 0) + Number(it.horas_noche ?? 0)).toFixed(2)) : '',
+            'Costo chofer': it.costo_chofer,
             Rentabilidad: it.rentabilidad ?? '',
             'Rentabilidad %': it.rentabilidad_pct ?? '',
         }));
@@ -195,6 +206,7 @@ export default function FinanzasPage() {
                 <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
                     <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase"><TrendingDown size={14} /> {t('finanzas.kpi.costo')}</div>
                     <div className="text-xl font-extrabold text-slate-900 dark:text-white mt-1">{format(data?.resumen.costo ?? 0)}</div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">{t('finanzas.kpi.gastos')}: {format(data?.resumen.gastos ?? 0)}</div>
                 </div>
                 <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
                     <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase"><TrendingUp size={14} /> {t('finanzas.kpi.rentabilidad')}</div>
@@ -253,7 +265,8 @@ export default function FinanzasPage() {
                                     <th className={thCls}>{t('finanzas.col.vehiculo')}</th>
                                     <th className={`${thCls} text-right`}>{t('finanzas.col.km')}</th>
                                     <th className={`${thCls} text-right`}>{t('finanzas.col.ingreso')}</th>
-                                    <th className={`${thCls} text-right`}>{t('finanzas.col.gastado')}</th>
+                                    <th className={`${thCls} text-right`} title={t('finanzas.gastosTip')}>{t('finanzas.col.gastos')}</th>
+                                    <th className={`${thCls} text-right`}>{t('finanzas.col.costoChofer')}</th>
                                     <th className={`${thCls} text-right`}>{t('finanzas.col.rentabilidad')}</th>
                                     <th className={`${thCls} text-right`}>{t('finanzas.col.rentabilidadPct')}</th>
                                     <th className={`${thCls} text-right`}>{t('finanzas.col.acciones')}</th>
@@ -261,11 +274,12 @@ export default function FinanzasPage() {
                             </thead>
                             <tbody>
                                 {grupos.length === 0 && (
-                                    <tr><td colSpan={12} className="px-4 py-10 text-center text-sm text-slate-400">{t('finanzas.vacio')}</td></tr>
+                                    <tr><td colSpan={13} className="px-4 py-10 text-center text-sm text-slate-400">{t('finanzas.vacio')}</td></tr>
                                 )}
                                 {grupos.map(([fecha, filas]) => {
                                     const subIngreso = filas.reduce((s, f) => s + (f.ingreso ?? 0), 0);
                                     const subCosto = filas.reduce((s, f) => s + f.costo_chofer, 0);
+                                                    const subGastos = filas.reduce((s, f) => s + (f.gastos_chofer ?? 0), 0);
                                     const subRent = filas.reduce((s, f) => s + (f.rentabilidad ?? 0), 0);
                                     return (
                                         <Fragment key={fecha}>
@@ -282,7 +296,16 @@ export default function FinanzasPage() {
                                                     </td>
                                                     <td className={`${tdCls} text-right`}>{it.km_facturable ?? '—'}</td>
                                                     <td className={`${tdCls} text-right`}>{it.ingreso != null ? format(it.ingreso) : <span className="text-slate-300 dark:text-slate-600">{t('finanzas.sinIngreso')}</span>}</td>
-                                                    <td className={`${tdCls} text-right`}>{format(it.costo_chofer)}</td>
+                                                    <td className={`${tdCls} text-right`}>{it.gastos_chofer != null ? format(it.gastos_chofer) : '—'}</td>
+                                                    <td
+                                                        className={`${tdCls} text-right`}
+                                                        title={it.pago_horas != null ? t('finanzas.costoTip', {
+                                                            horas: format(it.pago_horas ?? 0), rep: format(it.pago_reperibilita ?? 0),
+                                                            att: format(it.pago_attesa ?? 0), gastos: format(it.gastos_chofer ?? 0),
+                                                        }) : undefined}
+                                                    >
+                                                        {format(it.costo_chofer)}
+                                                    </td>
                                                     <td className={`${tdCls} text-right font-semibold ${it.rentabilidad == null ? '' : it.rentabilidad < 0 ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
                                                         {it.rentabilidad != null ? format(it.rentabilidad) : '—'}
                                                     </td>
@@ -301,6 +324,7 @@ export default function FinanzasPage() {
                                             <tr className="bg-slate-50 dark:bg-slate-800/60 text-xs font-bold">
                                                 <td className={tdCls} colSpan={7}>{fmtFecha(fecha)} · {t('finanzas.totales')}</td>
                                                 <td className={`${tdCls} text-right`}>{format(subIngreso)}</td>
+                                                <td className={`${tdCls} text-right`}>{format(subGastos)}</td>
                                                 <td className={`${tdCls} text-right`}>{format(subCosto)}</td>
                                                 <td className={`${tdCls} text-right ${subRent < 0 ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>{format(subRent)}</td>
                                                 <td className={tdCls}></td>
@@ -313,6 +337,7 @@ export default function FinanzasPage() {
                                     <tr className="bg-slate-100 dark:bg-slate-800 font-bold border-t-2 border-slate-200 dark:border-slate-700">
                                         <td className={`${tdCls} font-bold text-slate-900 dark:text-white`} colSpan={7}>{t('finanzas.totales')}</td>
                                         <td className={`${tdCls} text-right`}>{format(data.resumen.ingreso)}</td>
+                                        <td className={`${tdCls} text-right`}>{format(data.resumen.gastos ?? 0)}</td>
                                         <td className={`${tdCls} text-right`}>{format(data.resumen.costo)}</td>
                                         <td className={`${tdCls} text-right ${data.resumen.rentabilidad < 0 ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>{format(data.resumen.rentabilidad)}</td>
                                         <td className={`${tdCls} text-right`}>{pctFmt(data.resumen.rentabilidad_pct)}</td>

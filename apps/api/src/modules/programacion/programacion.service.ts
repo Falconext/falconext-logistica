@@ -1,6 +1,6 @@
 
 import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { GASTO_SYNC_SELECT, aplicarPlanGastos, planificarSyncGastos } from '../../common/gastos-sync.util';
+import { GASTO_SYNC_SELECT, aplicarPlanGastos, borradoProtegiendoRecibos, planificarSyncGastos } from '../../common/gastos-sync.util';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { fechaLimitePago } from '../../common/plazo-pago.util';
@@ -301,6 +301,15 @@ export class ProgramacionService {
                 km_facturable: op.km_facturable ?? null,
                 ingreso: ingresoPrincipal,
                 costo_chofer: costoTotal,
+                // Desglose del costo: lo que el chofer puso de su bolsillo (con recibo)
+                // separado de lo que se le paga por horas/reperibilità/attesa. En el
+                // panel se mostraban juntos como "Gastado" y se leían como recibos.
+                gastos_chofer: costos[i].gastos_chofer,
+                pago_horas: costos[i].pago_horas,
+                pago_reperibilita: costos[i].pago_reperibilita,
+                pago_attesa: costos[i].pago_attesa,
+                horas_dia: costos[i].horas_dia,
+                horas_noche: costos[i].horas_noche,
                 rentabilidad: rentabilidadPrincipal,
                 rentabilidad_pct: rentabilidadPctPrincipal,
                 compactado: !!op.compactado,
@@ -326,6 +335,12 @@ export class ProgramacionService {
                         km_facturable: d.km_facturable != null ? Number(d.km_facturable) : null,
                         ingreso: ingresoD,
                         costo_chofer: 0,
+                        gastos_chofer: 0,
+                        pago_horas: 0,
+                        pago_reperibilita: 0,
+                        pago_attesa: 0,
+                        horas_dia: 0,
+                        horas_noche: 0,
                         rentabilidad: null as number | null,
                         rentabilidad_pct: null as number | null,
                         compactado: true,
@@ -336,10 +351,11 @@ export class ProgramacionService {
             return [filaPrincipal, ...filasExtra];
         });
 
-        let sumIngreso = 0, sumCosto = 0, sumRentabilidad = 0, conIngreso = 0;
+        let sumIngreso = 0, sumCosto = 0, sumGastos = 0, sumRentabilidad = 0, conIngreso = 0;
         const porDiaMap = new Map<string, { fecha: string; ingreso: number; costo: number; rentabilidad: number; operaciones: number }>();
         for (const it of items) {
             sumCosto += it.costo_chofer;
+            sumGastos += it.gastos_chofer;
             const key = new Date(it.fecha).toISOString().slice(0, 10);
             if (!porDiaMap.has(key)) porDiaMap.set(key, { fecha: key, ingreso: 0, costo: 0, rentabilidad: 0, operaciones: 0 });
             const d = porDiaMap.get(key)!;
@@ -365,6 +381,7 @@ export class ProgramacionService {
                 operaciones_con_ingreso: conIngreso,
                 ingreso: round2(sumIngreso),
                 costo: round2(sumCosto),
+                gastos: round2(sumGastos),
                 rentabilidad: round2(sumRentabilidad),
                 rentabilidad_pct: sumIngreso > 0 ? round2((sumRentabilidad / sumIngreso) * 100) : null,
             },
@@ -442,6 +459,7 @@ export class ProgramacionService {
     private normalizeGasto(g: any, op: { id: string; trabajador_id?: string | null; vehiculo_id?: string | null; fecha?: Date | null; fecha_retiro?: Date | null; fecha_entrega?: Date | null }, tenantId: string) {
         const fechaGasto: Date = g.fecha ? new Date(g.fecha) : (op.fecha_entrega || op.fecha_retiro || op.fecha || new Date());
         return {
+            id: typeof g.id === 'string' && g.id ? g.id : null,
             programacion_id: op.id,
             tipo: String(g.tipo || 'OTRO'),
             monto: g.monto != null && g.monto !== '' ? Number(g.monto) : 0,
@@ -659,7 +677,7 @@ export class ProgramacionService {
                 where: { programacion_id: id }, select: GASTO_SYNC_SELECT, orderBy: { creado_en: 'asc' },
             });
             const entrantes = Array.isArray(gastos) ? gastos.map((g) => this.normalizeGasto(g, updated, updated.tenant_id)) : [];
-            await aplicarPlanGastos(this.prisma, planificarSyncGastos(existentes, entrantes, () => true));
+            await aplicarPlanGastos(this.prisma, planificarSyncGastos(existentes, entrantes, borradoProtegiendoRecibos(entrantes)));
         }
         return this.findOne(id);
     }
