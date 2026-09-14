@@ -18,6 +18,7 @@ import api from '../../lib/api';
 import FileUpload from '../../components/FileUpload';
 import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
+import OperacionPicker from './OperacionPicker';
 import { useCurrency } from '../../lib/useCurrency';
 import { useAuthStore } from '../../lib/store';
 
@@ -66,6 +67,9 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
     const [formData, setFormData] = useState(emptyForm());
     // Mientras el usuario no toque la fecha límite a mano, sigue a la fecha (+14 días).
     const [limiteManual, setLimiteManual] = useState(false);
+    // Operación a la que se vincula el peaje (opcional). Solo al CREAR: un peaje
+    // ya guardado se vincula desde su detalle (botón "Vincular a operación").
+    const [programacionId, setProgramacionId] = useState('');
 
     useEffect(() => {
         if (!isOpen) return;
@@ -95,6 +99,7 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
         } else {
             setFormData(emptyForm());
         }
+        setProgramacionId('');
     }, [isOpen, record]);
 
     // El chofer/autista no elige conductor: es él mismo (dueño de la cuenta). Resolvemos
@@ -117,7 +122,9 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
                 const payload = isAdmin ? formData : (({ estado, ...rest }) => rest)(formData);
                 await api.patch(`/peajes/${record.id}`, payload);
             } else {
-                await api.post('/peajes', formData);
+                // Con operación elegida el backend lo guarda como gasto de esa
+                // operación (entra a costos y reporte), no como peaje suelto.
+                await api.post('/peajes', programacionId ? { ...formData, programacion_id: programacionId } : formData);
             }
             onSuccess();
             onClose();
@@ -182,6 +189,17 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
                                         label: w.nombre || w.nombre_completo || w.id,
                                     }))} />
                             </div>
+                        )}
+
+                        {!isEdit && (
+                            <OperacionPicker
+                                className="sm:col-span-2"
+                                value={programacionId}
+                                onChange={setProgramacionId}
+                                trabajadorId={formData.trabajador_id || undefined}
+                                targa={formData.targa || undefined}
+                                fecha={formData.fecha || undefined}
+                            />
                         )}
 
                         <div className="space-y-2">

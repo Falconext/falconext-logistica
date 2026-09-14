@@ -263,7 +263,7 @@ export default function PeajesPage() {
             </div>
 
             <PeajeModal isOpen={isModalOpen} onClose={closeModal} onSuccess={fetchItems} record={editing} />
-            <PeajeDetailModal item={viewing} onClose={() => setViewing(null)} />
+            <PeajeDetailModal item={viewing} onClose={() => setViewing(null)} canVincular={canEdit} onVinculado={fetchItems} />
             <GastoSustentoModal item={sustentando} tipo="PEAJE" onClose={() => setSustentando(null)} onSaved={fetchItems} />
 
             {/* Search */}

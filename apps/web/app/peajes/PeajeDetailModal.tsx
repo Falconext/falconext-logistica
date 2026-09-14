@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ExternalLink, Paperclip } from 'lucide-react';
+import { X, ExternalLink, Paperclip, Link2, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+import api from '../../lib/api';
+import OperacionPicker from './OperacionPicker';
 import { useCurrency } from '../../lib/useCurrency';
 import { useT, useDateLocale } from '../../lib/i18n';
 
@@ -18,6 +21,10 @@ const sumarDiasIso = (iso?: string | null, dias = 14): string | null => {
 interface PeajeDetailModalProps {
     item: any | null;
     onClose: () => void;
+    // Supervisores/admin pueden vincular un peaje suelto a una operación desde
+    // aquí. Al terminar se avisa al padre para que recargue la lista.
+    canVincular?: boolean;
+    onVinculado?: () => void;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -29,8 +36,26 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     );
 }
 
-export default function PeajeDetailModal({ item, onClose }: PeajeDetailModalProps) {
+export default function PeajeDetailModal({ item, onClose, canVincular = false, onVinculado }: PeajeDetailModalProps) {
     const t = useT();
+    const [vincOpen, setVincOpen] = useState(false);
+    const [vincOp, setVincOp] = useState('');
+    const [vinculando, setVinculando] = useState(false);
+    const esSuelto = !!item && item._origen !== 'operacion';
+    const vincular = async () => {
+        if (!item || !vincOp) return;
+        setVinculando(true);
+        try {
+            await api.post(`/peajes/${item.id}/vincular`, { programacion_id: vincOp });
+            toast.success(t('peajes.vincular.toastOk'));
+            onVinculado?.();
+            onClose();
+        } catch (err: any) {
+            toast.error(err?.response?.data?.message || t('peajes.vincular.toastError'));
+        } finally {
+            setVinculando(false);
+        }
+    };
     const dateLocale = useDateLocale();
     const { format } = useCurrency();
     // Portal a <body>: sin esto el modal queda acotado al <main overflow-y-auto>
@@ -84,6 +109,42 @@ export default function PeajeDetailModal({ item, onClose }: PeajeDetailModalProp
                             ) : '—'}
                         </Field>
                     </div>
+
+                    {/* Vincular a operación: solo peajes sueltos y solo quien puede editar.
+                        Un peaje de operación ya está vinculado (chip "Desde operación"). */}
+                    {canVincular && esSuelto && (
+                        <div className="rounded-xl border border-dashed border-blue-200 dark:border-blue-500/30 bg-blue-50/50 dark:bg-blue-500/5 p-3.5">
+                            {!vincOpen ? (
+                                <button
+                                    onClick={() => setVincOpen(true)}
+                                    className="w-full flex items-center justify-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-300 hover:underline"
+                                >
+                                    <Link2 size={15} /> {t('peajes.vincular.boton')}
+                                </button>
+                            ) : (
+                                <div className="space-y-3">
+                                    <OperacionPicker
+                                        value={vincOp}
+                                        onChange={setVincOp}
+                                        trabajadorId={item.trabajador_id || undefined}
+                                        targa={item.targa || undefined}
+                                        fecha={item.fecha ? new Date(item.fecha).toISOString().split('T')[0] : undefined}
+                                    />
+                                    <div className="flex gap-2">
+                                        <button onClick={() => { setVincOpen(false); setVincOp(''); }} disabled={vinculando}
+                                            className="flex-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 transition disabled:opacity-50">
+                                            {t('peajes.cancelar')}
+                                        </button>
+                                        <button onClick={vincular} disabled={!vincOp || vinculando}
+                                            className="flex-1 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition disabled:opacity-50 flex items-center justify-center gap-2">
+                                            {vinculando ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />}
+                                            {t('peajes.vincular.confirmar')}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {item.comentarios && (
                         <Field label={t('peajes.columnas.comentario')}>{item.comentarios}</Field>
