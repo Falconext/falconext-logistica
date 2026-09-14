@@ -110,6 +110,7 @@ export const es = {
         conUbicacion: '{count} con ubicación · {total} dispositivos',
         buscarPlaceholder: 'Buscar chofer o placa',
         sinChoferes: 'Sin choferes con ubicación aún.',
+        centrarFlota: 'Centrar flota',
     },
     geofences: {
         configurarMapa: 'Configura NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.',
@@ -186,6 +187,7 @@ export const es = {
         ubicados: '· {count} ubicados',
         abrirRastreo: 'Abrir rastreo completo',
         sinUbicaciones: 'Sin ubicaciones de flota aún',
+        centrarFlota: 'Centrar flota',
     },
 };
 
@@ -299,6 +301,7 @@ export const it: typeof es = {
         conUbicacion: '{count} con posizione · {total} dispositivi',
         buscarPlaceholder: 'Cerca autista o targa',
         sinChoferes: 'Ancora nessun autista con posizione.',
+        centrarFlota: 'Centra flotta',
     },
     geofences: {
         configurarMapa: 'Configura NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.',
@@ -375,5 +378,6 @@ export const it: typeof es = {
         ubicados: '· {count} localizzati',
         abrirRastreo: 'Apri tracciamento completo',
         sinUbicaciones: 'Ancora nessuna posizione della flotta',
+        centrarFlota: 'Centra flotta',
     },
 };
