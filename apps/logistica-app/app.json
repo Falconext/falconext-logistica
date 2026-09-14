@@ -90,7 +90,14 @@
           "cameraPermission": "Necesitamos la cámara para que puedas tomar foto de tus documentos y bollas."
         }
       ],
-      "expo-document-picker"
+      "expo-document-picker",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#FFC933"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

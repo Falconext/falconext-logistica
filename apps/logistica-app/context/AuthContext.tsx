@@ -1,9 +1,10 @@
 import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import api, { AUTH_TOKEN_KEY, DEVICE_TOKEN_KEY, USER_KEY } from '../services/api';
+import api, { AUTH_TOKEN_KEY, DEVICE_TOKEN_KEY, USER_KEY, setUnauthorizedHandler } from '../services/api';
 import { Env } from '../constants/Env';
 import { stopTracking } from '../services/LocationService';
+import { registerForPush, unregisterPush } from '../services/PushService';
 import type { User } from '../types';
 
 type AuthMode = 'user' | null;
@@ -48,6 +49,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         ]);
         if (jwt) setToken(jwt);
         if (userStr) setUser(JSON.parse(userStr));
+        // Con sesión guardada, (re)registrar el token de push: Expo puede rotarlo
+        // y el backend debe tener siempre el vigente. No bloquea el arranque.
+        if (jwt) void registerForPush();
       } catch (e) {
         console.error('No se pudo restaurar la sesión', e);
       } finally {
@@ -64,6 +68,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await AsyncStorage.setItem(USER_KEY, JSON.stringify(u ?? {}));
     setToken(access_token);
     setUser(u ?? null);
+    // Registrar el celular para recibir "te asignaron una consegna". No bloquea.
+    void registerForPush();
     router.replace('/(app)/dashboard' as any);
   }, [router]);
 
@@ -71,6 +77,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Detener el rastreo en segundo plano y limpiar el token de dispositivo
     // antes de cerrar la sesión (evita que siga reportando con otra cuenta).
     try { await stopTracking(); } catch { /* noop */ }
+    // Dar de baja el token de push ANTES de borrar el JWT (el DELETE va autenticado).
+    await unregisterPush();
     await Promise.all([
       AsyncStorage.removeItem(AUTH_TOKEN_KEY),
       AsyncStorage.removeItem(USER_KEY),
@@ -80,6 +88,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(null);
     router.replace('/');
   }, [router]);
+
+  // El interceptor de axios (services/api.ts) llama a esto cuando cualquier
+  // petición vuelve con 401 (token vencido/inválido) — mantiene el estado en
+  // memoria (user/token) sincronizado con el storage que ya limpió.
+  useEffect(() => {
+    setUnauthorizedHandler(logout);
+    return () => setUnauthorizedHandler(null);
+  }, [logout]);
 
   const mode: AuthMode = token ? 'user' : null;
 
