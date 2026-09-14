@@ -21,6 +21,15 @@ import MapboxWebView from '../../components/MapboxWebView';
 import api from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
 
+// Región donde opera la flota (Europa). Fuera de aquí un punto no es un vehículo:
+// es un dato de prueba o un GPS sin fix, y se ignora en el mapa.
+const EUROPE = { south: 34, west: -12, north: 72, east: 45 };
+function isFleetCoord(lat: number, lng: number): boolean {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  if (Math.abs(lat) < 0.5 && Math.abs(lng) < 0.5) return false; // "null island"
+  return lat >= EUROPE.south && lat <= EUROPE.north && lng >= EUROPE.west && lng <= EUROPE.east;
+}
+
 const C = Theme.colors;
 const S = Theme.spacing;
 
@@ -129,7 +138,10 @@ export default function DispositivosScreen() {
     return { total: items.length, conectados, sinVehiculo };
   }, [items]);
 
-  // Dispositivos con posición válida para el mapa.
+  // Dispositivos con posición válida para el mapa. Toda la flota opera en
+  // Europa (Italia): cualquier punto fuera de esa región (un celular de prueba
+  // en Perú, un 0,0 de GPS sin señal) se descarta para que no arruine el
+  // encuadre del mapa — misma regla que en la web (mapBounds.ts).
   const located = useMemo(() => {
     return items
       .map((d) => ({ d, pos: lastPosition(d) }))
@@ -138,8 +150,7 @@ export default function DispositivosScreen() {
           !!x.pos &&
           typeof x.pos.latitude === 'number' &&
           typeof x.pos.longitude === 'number' &&
-          Number.isFinite(x.pos.latitude) &&
-          Number.isFinite(x.pos.longitude)
+          isFleetCoord(x.pos.latitude, x.pos.longitude)
       );
   }, [items]);
 
