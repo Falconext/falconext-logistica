@@ -7,15 +7,16 @@ import { Programacion } from '../../types';
 import { MapboxRouteMap } from '../../components/tracking/MapboxRouteMap';
 import { MapboxLiveMap as LiveMapReal } from '../../components/tracking/MapboxLiveMap';
 import NewRouteModal from './NewRouteModal';
+import ReporteMensualModal from './ReporteMensualModal';
 import { estadoConsegnaMeta, SPEDIZIONE_OPTIONS } from './constants';
 import {
-    Truck, Search, Plus, Package, Layers, FileSpreadsheet, MapPin, User, Navigation, X, Check, Trash2, AlertTriangle, Loader2, Route, MapPinned, Smartphone, Boxes, Clock, SlidersHorizontal
+    Truck, Search, Plus, Package, Layers, FileSpreadsheet, FileBarChart, MapPin, User, Navigation, X, Check, Trash2, AlertTriangle, Loader2, Route, MapPinned, Smartphone, Boxes, Clock, SlidersHorizontal
 } from 'lucide-react';
 import { toast } from 'sonner';
 import clsx from 'clsx';
 import { useCurrency } from '../../lib/useCurrency';
 import { useAuthStore } from '../../lib/store';
-import { isChofer } from '../../lib/modules';
+import { isChofer, isAdmin } from '../../lib/modules';
 import { useT, useDateLocale } from '../../lib/i18n';
 import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
@@ -244,6 +245,7 @@ export default function OperacionesPage() {
 
     const [isNewRouteModalOpen, setIsNewRouteModalOpen] = useState(false);
     const [editingRuta, setEditingRuta] = useState<Programacion | null>(null);
+    const [showReporteMensual, setShowReporteMensual] = useState(false);
 
     const listRef = useRef<HTMLDivElement | null>(null);
 
@@ -447,9 +449,16 @@ export default function OperacionesPage() {
                                 {total}
                             </span>
                         </div>
-                        <button onClick={exportToExcel} title={t('operaciones.exportarTitle')} className="w-9 h-9 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 transition">
-                            <FileSpreadsheet size={16} />
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                            {isAdmin(user) && (
+                                <button onClick={() => setShowReporteMensual(true)} title={t('operaciones.reporteMensual.botonTitle')} className="w-9 h-9 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 transition">
+                                    <FileBarChart size={16} />
+                                </button>
+                            )}
+                            <button onClick={exportToExcel} title={t('operaciones.exportarTitle')} className="w-9 h-9 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 transition">
+                                <FileSpreadsheet size={16} />
+                            </button>
+                        </div>
                     </div>
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
@@ -741,6 +750,8 @@ export default function OperacionesPage() {
                 </div>,
                 document.body
             )}
+
+            {showReporteMensual && <ReporteMensualModal onClose={() => setShowReporteMensual(false)} />}
         </div>
     );
 }
