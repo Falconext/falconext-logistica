@@ -452,6 +452,64 @@ export class VelocityService {
         return { devices: ids.length, posicionesBorradas: del.count };
     }
 
+    // Temporal (one-off, no tiene relación con Velocity): reporte de horarios de
+    // trabajo reales a partir de Recorrido (inicio/fin de cada viaje ida+vuelta),
+    // para decidir en qué franja horaria vale la pena que corra el cron de GPS.
+    // Todo en hora de Italia (Europe/Rome), que es donde opera la flota.
+    async reporteHorarios(dias: number) {
+        const desde = new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
+        const recorridos = await this.prisma.recorrido.findMany({
+            where: { iniciado_en: { gte: desde } },
+            select: { iniciado_en: true, llegada_en: true, retorno_en: true, finalizado_en: true, estado: true },
+            orderBy: { iniciado_en: 'asc' },
+        });
+        if (!recorridos.length) return { total: 0 };
+
+        const TZ = 'Europe/Rome';
+        const fmt = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hourCycle: 'h23', weekday: 'short', hour: '2-digit' });
+        const hourOf = (d: Date) => Number(fmt.formatToParts(d).find((p) => p.type === 'hour')!.value);
+        const dowOf = (d: Date) => fmt.formatToParts(d).find((p) => p.type === 'weekday')!.value;
+
+        const startHist = Array(24).fill(0);
+        const endHist = Array(24).fill(0);
+        const dowHist: Record<string, number> = {};
+        const activeHours = new Set<number>();
+        const durs: number[] = [];
+
+        for (const r of recorridos) {
+            startHist[hourOf(r.iniciado_en)]++;
+            const end = r.finalizado_en || r.retorno_en || r.llegada_en || r.iniciado_en;
+            endHist[hourOf(end)]++;
+            const dow = dowOf(r.iniciado_en);
+            dowHist[dow] = (dowHist[dow] || 0) + 1;
+
+            let cursor = r.iniciado_en.getTime();
+            const endTime = end.getTime();
+            let guard = 0;
+            while (cursor <= endTime && guard < 60) {
+                activeHours.add(hourOf(new Date(cursor)));
+                cursor += 30 * 60 * 1000;
+                guard++;
+            }
+            if (r.finalizado_en) durs.push((r.finalizado_en.getTime() - r.iniciado_en.getTime()) / 60000);
+        }
+
+        const gaps: number[] = [];
+        for (let h = 0; h < 24; h++) if (!activeHours.has(h)) gaps.push(h);
+
+        return {
+            total: recorridos.length,
+            primero: recorridos[0].iniciado_en.toISOString(),
+            ultimo: recorridos[recorridos.length - 1].iniciado_en.toISOString(),
+            salidasPorHora: startHist,
+            llegadasPorHora: endHist,
+            horasSinActividad: gaps,
+            porDiaSemana: dowHist,
+            duracionPromedioMin: durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) : null,
+            recorridosCompletados: durs.length,
+        };
+    }
+
     // ---- Helpers ------------------------------------------------------------
 
     // Normaliza una placa/matrícula para comparar (mayúsculas, sin separadores).

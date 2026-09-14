@@ -61,6 +61,14 @@ export class VelocityController {
         return this.velocity.proxyFetch(body);
     }
 
+    // Temporal (one-off, sin relación con Velocity): reporte de horarios de
+    // trabajo reales (Recorrido) para decidir la ventana horaria del cron de GPS.
+    @Get('reporte-horarios')
+    async reporteHorarios(@Req() req: any, @Query('dias') dias?: string) {
+        this.assertCron(req);
+        return this.velocity.reporteHorarios(dias ? parseInt(dias, 10) : 62);
+    }
+
     // Temporal: limpia las posiciones VF-* cargadas con la hora mal (2026-09-13).
     @Post('reset-positions')
     async resetPositions(@Req() req: any) {
