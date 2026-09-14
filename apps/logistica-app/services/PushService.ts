@@ -45,9 +45,6 @@ async function ensureAndroidChannel() {
 /** Pide permiso, obtiene el token y lo registra en el backend. Silencioso: nunca lanza. */
 export async function registerForPush(): Promise<string | null> {
   try {
-    // En simulador no hay push real; se evita el error de Expo.
-    if (!Device.isDevice) return null;
-
     await ensureAndroidChannel();
 
     const { status: current } = await Notifications.getPermissionsAsync();
@@ -57,6 +54,11 @@ export async function registerForPush(): Promise<string | null> {
       status = req.status;
     }
     if (status !== 'granted') return null;
+
+    // En simulador no existe token de push real (Expo lanza error). Se pide el
+    // permiso igual (así se pueden mostrar notificaciones locales/simuladas en
+    // QA) pero no se intenta registrar nada en el backend.
+    if (!Device.isDevice) return null;
 
     const projectId = Constants.expoConfig?.extra?.eas?.projectId || Constants.easConfig?.projectId;
     const { data: token } = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
