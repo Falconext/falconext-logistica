@@ -11,6 +11,7 @@ import {
   Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import Constants from 'expo-constants';
 import { Lock, User, ArrowRight, Eye, EyeOff } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -139,7 +140,7 @@ export default function LoginScreen() {
         </View>
       </View>
 
-      <Text style={styles.footer}>v1.0.0 • Gamonal Driver</Text>
+      <Text style={styles.footer}>v{Constants.expoConfig?.version ?? '1.0.0'} • Gamonal Driver</Text>
     </KeyboardAvoidingView>
   );
 }
