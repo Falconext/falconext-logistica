@@ -3,13 +3,14 @@ import { Injectable, BadRequestException, NotFoundException, ForbiddenException 
 import { GASTO_SYNC_SELECT, aplicarPlanGastos, borradoProtegiendoRecibos, planificarSyncGastos } from '../../common/gastos-sync.util';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
+import { NotificacionesService } from '../notificaciones/notificaciones.service';
 import { fechaLimitePago } from '../../common/plazo-pago.util';
 import { num, horasDeRecorrido, tarifasFromTenant, TARIFAS_TENANT_SELECT, TarifasChofer } from '../../common/tarifas-chofer.util';
 import { ingresoSugerido, tarifasIngresoFromTenant, TARIFAS_INGRESO_TENANT_SELECT } from '../../common/ingreso-vehiculo.util';
 
 @Injectable()
 export class ProgramacionService {
-    constructor(private prisma: PrismaService) { }
+    constructor(private prisma: PrismaService, private notificaciones: NotificacionesService) { }
 
     // Only the columns the operaciones list/map actually render — keeps the
     // payload small (drops nota + audit timestamps + tenant_id).
@@ -719,7 +720,26 @@ export class ProgramacionService {
                 () => false,
             ));
         }
+        // Push al chofer asignado (si la operación nace ya con uno). Fire-and-forget:
+        // la creación no espera ni falla por el push.
+        if (created.trabajador_id) void this.notificarConsegnaAsignada(created);
         return this.findOne(created.id);
+    }
+
+    // Push "te asignaron una consegna": lo que pedían los choferes, que hasta ahora
+    // tenían que salir y volver a entrar a la app para ver la ruta nueva.
+    private async notificarConsegnaAsignada(op: { id: string; trabajador_id: string | null; tenant_id: string; cliente: string | null; lugar_entrega: string | null; fecha_retiro: Date | null; fecha: Date }) {
+        if (!op.trabajador_id) return;
+        const destino = op.lugar_entrega || op.cliente || 'nueva consegna';
+        const cuando = op.fecha_retiro || op.fecha;
+        const hora = cuando ? new Date(cuando).toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+        try {
+            await this.notificaciones.enviarATrabajador(op.trabajador_id, op.tenant_id, {
+                title: 'Nueva consegna asignada',
+                body: `${op.cliente ? op.cliente + ' · ' : ''}${destino}${hora ? ' · ' + hora : ''}`,
+                data: { tipo: 'consegna_asignada', programacion_id: op.id },
+            });
+        } catch { /* best-effort */ }
     }
 
     async update(id: string, data: any, opts?: { isChofer?: boolean }) {
@@ -738,10 +758,17 @@ export class ProgramacionService {
             rest.attesa_estado = 'PENDIENTE';
             rest.attesa_autorizado_por = null;
         }
+        // Para saber si el chofer CAMBIÓ (y avisarle al nuevo) hace falta el valor previo.
+        const previo = rest.trabajador_id !== undefined
+            ? await this.prisma.programacion.findUnique({ where: { id }, select: { trabajador_id: true } })
+            : null;
         const updated = await this.prisma.programacion.update({
             where: { id },
             data: rest,
         });
+        if (previo && updated.trabajador_id && updated.trabajador_id !== previo.trabajador_id) {
+            void this.notificarConsegnaAsignada(updated);
+        }
 
         // Si el cliente envía `gastos`, la lista del formulario es la lista completa de la
         // operación — pero se aplica por FUSIÓN (no delete+create): un gasto que sigue en la

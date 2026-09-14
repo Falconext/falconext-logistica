@@ -1,4 +1,3 @@
-
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
@@ -25,17 +24,17 @@ model Trabajador {
   // Información Personal
   nombre_completo  String
   cargo            String
-  estado_laboral   String  @default("Activo") // 'Activo', 'Inactivo'
+  estado_laboral   String    @default("Activo") // 'Activo', 'Inactivo'
   nacionalidad     String?
   fecha_nacimiento DateTime?
   url_foto         String?
 
   // Rastreo GPS: si el trabajador reporta su ubicación desde la app.
   // Al activarse se auto-provisiona un Device con token para este trabajador.
-  trackable        Boolean @default(false)
+  trackable Boolean @default(false)
 
   // Panel DHL: disponibilidad operativa (DISPONIBLE / NO DISPONIBLE). Toggle manual.
-  disponible       Boolean @default(true)
+  disponible Boolean @default(true)
 
   // Documentación Personal
   numero_pasaporte            String?
@@ -62,36 +61,36 @@ model Trabajador {
   tipo_contrato              String?
   fecha_vencimiento_contrato DateTime?
   dimision                   String? // Motivo o Fecha de salida
-  
+
   // Contacto
-  telefono           String?
-  email_personal     String?
-  direccion          String?
-  area_trabajo       String?
-  email_supervisor   String?
-  
+  telefono         String?
+  email_personal   String?
+  direccion        String?
+  area_trabajo     String?
+  email_supervisor String?
+
   // Financiero
-  sueldo_base        Decimal? @default(0) // Added for payroll tracking
-  tarifa_hora        Decimal? @default(0) // DEPRECADO: el pago se calcula con las tarifas de empresa (Tenant.tarifa_ore_*). No usar.
+  sueldo_base Decimal? @default(0) // Added for payroll tracking
+  tarifa_hora Decimal? @default(0) // DEPRECADO: el pago se calcula con las tarifas de empresa (Tenant.tarifa_ore_*). No usar.
 
   // Otros
-  permiso_univex     String?
-  carta_responsiva   String?
+  permiso_univex   String?
+  carta_responsiva String?
 
-  creado_en          DateTime @default(now())
-  actualizado_en     DateTime @updatedAt
-  
-  tenant_id          String
-  tenant             Tenant   @relation(fields: [tenant_id], references: [id])
+  creado_en      DateTime @default(now())
+  actualizado_en DateTime @updatedAt
 
-  devices            Device[]
+  tenant_id String
+  tenant    Tenant @relation(fields: [tenant_id], references: [id])
+
+  devices Device[]
 
   @@map("trabajadores")
 }
 
 model Vehiculo {
-  id             String @id @default(uuid())
-  placa          String @unique // 'TARGA'
+  id    String @id @default(uuid())
+  placa String @unique // 'TARGA'
 
   // Detalles Técnicos
   marca_modelo        String?
@@ -105,34 +104,34 @@ model Vehiculo {
   categoria           String?
 
   // Panel DHL: disponibilidad operativa del vehículo (DISPONIBLE / NO DISPONIBLE). Toggle manual.
-  disponible          Boolean @default(true)
+  disponible Boolean @default(true)
 
   // Documentación
-  tarjeta_circulacion      String? // 'LIBRETO'
-  poliza_seguro            String? // 'ASEGURAZIONE'
-  fecha_vencimiento_seguro DateTime? // Segunda columna de segurazione?
-  revision_tecnica         String? // 'R.TECNICA' (texto legacy del Excel)
+  tarjeta_circulacion        String? // 'LIBRETO'
+  poliza_seguro              String? // 'ASEGURAZIONE'
+  fecha_vencimiento_seguro   DateTime? // Segunda columna de segurazione?
+  revision_tecnica           String? // 'R.TECNICA' (texto legacy del Excel)
   fecha_vencimiento_revision DateTime? // Vencimiento real de la revisión técnica
-  permisos_especiales      String? // 'DEROGHE' (texto legacy del Excel)
+  permisos_especiales        String? // 'DEROGHE' (texto legacy del Excel)
   fecha_vencimiento_deroghe  DateTime? // Vencimiento real de los permisos especiales
-  id_interno_furgon        String? // 'ID_FURGON'
-  url_foto                 String? // Foto de la unidad (Cloudinary)
+  id_interno_furgon          String? // 'ID_FURGON'
+  url_foto                   String? // Foto de la unidad (Cloudinary)
 
   // Telemetría y Rastreo (Futuro)
-  kilometraje_actual Int?      @default(0)
-  ultima_latitud     Float?
-  ultima_longitud    Float?
+  kilometraje_actual   Int?      @default(0)
+  ultima_latitud       Float?
+  ultima_longitud      Float?
   ultima_actualizacion DateTime?
 
   creado_en      DateTime @default(now())
   actualizado_en DateTime @updatedAt
-  
+
   mantenimientos Mantenimiento[]
 
-  tenant_id      String
-  tenant         Tenant   @relation(fields: [tenant_id], references: [id])
-  
-  devices        Device[]
+  tenant_id String
+  tenant    Tenant @relation(fields: [tenant_id], references: [id])
+
+  devices Device[]
 
   @@map("vehiculos")
 }
@@ -143,20 +142,20 @@ model Mantenimiento {
   vehiculo_id String
   vehiculo    Vehiculo @relation(fields: [vehiculo_id], references: [id])
 
-  tipo        String   // 'Preventivo', 'Correctivo', 'Emergencia'
+  tipo        String // 'Preventivo', 'Correctivo', 'Emergencia'
   fecha       DateTime
   descripcion String
   costo       Float
   taller      String?
 
-  kilometraje Int?
+  kilometraje  Int?
   evidence_url String? // URL de Cloudinary
 
   creado_en      DateTime @default(now())
   actualizado_en DateTime @updatedAt
 
-  tenant_id      String
-  tenant         Tenant   @relation(fields: [tenant_id], references: [id])
+  tenant_id String
+  tenant    Tenant @relation(fields: [tenant_id], references: [id])
 
   @@map("mantenimiento")
 }
@@ -165,29 +164,29 @@ model Programacion {
   id String @id @default(uuid())
 
   // Core info
-  fecha            DateTime // 'FECHA'
-  id_programacion  String?  @unique
-  
+  fecha           DateTime // 'FECHA'
+  id_programacion String?  @unique
+
   // Loose linking to allow ID_FURGON (e.g. F014) or PLACA
-  vehiculo_id      String?  // 'MEZZO' (Could be F014 or Placa)
-  trabajador_id    String?  // 'ID_AUTISTA'
-  
+  vehiculo_id   String? // 'MEZZO' (Could be F014 or Placa)
+  trabajador_id String? // 'ID_AUTISTA'
+
   // Route Info
-  cliente          String?  // 'CLIENTE'
-  spedizione       String?  // 'SPEDIZIONE' — expedición/cliente (ver SPEDIZIONE_OPTIONS en apps/web/app/operaciones/constants.ts)
-  reperibilita     Boolean? @default(false) // Reperibilità (disponibilidad on-call) marcada por el supervisor
+  cliente         String? // 'CLIENTE'
+  spedizione      String? // 'SPEDIZIONE' — expedición/cliente (ver SPEDIZIONE_OPTIONS en apps/web/app/operaciones/constants.ts)
+  reperibilita    Boolean?  @default(false) // Reperibilità (disponibilidad on-call) marcada por el supervisor
   // Navetta: traslado/lanzadera entre almacenes (no una entrega normal). El
   // ingreso sugerido pasa a ser SIEMPRE el fijo de Tenant.pago_navetta, sin
   // importar km ni categoría del vehículo.
-  es_navetta       Boolean? @default(false)
-  lugar_retiro     String?  // 'LUOGO RITIRO' (primer/único origen de retiro)
-  retiros          String[] // Retiros adicionales (recogidas) tras lugar_retiro, en orden
-  fecha_retiro     DateTime? // New: Specific Date+Time for pickup
+  es_navetta      Boolean?  @default(false)
+  lugar_retiro    String? // 'LUOGO RITIRO' (primer/único origen de retiro)
+  retiros         String[] // Retiros adicionales (recogidas) tras lugar_retiro, en orden
+  fecha_retiro    DateTime? // New: Specific Date+Time for pickup
   // Fecha/hora de cada retiro adicional — paralelo a `retiros[]` por índice:
   // [{ fecha, hora }]. Cada almacén adicional puede tener su propio horario.
-  retiros_detalle  Json?
+  retiros_detalle Json?
 
-  lugar_entrega    String?  // 'LUOGO CONSEGNA' (primer/único destino)
+  lugar_entrega    String? // 'LUOGO CONSEGNA' (primer/único destino)
   fecha_entrega    DateTime? // New: Specific Date+Time for delivery
   destinos         String[] // Destinos adicionales (paradas) tras lugar_entrega, en orden
   // Detalle de cada destino adicional — paralelo a `destinos[]` por índice:
@@ -199,29 +198,29 @@ model Programacion {
   // km/ingreso para poder cruzarlas después contra lo que reporta cada cliente.
   destinos_detalle Json?
 
-  hora_retiro      String?  // Deprecated? Keep for legacy
-  eta              String?  // Deprecated? Keep for legacy
-  
-  nota             String?  // 'NOTA'
+  hora_retiro String? // Deprecated? Keep for legacy
+  eta         String? // Deprecated? Keep for legacy
+
+  nota String? // 'NOTA'
 
   // Datos operativos de consegna
-  km               Float?   @default(0)     // Kilómetros del recorrido (real al finalizar)
-  tiempo_min       Int?                     // Tiempo total del recorrido (min) al finalizar
-  ciudad           String?                  // Ciudad
-  app              String?                  // App/plataforma (SENSA APP, MILANO 01..18, APP ROMA)
-  compactado       Boolean? @default(false) // Chofer con dos rutas/consegnas en un mismo viaje (N/Y)
-  estado_consegna  String?                  // CONSEGNATO | IN_CONSEGNA | IN_SOSPESO | RITIRATO | ANNULLATO | RISCHEDULATO
-  attesa           String?                  // Tiempo que el chofer espera al cliente (texto libre, legacy)
+  km                    Float?   @default(0) // Kilómetros del recorrido (real al finalizar)
+  tiempo_min            Int? // Tiempo total del recorrido (min) al finalizar
+  ciudad                String? // Ciudad
+  app                   String? // App/plataforma (SENSA APP, MILANO 01..18, APP ROMA)
+  compactado            Boolean? @default(false) // Chofer con dos rutas/consegnas en un mismo viaje (N/Y)
+  estado_consegna       String? // CONSEGNATO | IN_CONSEGNA | IN_SOSPESO | RITIRATO | ANNULLATO | RISCHEDULATO
+  attesa                String? // Tiempo que el chofer espera al cliente (texto libre, legacy)
   // Attesa estructurada con autorización: el chofer/supervisor editan las horas;
   // SOLO el supervisor autoriza/rechaza. Se paga €10/h autorizada.
-  attesa_horas       Float?  @default(0)          // Horas de espera declaradas
-  attesa_estado      String? @default("PENDIENTE") // PENDIENTE | AUTORIZADO | DENEGADO
-  attesa_autorizado_por String?                    // User.id del supervisor que decidió
-  otros_datos      String?                  // Otros datos de consegna (texto pegado desde WhatsApp)
-  foto_bolla       String[]  @default([])   // URLs (S3) de la bolla/DDT de esta operación — puede ser de varias hojas (la sube el chofer en Editar ruta)
+  attesa_horas          Float?   @default(0) // Horas de espera declaradas
+  attesa_estado         String?  @default("PENDIENTE") // PENDIENTE | AUTORIZADO | DENEGADO
+  attesa_autorizado_por String? // User.id del supervisor que decidió
+  otros_datos           String? // Otros datos de consegna (texto pegado desde WhatsApp)
+  foto_bolla            String[] @default([]) // URLs (S3) de la bolla/DDT de esta operación — puede ser de varias hojas (la sube el chofer en Editar ruta)
 
-  estado           String   @default("PENDING") // PENDING, IN_TRANSIT, COMPLETED, FAILED
-  ingreso_estimado Float?   @default(0)
+  estado           String @default("PENDING") // PENDING, IN_TRANSIT, COMPLETED, FAILED
+  ingreso_estimado Float? @default(0)
   // Km de IDA que el cliente (DHL/AB Servis) informa por mensaje — es el km que
   // FACTURA, distinto del km real recorrido (GPS, en el campo `km`). El supervisor
   // lo escribe a mano. Con la categoría del vehículo se sugiere el ingreso.
@@ -229,17 +228,17 @@ model Programacion {
 
   // Rendición del chofer: bonifico inicial + abonos recibidos en ruta y gastos.
   // Recibido = anticipo + abonos_ruta. Saldo a devolver = recibido - gastos pagados por el chofer.
-  anticipo         Float?   @default(0)
+  anticipo    Float?           @default(0)
   // Suma de abonos que el chofer recibió EN CADA PARADA (dinero extra en ruta).
   // Se consolida desde las paradas del recorrido al finalizar (fuente de verdad).
-  abonos_ruta      Float?   @default(0)
-  gastos           GastoOperacion[]
+  abonos_ruta Float?           @default(0)
+  gastos      GastoOperacion[]
 
-  creado_en        DateTime @default(now())
-  actualizado_en   DateTime @updatedAt
+  creado_en      DateTime @default(now())
+  actualizado_en DateTime @updatedAt
 
-  tenant_id        String
-  tenant           Tenant   @relation(fields: [tenant_id], references: [id])
+  tenant_id String
+  tenant    Tenant @relation(fields: [tenant_id], references: [id])
 
   @@map("programacion")
 }
@@ -248,41 +247,41 @@ model Programacion {
 // contra el anticipo recibido. Cada gasto puede tener uno o varios comprobantes.
 // Los de tipo PEAJE/COMBUSTIBLE se listan además en sus módulos respectivos.
 model GastoOperacion {
-  id              String   @id @default(uuid())
+  id String @id @default(uuid())
 
   programacion_id String
   programacion    Programacion @relation(fields: [programacion_id], references: [id], onDelete: Cascade)
 
-  tipo            String   // PEAJE | COMBUSTIBLE | PARKING | OTRO
-  monto           Float    @default(0)
-  fecha           DateTime?
-  descripcion     String?  // detalle libre (obligatorio para OTRO)
-  numero_mancato  String?  // Nº de mancato pagamento (solo PEAJE)
-  link_peaje      String?  // Link/URL del peaje (solo PEAJE)
-  comprobantes    String[] // URLs (S3) del/los comprobante(s)
+  tipo              String // PEAJE | COMBUSTIBLE | PARKING | OTRO
+  monto             Float     @default(0)
+  fecha             DateTime?
+  descripcion       String? // detalle libre (obligatorio para OTRO)
+  numero_mancato    String? // Nº de mancato pagamento (solo PEAJE)
+  link_peaje        String? // Link/URL del peaje (solo PEAJE)
+  comprobantes      String[] // URLs (S3) del/los comprobante(s)
   // Estado de pago del peaje MANCATO (solo PEAJE, pagado_por_chofer=false): NO_PAGADO |
   // PAGADO | PAGO_BONIFICO. Null = pendiente. Solo lo edita un administrador (EsAdminGuard).
-  estado          String?
+  estado            String?
   // Plazo para que la empresa pague el peaje (~14 días desde fecha). Editable.
   fecha_limite_pago DateTime?
   // ¿Lo pagó el CHOFER de su bolsillo? true → se descuenta de su anticipo (saldo).
   // false → lo paga la EMPRESA (peaje mancato / combustible con código): NO descuenta
   // al chofer, pero SÍ cuenta en el costo total de la ruta.
-  pagado_por_chofer Boolean @default(true)
+  pagado_por_chofer Boolean   @default(true)
 
   // Denormalizados de la operación para reportes/módulos (chofer y vehículo).
-  trabajador_id   String?
-  targa           String?
+  trabajador_id String?
+  targa         String?
 
   // Parada del recorrido (RecorridoParada.id) de la que se consolidó este gasto.
   // Null = cargado directo en la operación (supervisor/rendición de cierre). Permite
   // re-consolidar por FUSIÓN al cerrar el recorrido sin borrar los demás gastos.
-  parada_id       String?
+  parada_id String?
 
-  tenant_id       String
+  tenant_id String
 
-  creado_en       DateTime @default(now())
-  actualizado_en  DateTime @updatedAt
+  creado_en      DateTime @default(now())
+  actualizado_en DateTime @updatedAt
 
   @@index([programacion_id])
   @@index([tenant_id, tipo])
@@ -290,17 +289,17 @@ model GastoOperacion {
 }
 
 model Tenant {
-  id    String @id @default(uuid())
-  name  String
-  slug  String @unique
-  plan  String @default("FREE") // FREE, PRO, ENTERPRISE
+  id     String @id @default(uuid())
+  name   String
+  slug   String @unique
+  plan   String @default("FREE") // FREE, PRO, ENTERPRISE
   moneda String @default("EUR") // PEN | USD | EUR — moneda base de la empresa
 
   // Pago de choferes por hora de manejo (ore guida). Tarifa de empresa (igual
   // para todos): diurna hasta la hora de corte, nocturna a partir de ella.
-  tarifa_ore_giorno Decimal @default(10) // €/h de manejo diurno
-  tarifa_ore_notte  Decimal @default(12) // €/h de manejo nocturno (desde hora_corte_notte)
-  hora_corte_notte  Int     @default(19) // hora (0-23) a partir de la cual aplica la tarifa nocturna
+  tarifa_ore_giorno   Decimal @default(10) // €/h de manejo diurno
+  tarifa_ore_notte    Decimal @default(12) // €/h de manejo nocturno (desde hora_corte_notte)
+  hora_corte_notte    Int     @default(19) // hora (0-23) a partir de la cual aplica la tarifa nocturna
   // Bono fijo por reperibilità (entrega fuera de horario: madrugada, fin de
   // semana) y €/hora de ATTESA autorizada por el supervisor. Se suman al pago
   // por horas para formar el costo total del chofer en cada operación.
@@ -314,11 +313,11 @@ model Tenant {
   factor_km_h1_l1          Decimal @default(0.90) // €/km — Furgón H1 L1
   factor_km_h2_l2          Decimal @default(1.00) // €/km — Furgón H2 L2
   factor_km_cassonato      Decimal @default(1.00) // €/km — Cassonato
-  ingreso_km_minimo Decimal @default(15) // € fijo si el km facturable es corto
-  ingreso_km_umbral Int     @default(35) // km bajo el cual aplica el fijo (todas las categorías)
+  ingreso_km_minimo        Decimal @default(15) // € fijo si el km facturable es corto
+  ingreso_km_umbral        Int     @default(35) // km bajo el cual aplica el fijo (todas las categorías)
   // Pago fijo de una NAVETTA (traslado/lanzadera entre almacenes, no una
   // entrega): siempre este monto, sin importar km ni categoría del vehículo.
-  pago_navetta      Decimal @default(15)
+  pago_navetta             Decimal @default(15)
 
   creado_en      DateTime @default(now())
   actualizado_en DateTime @updatedAt
@@ -342,13 +341,13 @@ model Tenant {
 // Rol/puesto configurable por empresa. Define qué módulos ve el usuario y su
 // comportamiento (administrador / solo sus propios registros).
 model Rol {
-  id           String  @id @default(uuid())
+  id           String   @id @default(uuid())
   nombre       String
   descripcion  String?
   modulos      String[] @default([]) // claves de módulos permitidos
-  es_admin     Boolean @default(false) // ve todo y puede administrar usuarios/roles
-  solo_propios Boolean @default(false) // los usuarios de este rol solo ven sus registros
-  ve_finanzas  Boolean @default(false) // ve montos/pagos/ganancias (choferes y supervisores NO)
+  es_admin     Boolean  @default(false) // ve todo y puede administrar usuarios/roles
+  solo_propios Boolean  @default(false) // los usuarios de este rol solo ven sus registros
+  ve_finanzas  Boolean  @default(false) // ve montos/pagos/ganancias (choferes y supervisores NO)
 
   tenant_id String
   tenant    Tenant @relation(fields: [tenant_id], references: [id])
@@ -364,20 +363,20 @@ model Rol {
 // Documento genérico: escaneos/archivos asociados a una entidad
 // (VEHICULO | TRABAJADOR | MANTENIMIENTO). Soporta alertas por vencimiento.
 model Documento {
-  id          String  @id @default(uuid())
-  entidad     String  // 'VEHICULO' | 'TRABAJADOR' | 'MANTENIMIENTO'
-  entidad_id  String  // id del registro dueño
-  tipo        String  // 'LICENCIA' | 'SEGURO' | 'TARJETA_CIRCULACION' | 'PASAPORTE' | 'REVISION_TECNICA' | 'OTRO'
-  nombre      String?
-  url         String? // URL de Cloudinary (imagen o PDF). Opcional: se puede
-                      // registrar solo la fecha de vencimiento antes de subir el escaneo.
+  id                String    @id @default(uuid())
+  entidad           String // 'VEHICULO' | 'TRABAJADOR' | 'MANTENIMIENTO'
+  entidad_id        String // id del registro dueño
+  tipo              String // 'LICENCIA' | 'SEGURO' | 'TARJETA_CIRCULACION' | 'PASAPORTE' | 'REVISION_TECNICA' | 'OTRO'
+  nombre            String?
+  url               String? // URL de Cloudinary (imagen o PDF). Opcional: se puede
+  // registrar solo la fecha de vencimiento antes de subir el escaneo.
   // Reverso del mismo documento (DNI, patente, libretto…). Va en la misma fila
   // porque comparte vencimiento, candado y alertas con el anverso. Opcional.
-  url_reverso String?
+  url_reverso       String?
   fecha_vencimiento DateTime?
   // Candado del auto-servicio del chofer: cuando el chofer sube/confirma su
   // documento, queda BLOQUEADO y solo el supervisor puede renovarlo/editarlo.
-  bloqueado   Boolean @default(false)
+  bloqueado         Boolean   @default(false)
 
   creado_en      DateTime @default(now())
   actualizado_en DateTime @updatedAt
@@ -390,18 +389,18 @@ model Documento {
 }
 
 model User {
-  id        String @id @default(uuid())
-  email     String @unique
-  password  String
-  role      String @default("VIEWER") // SUPERADMIN, ADMIN, USER (VIEWER legacy)
-  nombre    String? // nombre visible del usuario
-  activo    Boolean @default(true)
-  modulos   String[] @default([]) // claves de módulos permitidos (los ADMIN ven todos)
+  id       String   @id @default(uuid())
+  email    String   @unique
+  password String
+  role     String   @default("VIEWER") // SUPERADMIN, ADMIN, USER (VIEWER legacy)
+  nombre   String? // nombre visible del usuario
+  activo   Boolean  @default(true)
+  modulos  String[] @default([]) // claves de módulos permitidos (los ADMIN ven todos)
 
   // Vínculo a un trabajador para filtrado por dueño (row-level)
-  trabajador_id      String? // UUID del Trabajador vinculado (docs/alertas)
-  trabajador_codigo  String? // id_trabajador (ej. G001) — clave en peajes/combustible/programacion
-  solo_propios       Boolean @default(false) // override legacy; el rol es la fuente principal
+  trabajador_id     String? // UUID del Trabajador vinculado (docs/alertas)
+  trabajador_codigo String? // id_trabajador (ej. G001) — clave en peajes/combustible/programacion
+  solo_propios      Boolean @default(false) // override legacy; el rol es la fuente principal
 
   rol_id String? // rol/puesto asignado (define módulos y comportamiento)
   rol    Rol?    @relation(fields: [rol_id], references: [id])
@@ -415,50 +414,66 @@ model User {
   @@map("users")
 }
 
+// Token de notificaciones push (Expo) de un usuario de la app móvil. Un usuario
+// puede tener varios (un celular viejo y uno nuevo); se limpian solos cuando Expo
+// reporta que el dispositivo ya no está registrado (DeviceNotRegistered).
+model PushToken {
+  id             String   @id @default(uuid())
+  token          String   @unique // "ExponentPushToken[xxxx]"
+  user_id        String
+  platform       String? // ios | android
+  tenant_id      String
+  creado_en      DateTime @default(now())
+  actualizado_en DateTime @updatedAt
+
+  @@index([user_id])
+  @@map("push_tokens")
+}
+
 model Device {
-  id              String   @id @default(uuid())
-  imei            String   @unique // Identificador único del hardware/app
-  name            String
-  token           String   @unique @default(uuid()) // Token para autenticación del dispositivo
-  model           String?  // Modelo del dispositivo
-  last_activity   DateTime?
-  
+  id            String    @id @default(uuid())
+  imei          String    @unique // Identificador único del hardware/app
+  name          String
+  token         String    @unique @default(uuid()) // Token para autenticación del dispositivo
+  model         String? // Modelo del dispositivo
+  last_activity DateTime?
+
   // Relacion con el negocio
   id_programacion_actual String? // For sequential IDs (e.g. "R-001")
 
-  vehiculo_id     String?  // Vehículo asignado actualmente
-  vehiculo        Vehiculo? @relation(fields: [vehiculo_id], references: [id])
+  vehiculo_id String? // Vehículo asignado actualmente
+  vehiculo    Vehiculo? @relation(fields: [vehiculo_id], references: [id])
 
-  trabajador_id   String?  // Conductor/trabajador que porta este dispositivo
-  trabajador      Trabajador? @relation(fields: [trabajador_id], references: [id])
+  trabajador_id String? // Conductor/trabajador que porta este dispositivo
+  trabajador    Trabajador? @relation(fields: [trabajador_id], references: [id])
 
-  tenant_id       String
-  tenant          Tenant   @relation(fields: [tenant_id], references: [id])
-  
+  tenant_id String
+  tenant    Tenant @relation(fields: [tenant_id], references: [id])
+
   positions       Position[]
   geofence_events GeofenceEvent[]
-  
-  creado_en       DateTime @default(now())
-  actualizado_en  DateTime @updatedAt
+
+  creado_en      DateTime @default(now())
+  actualizado_en DateTime @updatedAt
 
   @@map("devices")
 }
 
 model Position {
-  id          String   @id @default(uuid())
-  device_id   String
-  device      Device   @relation(fields: [device_id], references: [id])
-  
-  latitude    Float
-  longitude   Float
-  speed       Float?   // km/h
-  heading     Float?   // dirección en grados
-  altitude    Float?
-  accuracy    Float?
-  
-  battery     Int?     // Nivel de batería si aplica
-  ignition    Boolean? // Si el motor está encendido
-  
+  id        String @id @default(uuid())
+  device_id String
+  device    Device @relation(fields: [device_id], references: [id])
+
+  latitude  Float
+  longitude Float
+  speed     Float? // km/h
+  heading   Float? // dirección en grados
+  altitude  Float?
+  accuracy  Float?
+
+  battery  Int? // Nivel de batería si aplica
+  ignition Boolean? // Si el motor está encendido
+
   timestamp   DateTime // Fecha real del reporte GPS
   server_time DateTime @default(now()) // Fecha de recepción en servidor
 
@@ -467,26 +482,26 @@ model Position {
 }
 
 model Geofence {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   name        String
   description String?
-  type        String   @default("CIRCLE") // CIRCLE, POLYGON
-  
+  type        String  @default("CIRCLE") // CIRCLE, POLYGON
+
   // Para Circulo
-  latitude    Float?
-  longitude   Float?
-  radius      Float?   // Metros
-  
+  latitude  Float?
+  longitude Float?
+  radius    Float? // Metros
+
   // Para Poligono (GeoJSON stringified)
   coordinates String?
 
-  tenant_id   String
-  tenant      Tenant   @relation(fields: [tenant_id], references: [id])
-  
-  events      GeofenceEvent[]
+  tenant_id String
+  tenant    Tenant @relation(fields: [tenant_id], references: [id])
 
-  creado_en       DateTime @default(now())
-  actualizado_en  DateTime @updatedAt
+  events GeofenceEvent[]
+
+  creado_en      DateTime @default(now())
+  actualizado_en DateTime @updatedAt
 
   @@map("geofences")
 }
@@ -495,45 +510,45 @@ model GeofenceEvent {
   id          String   @id @default(uuid())
   geofence_id String
   geofence    Geofence @relation(fields: [geofence_id], references: [id])
-  
-  device_id   String
-  device      Device   @relation(fields: [device_id], references: [id])
-  
-  event_type  String   // ENTER, EXIT
-  timestamp   DateTime @default(now())
-  
+
+  device_id String
+  device    Device @relation(fields: [device_id], references: [id])
+
+  event_type String // ENTER, EXIT
+  timestamp  DateTime @default(now())
+
   @@index([device_id, timestamp])
   @@map("geofence_events")
 }
 
 // Peaje/Multa from sheet "MANCATO P."
 model Peaje {
-  id             String   @id @default(uuid())
-  id_multa       String?  @unique  // 'Id_Multas'
-  estado         String?           // 'ESTADO' (PAGADO, PENDIENTE, etc.)
-  fecha          DateTime?         // 'FECHA'
-  hora           String?           // 'HORA'
-  targa          String?           // 'TARGA' (Vehicle plate)
-  monto          Float?            // 'MONTO' (€ amount)
-  trabajador_id  String?           // 'ID_ TRABAJADOR'
-  comentarios    String?           // 'COMENTARIOS'
-  archivo        String?           // 'ARCHIVO' (PDF link)
-  recibo_pago    String?           // 'RECIBO DE PAGO'
-  tipo           String?           // 'TIPO'
-  mes            String?           // 'MES'
-  fecha_recepcion DateTime?        // 'FECHA RECEPCIÓN'
-  peaje_salida   String?           // 'PEAJE/SALIDA'
-  nota_autista   String?           // 'NOTA AUTISTA'
+  id                String    @id @default(uuid())
+  id_multa          String?   @unique // 'Id_Multas'
+  estado            String? // 'ESTADO' (PAGADO, PENDIENTE, etc.)
+  fecha             DateTime? // 'FECHA'
+  hora              String? // 'HORA'
+  targa             String? // 'TARGA' (Vehicle plate)
+  monto             Float? // 'MONTO' (€ amount)
+  trabajador_id     String? // 'ID_ TRABAJADOR'
+  comentarios       String? // 'COMENTARIOS'
+  archivo           String? // 'ARCHIVO' (PDF link)
+  recibo_pago       String? // 'RECIBO DE PAGO'
+  tipo              String? // 'TIPO'
+  mes               String? // 'MES'
+  fecha_recepcion   DateTime? // 'FECHA RECEPCIÓN'
+  peaje_salida      String? // 'PEAJE/SALIDA'
+  nota_autista      String? // 'NOTA AUTISTA'
   // Plazo para que la empresa pague el peaje no cubierto por el chofer (~14 días
   // desde fecha_recepcion). Editable — no siempre cae exacto por lote de pago.
   fecha_limite_pago DateTime?
 
-  tenant_id      String
-  tenant         Tenant   @relation(fields: [tenant_id], references: [id])
-  
+  tenant_id String
+  tenant    Tenant @relation(fields: [tenant_id], references: [id])
+
   creado_en      DateTime @default(now())
   actualizado_en DateTime @updatedAt
-  
+
   @@index([trabajador_id])
   @@index([targa])
   @@map("peajes")
@@ -541,23 +556,23 @@ model Peaje {
 
 // Combustible from sheet "COMBUSTIBLE"
 model Combustible {
-  id              String   @id @default(uuid())
-  id_registro     String?  @unique  // 'ID_REGISTRO'
-  trabajador_id   String?           // 'ID_TRABAJADOR'
-  fecha           DateTime?         // 'FECHA'
-  monto           Float?            // 'MONTO'
-  targa           String?           // 'TARGA'
-  metodo          String?           // 'METODO' (AUTOBOT / IP, etc.)
-  area            String?           // 'AREA' (DHL, FARMACIA)
-  mes             String?           // 'MES'
-  archivo         String?           // 'ARCHIVO' (Photo link)
-  
-  tenant_id       String
-  tenant          Tenant   @relation(fields: [tenant_id], references: [id])
-  
-  creado_en       DateTime @default(now())
-  actualizado_en  DateTime @updatedAt
-  
+  id            String    @id @default(uuid())
+  id_registro   String?   @unique // 'ID_REGISTRO'
+  trabajador_id String? // 'ID_TRABAJADOR'
+  fecha         DateTime? // 'FECHA'
+  monto         Float? // 'MONTO'
+  targa         String? // 'TARGA'
+  metodo        String? // 'METODO' (AUTOBOT / IP, etc.)
+  area          String? // 'AREA' (DHL, FARMACIA)
+  mes           String? // 'MES'
+  archivo       String? // 'ARCHIVO' (Photo link)
+
+  tenant_id String
+  tenant    Tenant @relation(fields: [tenant_id], references: [id])
+
+  creado_en      DateTime @default(now())
+  actualizado_en DateTime @updatedAt
+
   @@index([trabajador_id])
   @@index([targa])
   @@map("combustible")
@@ -567,65 +582,65 @@ model Combustible {
 // Vinculado a una Programación (operación). Se apoya en las posiciones GPS del
 // Device para métricas y ETA. IDs escalares (sin relaciones Prisma) a propósito.
 model Recorrido {
-  id              String   @id @default(uuid())
+  id String @id @default(uuid())
 
   tenant_id       String
   trabajador_id   String
   device_id       String?
-  vehiculo_id     String?  // Vehiculo.id real (del device), para disponibilidad
+  vehiculo_id     String? // Vehiculo.id real (del device), para disponibilidad
   programacion_id String?
 
   // Origen/destino: etiqueta (de la operación) + coords geocodificadas al iniciar.
-  origen_label    String?
-  destino_label   String?
-  origen_lat      Float?
-  origen_lng      Float?
-  destino_lat     Float?
-  destino_lng     Float?
+  origen_label  String?
+  destino_label String?
+  origen_lat    Float?
+  origen_lng    Float?
+  destino_lat   Float?
+  destino_lng   Float?
 
   // EN_RUTA_IDA | EN_DESTINO | EN_RUTA_VUELTA | COMPLETADO | CANCELADO
-  estado          String   @default("EN_RUTA_IDA")
+  estado String @default("EN_RUTA_IDA")
 
   // Hitos del ciclo.
-  iniciado_en     DateTime @default(now())
-  llegada_en      DateTime?
-  retorno_en      DateTime?
-  finalizado_en   DateTime?
+  iniciado_en   DateTime  @default(now())
+  llegada_en    DateTime?
+  retorno_en    DateTime?
+  finalizado_en DateTime?
 
   // Descanso: pausa dentro de un tramo (tramos largos). descanso_desde != null
   // ⇒ el chofer está descansando ahora; descanso_min acumula el total pausado.
-  descanso_desde  DateTime?
-  descanso_min    Float?   @default(0)
+  descanso_desde DateTime?
+  descanso_min   Float?    @default(0)
 
   // ETA estimada de la ida (min), calculada por carretera al iniciar → base del
   // "esperado vs real" (se compara con ida_min real).
   esperado_ida_min Float?
   // Estimado de la RUTA COMPLETA (bucle origen→destinos→origen) según Google
   // Directions al iniciar: sirve de respaldo cuando el GPS real es bajo/basura.
-  esperado_km     Float?
-  esperado_min    Float?
+  esperado_km      Float?
+  esperado_min     Float?
 
   // Métricas por tramo (km / minutos), calculadas al cerrar cada tramo.
-  ida_km          Float?
-  ida_min         Float?
-  vuelta_km       Float?
-  vuelta_min      Float?
+  ida_km     Float?
+  ida_min    Float?
+  vuelta_km  Float?
+  vuelta_min Float?
   // Totales FIELES del recorrido al finalizar: GPS real (ida+vuelta, con tope
   // anti-basura) y, si el GPS es implausiblemente bajo, el estimado de la ruta.
   // Es la fuente de verdad del km/tiempo de la operación y del perfil del mes.
-  total_km        Float?
-  total_min       Float?
+  total_km   Float?
+  total_min  Float?
   // Tiempo REAL de MANEJO (GPS en movimiento, excluye paradas/detenido), en minutos.
   // Base de las "horas de manejo" del pago mensual. Se persiste al finalizar; para
   // recorridos viejos (null) el resumen cae al tiempo transcurrido menos descanso.
-  manejo_min      Float?
+  manejo_min Float?
 
-  creado_en       DateTime @default(now())
-  actualizado_en  DateTime @updatedAt
+  creado_en      DateTime @default(now())
+  actualizado_en DateTime @updatedAt
 
   // Paradas del recorrido (destino principal + destinos adicionales). El chofer
   // marca la llegada de cada una y puede registrar su rendición/gastos ahí.
-  paradas         RecorridoParada[]
+  paradas RecorridoParada[]
 
   @@index([tenant_id, estado])
   @@index([trabajador_id, estado])
@@ -639,8 +654,8 @@ model RecorridoParada {
   id             String    @id @default(uuid())
   recorrido_id   String
   tenant_id      String
-  orden          Int       // 1, 2, 3… (orden de visita)
-  label          String    // dirección del destino
+  orden          Int // 1, 2, 3… (orden de visita)
+  label          String // dirección del destino
   // Parada final de RETORNO al origen (punto verde). El vehículo siempre vuelve a
   // la base: es la última parada del recorrido y cierra la trazabilidad (ida+vuelta).
   es_retorno     Boolean   @default(false)
@@ -653,9 +668,9 @@ model RecorridoParada {
   foto_bolla     String[]  @default([])
   // "Abono recibido aquí": dinero EXTRA que le entregaron al chofer en esta parada
   // (además del anticipo inicial de la operación). Sirve para el control del saldo.
-  anticipo       Float?    // monto del abono recibido en esta parada (opcional)
-  abono_de       String?   // quién le entregó el dinero (supervisor/persona)
-  gastos         Json?     // lista de gastos [{ tipo, monto, descripcion }] (opcional)
+  anticipo       Float? // monto del abono recibido en esta parada (opcional)
+  abono_de       String? // quién le entregó el dinero (supervisor/persona)
+  gastos         Json? // lista de gastos [{ tipo, monto, descripcion }] (opcional)
   nota           String?
   // Km/min GPS del TRAMO hasta esta parada (desde la parada anterior, o desde el
   // inicio/retorno si es la primera). Solo informativo — NO alimenta ida_km/
@@ -666,7 +681,7 @@ model RecorridoParada {
   creado_en      DateTime  @default(now())
   actualizado_en DateTime  @updatedAt
 
-  recorrido      Recorrido @relation(fields: [recorrido_id], references: [id], onDelete: Cascade)
+  recorrido Recorrido @relation(fields: [recorrido_id], references: [id], onDelete: Cascade)
 
   @@index([recorrido_id])
   @@map("recorrido_paradas")
@@ -677,30 +692,30 @@ model RecorridoParada {
 // de manejo (ore guida), base del pago del chofer. Lo crea el propio chofer
 // desde la app; supervisores/admin pueden verlo y editarlo.
 model RegistroServicio {
-  id            String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  tenant_id     String
-  tenant        Tenant   @relation(fields: [tenant_id], references: [id])
+  tenant_id String
+  tenant    Tenant @relation(fields: [tenant_id], references: [id])
 
-  trabajador_id String   // Trabajador.id del chofer (ID_AUTISTA)
-  vehiculo_id   String?  // Vehiculo.id o placa/ID_FURGON (targa furgón)
-  targa         String?  // Placa mostrada (denormalizada para el listado)
+  trabajador_id String // Trabajador.id del chofer (ID_AUTISTA)
+  vehiculo_id   String? // Vehiculo.id o placa/ID_FURGON (targa furgón)
+  targa         String? // Placa mostrada (denormalizada para el listado)
 
-  fecha         DateTime // FECHA del servicio
-  operacion     String   @default("DHL") // DHL | FARMACIA (las dos operaciones)
+  fecha     DateTime // FECHA del servicio
+  operacion String   @default("DHL") // DHL | FARMACIA (las dos operaciones)
 
-  km            Float?   @default(0) // KM TOTAL de la jornada
-  ore_mattina   Float?   @default(0) // Ore guida diurnas (tarifa diurna)
-  ore_sera      Float?   @default(0) // Ore guida nocturnas (desde hora_corte_notte, tarifa nocturna)
-  ore_attesa    Float?   @default(0) // Ore attesa: horas de espera (no de manejo)
+  km          Float? @default(0) // KM TOTAL de la jornada
+  ore_mattina Float? @default(0) // Ore guida diurnas (tarifa diurna)
+  ore_sera    Float? @default(0) // Ore guida nocturnas (desde hora_corte_notte, tarifa nocturna)
+  ore_attesa  Float? @default(0) // Ore attesa: horas de espera (no de manejo)
 
-  repibilita    Boolean  @default(false) // Reperibilità (disponibilidad on-call) SI/NO
+  repibilita         Boolean @default(false) // Reperibilità (disponibilidad on-call) SI/NO
   consegna_realizada Boolean @default(true) // "Se realizó consegna" SI/NO
-  citta_destino String?  // CITTA / DESTINAZIONE (ciudad o destino del servicio)
-  cliente       String?  // CLIENTE
-  spedizione    String?  // SPEDIZIONE
-  comentario    String?  // COMENTARIO FINAL
-  foto_bolla    String?  // URL de la foto de la bolla (Cloudinary)
+  citta_destino      String? // CITTA / DESTINAZIONE (ciudad o destino del servicio)
+  cliente            String? // CLIENTE
+  spedizione         String? // SPEDIZIONE
+  comentario         String? // COMENTARIO FINAL
+  foto_bolla         String? // URL de la foto de la bolla (Cloudinary)
 
   creado_en      DateTime @default(now())
   actualizado_en DateTime @updatedAt

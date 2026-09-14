@@ -19,6 +19,7 @@ import { PanelModule } from './modules/panel/panel.module';
 import { RecorridosModule } from './modules/recorridos/recorridos.module';
 import { RegistrosModule } from './modules/registros/registros.module';
 import { VelocityModule } from './modules/velocity/velocity.module';
+import { NotificacionesModule } from './modules/notificaciones/notificaciones.module';
 
 @Module({
     imports: [
@@ -42,6 +43,7 @@ import { VelocityModule } from './modules/velocity/velocity.module';
         RecorridosModule,
         RegistrosModule,
         VelocityModule,
+        NotificacionesModule,
     ],
     controllers: [],
     providers: [],
