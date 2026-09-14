@@ -96,8 +96,8 @@ export default function ReporteMensualModal({ onClose }: { onClose: () => void }
                 { wch: 12 }, // Fecha
                 { wch: 22 }, // Conductor
                 { wch: 12 }, // Vehículo
-                { wch: 32 }, // Origen
-                { wch: 32 }, // Destino
+                { wch: 60 }, // Origen
+                { wch: 45 }, // Destino
                 { wch: 11 }, // Compactada
                 { wch: 18 }, // Cliente
                 { wch: 20 }, // Spedizione
