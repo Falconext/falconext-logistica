@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, Linking } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { Receipt, Calendar, Pencil, Trash2, Coins, ClipboardList, Clock, ExternalLink } from 'lucide-react-native';
+import { Receipt, Calendar, Pencil, Trash2, Coins, ClipboardList, Clock, ExternalLink, Upload } from 'lucide-react-native';
 import {
   Screen,
   AppHeader,
@@ -50,6 +50,9 @@ interface Peaje {
   link_peaje?: string | null;
   archivo?: string | null;
   comprobantes?: string[];
+  // Fecha/hora en que se subió el peaje al sistema — la empresa da 48h para
+  // cargarlo, así que esto sirve para controlar ese plazo.
+  creado_en?: string | null;
   // Filas que provienen de gastos de operación: no se editan aquí (monto/estado),
   // pero el chofer SÍ puede sustentarlas después (fotos, nº mancato, link).
   _origen?: string | null;
@@ -57,22 +60,35 @@ interface Peaje {
 
 type Sustento = { comprobantes: string[]; numero_mancato: string; link_peaje: string };
 
-const ESTADOS = ['PENDIENTE', 'PAGADO', 'ANULADO'] as const;
+const ESTADOS = ['PENDIENTE', 'OBSERVADO', 'PAGADO', 'ANULADO'] as const;
 type Estado = (typeof ESTADOS)[number];
 
 const TIPOS = ['Peaje', 'Multa'] as const;
 
-function estadoVariant(estado?: string | null): 'success' | 'warning' | 'danger' | 'neutral' {
+function estadoVariant(estado?: string | null): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
   switch ((estado || '').toUpperCase()) {
     case 'PAGADO':
       return 'success';
     case 'PENDIENTE':
       return 'warning';
+    // Observado: el admin lo aparta porque no se puede pagar por algún motivo
+    // (mismo criterio que la web) — se resalta como algo que necesita atención.
+    case 'OBSERVADO':
+    case 'OBSERVACIÓN':
+    case 'OBSERVACION':
+      return 'danger';
     case 'ANULADO':
       return 'neutral';
     default:
       return 'neutral';
   }
+}
+
+function formatDateTime(v?: string | null) {
+  if (!v) return '—';
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return v;
+  return `${formatDate(v)} · ${d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
 function formatDate(v?: string | null) {
@@ -82,12 +98,14 @@ function formatDate(v?: string | null) {
   return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-// El peaje sigue "pendiente" mientras no esté pagado ni anulado (estado texto libre).
+// El peaje sigue "pendiente" mientras no esté pagado, anulado NI observado
+// (estado texto libre) — observado es un motivo aparte, no un olvido.
 const PAGADO_VALS = ['PAGADO', 'PAGADO POR AUTISTA', 'PAGO BONIFICO'];
 const ANULADO_VALS = ['ANULADO'];
+const OBSERVADO_VALS = ['OBSERVADO', 'OBSERVACIÓN', 'OBSERVACION'];
 function esPendiente(estado?: string | null) {
   const v = (estado || '').trim().toUpperCase();
-  return !PAGADO_VALS.includes(v) && !ANULADO_VALS.includes(v);
+  return !PAGADO_VALS.includes(v) && !ANULADO_VALS.includes(v) && !OBSERVADO_VALS.includes(v);
 }
 // Fecha límite vencida y todavía sin pagar → hay riesgo de multa (se resalta en rojo).
 function esVencido(limite?: string | null, estado?: string | null) {
@@ -377,6 +395,12 @@ export default function PeajesScreen() {
             </Text>
           </View>
         ) : null}
+        {p.creado_en ? (
+          <View style={[styles.metaItem, { marginTop: 4 }]}>
+            <Upload size={13} color={C.textFaint} />
+            <Text style={styles.meta}>Subido: {formatDateTime(p.creado_en)}</Text>
+          </View>
+        ) : null}
       </View>
       <Text style={styles.cost} numberOfLines={1}>{formatMoney(p.monto, moneda)}</Text>
     </TouchableOpacity>
@@ -449,6 +473,7 @@ export default function PeajesScreen() {
             <InfoRow label="Estado" value={detail.estado} />
             <InfoRow label="Fecha" value={formatDate(detail.fecha)} />
             <InfoRow label="Fecha límite" value={formatDate(detail.fecha_limite_pago || (detail.fecha ? sumarDias(String(detail.fecha).split('T')[0], PLAZO_PAGO_DIAS) : null))} />
+            <InfoRow label="Subido" value={formatDateTime(detail.creado_en)} />
             <InfoRow label="Trabajador" value={trabajadorLabel(detail.trabajador_id)} />
             {(detail.link_peaje || detail.archivo) ? (
               <TouchableOpacity

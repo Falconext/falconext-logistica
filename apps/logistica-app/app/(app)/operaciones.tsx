@@ -239,7 +239,7 @@ export default function OperacionesScreen() {
   // Al entrar desde el menú llegamos con un filtro pre-activado:
   //  ?mias=1 → «Mis consegnas» (las asignadas al usuario logueado)
   //  ?sup=1  → «Supervisores» (asignadas a cualquier supervisor)
-  const { sup, mias } = useLocalSearchParams<{ sup?: string; mias?: string }>();
+  const { sup, mias, op } = useLocalSearchParams<{ sup?: string; mias?: string; op?: string }>();
   const [items, setItems] = useState<Programacion[]>([]);
   const [total, setTotal] = useState(0);
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -369,6 +369,15 @@ export default function OperacionesScreen() {
     if (mias === '1' && canEditAll) setSoloMias(true);
     if (sup === '1' && canEditAll) setSoloSupervisores(true);
   }, [mias, sup, canEditAll]);
+
+  // Deep-link ?op=<id> (desde Finanzas: "Ir a la consegna"): abre esa operación
+  // puntual aunque no esté en la primera página de la lista cargada.
+  useEffect(() => {
+    if (!op) return;
+    api.get(`/programacion/${op}`)
+      .then((res) => { if (res.data) setDetail(res.data); })
+      .catch((e) => console.error('[operaciones] deep-link op', e));
+  }, [op]);
 
   // Al activar "Mis consegnas" cargamos el mismo resumen que ve el chofer
   // (endpoints scopeados al trabajador del usuario, no dependen de solo_propios).

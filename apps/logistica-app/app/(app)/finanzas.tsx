@@ -4,8 +4,8 @@
 // celular. Solo visible a roles con ve_finanzas; el backend ya bloquea el acceso.
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native';
-import { useFocusEffect } from 'expo-router';
-import { SlidersHorizontal, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Wallet, Percent } from 'lucide-react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { SlidersHorizontal, ChevronDown, ChevronUp, ChevronRight, TrendingUp, TrendingDown, Wallet, Percent } from 'lucide-react-native';
 import { Screen, AppHeader, Card, StatCard, Badge, LoadingState, EmptyState, FormField, Theme } from '../../components/ui';
 import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
@@ -45,6 +45,7 @@ interface Resumen { operaciones: number; operaciones_con_ingreso: number; ingres
 interface Data { moneda: string; resumen: Resumen; items: Fila[]; }
 
 export default function FinanzasScreen() {
+  const router = useRouter();
   const { themeKey } = useTheme();
   const styles = useMemo(() => makeStyles(), [themeKey]);
   const [data, setData] = useState<Data | null>(null);
@@ -168,11 +169,17 @@ export default function FinanzasScreen() {
       ) : (
         data.items.map((it) => {
           const rentOk = (it.rentabilidad ?? 0) >= 0;
+          // Salta a la operación en Operaciones para editarla o agregar gastos —
+          // buscarla a mano ahí era el pedido original (feedback 0909, punto 5).
+          const irALaConsegna = () => router.push({ pathname: '/(app)/operaciones', params: { op: it.id } } as any);
           return (
-            <Card key={it.id} style={styles.row}>
+            <Card key={it.id} style={styles.row} onPress={irALaConsegna}>
               <View style={styles.rowHead}>
                 <Text style={styles.cliente} numberOfLines={1}>{it.cliente || it.lugar_entrega || 'Sin cliente'}</Text>
-                <Text style={styles.fecha}>{fmtFecha(it.fecha)}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={styles.fecha}>{fmtFecha(it.fecha)}</Text>
+                  <ChevronRight size={15} color={C.textFaint} />
+                </View>
               </View>
               <View style={styles.rowMeta}>
                 {!!it.spedizione && <Badge label={it.spedizione} variant="info" />}
