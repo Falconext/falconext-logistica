@@ -1,7 +1,8 @@
 
-import { Controller, Get, Param, Patch, Body, Post, Delete, UseGuards, Req, Query, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Param, Patch, Body, Post, Delete, UseGuards, Req, Query, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { ProgramacionService } from './programacion.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { EsAdminGuard } from '../auth/es-admin.guard';
 
 @Controller('programacion')
 @UseGuards(JwtAuthGuard)
@@ -24,6 +25,16 @@ export class ProgramacionController {
             // data histórica por código durante la transición.
             ownerIds: req.user.soloPropios ? [req.user.trabajadorId, req.user.trabajadorCodigo].filter(Boolean) : undefined,
         });
+    }
+
+    // Reporte mensual (comparativa fin de mes contra clientes/proveedores): una
+    // fila por entrega facturable, dividiendo las operaciones compactadas. Solo
+    // admin — expone ingreso/gastos de TODA la flota, no solo lo propio.
+    @Get('reporte-mensual')
+    @UseGuards(EsAdminGuard)
+    reporteMensual(@Req() req, @Query('from') from: string, @Query('to') to: string) {
+        if (!from || !to) throw new BadRequestException('Faltan los parámetros from/to.');
+        return this.programacionService.reporteMensual(req.user.tenantId, from, to);
     }
 
     @Post()

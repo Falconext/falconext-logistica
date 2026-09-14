@@ -42,6 +42,81 @@ export class ProgramacionService {
         ingreso_estimado: true,
     };
 
+    // Reporte mensual (comparativa con clientes/proveedores): una fila por cada
+    // ENTREGA REAL facturable, incluso dentro de una operación "compactada" (2+
+    // clientes distintos en un mismo viaje) — se divide en tantas filas como
+    // destinos tenga, cada una con su propio cliente/spedizione/km/ingreso, para
+    // poder cruzarla contra la hoja de cobro de cada cliente (ver destinos_detalle).
+    // Los gastos rendidos (peajes/combustible/parking/otro) son del VIAJE completo,
+    // no de cada parada, así que solo se muestran en la primera fila de cada grupo
+    // compactado — evita inflar el total de gastos al sumar la columna.
+    async reporteMensual(tenantId: string, from: string, to: string) {
+        const ops = await this.prisma.programacion.findMany({
+            where: { tenant_id: tenantId, fecha: { gte: new Date(from), lte: new Date(to) } },
+            orderBy: { fecha: 'asc' },
+            select: {
+                id: true, fecha: true, trabajador_id: true, vehiculo_id: true,
+                lugar_retiro: true, retiros: true,
+                lugar_entrega: true, destinos: true, destinos_detalle: true,
+                compactado: true, cliente: true, spedizione: true,
+                km_facturable: true, ingreso_estimado: true,
+                gastos: { select: { monto: true } },
+            },
+        });
+
+        const codes = Array.from(new Set(ops.map((o) => o.trabajador_id).filter((c): c is string => !!c)));
+        const nameByCode = new Map<string, string>();
+        if (codes.length) {
+            const trabajadores = await this.prisma.trabajador.findMany({
+                where: { tenant_id: tenantId, OR: [{ id: { in: codes } }, { id_trabajador: { in: codes } }] },
+                select: { id: true, id_trabajador: true, nombre_completo: true },
+            });
+            trabajadores.forEach((t) => {
+                nameByCode.set(t.id, t.nombre_completo);
+                if (t.id_trabajador) nameByCode.set(t.id_trabajador, t.nombre_completo);
+            });
+        }
+
+        const rows: any[] = [];
+        for (const op of ops) {
+            const conductor = (op.trabajador_id && nameByCode.get(op.trabajador_id)) || op.trabajador_id || null;
+            const origen = [op.lugar_retiro, ...(op.retiros || [])].filter(Boolean).join(' → ') || null;
+            const gastosTotal = op.gastos.reduce((s, g) => s + (g.monto || 0), 0);
+            const base = { fecha: op.fecha, conductor, vehiculo: op.vehiculo_id, origen, compactada: op.compactado ? 'Sí' : 'No' };
+
+            // Primera entrega (o única, si no es compactada): campos de nivel raíz.
+            rows.push({
+                ...base,
+                destino: op.lugar_entrega,
+                cliente: op.cliente,
+                spedizione: op.spedizione,
+                km_facturado: op.km_facturable,
+                ingreso: op.ingreso_estimado,
+                gastos: gastosTotal,
+            });
+
+            // Entregas adicionales (solo cuando compactado=true) — destinos[] y
+            // destinos_detalle[] son paralelos por índice.
+            if (op.compactado && Array.isArray(op.destinos)) {
+                const detalle: any[] = Array.isArray(op.destinos_detalle) ? (op.destinos_detalle as any[]) : [];
+                op.destinos.forEach((destino, idx) => {
+                    if (!destino) return;
+                    const det = detalle[idx] || {};
+                    rows.push({
+                        ...base,
+                        destino,
+                        cliente: det.cliente || op.cliente,
+                        spedizione: det.spedizione || op.spedizione,
+                        km_facturado: det.km_facturable != null && det.km_facturable !== '' ? Number(det.km_facturable) : null,
+                        ingreso: det.ingreso != null && det.ingreso !== '' ? Number(det.ingreso) : null,
+                        gastos: 0, // ya se contó en la primera fila del grupo
+                    });
+                });
+            }
+        }
+        return rows;
+    }
+
     async findAll(
         tenantId: string,
         opts: { from?: string; to?: string; q?: string; estados?: string[]; skip?: number; take?: number; ownerIds?: string[]; spedizione?: string; trabajadorId?: string } = {},
