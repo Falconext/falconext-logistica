@@ -22,6 +22,26 @@ export class PeajesController {
         return this.peajesService.create(data, req.user.tenantId);
     }
 
+    // Operaciones recientes para vincular un peaje (debe ir antes de ':id').
+    @Get('operaciones-candidatas')
+    operacionesCandidatas(@Req() req, @Query() query: any) {
+        this.assertPuedeEditar(req);
+        return this.peajesService.operacionesCandidatas(req.user.tenantId, {
+            trabajadorId: query.trabajadorId || undefined,
+            targa: query.targa || undefined,
+            fecha: query.fecha || undefined,
+            q: query.q || undefined,
+            take: query.take ? parseInt(query.take, 10) : undefined,
+        });
+    }
+
+    // Vincula un peaje ya registrado (suelto) a una operación.
+    @Post(':id/vincular')
+    vincular(@Param('id') id: string, @Body() body: { programacion_id: string }, @Req() req) {
+        this.assertPuedeEditar(req);
+        return this.peajesService.vincular(id, body?.programacion_id, req.user.tenantId);
+    }
+
     @Get()
     findAll(@Req() req, @Query() query: any) {
         return this.peajesService.findAll(req.user.tenantId, {

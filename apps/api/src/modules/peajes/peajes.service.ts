@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { fechaLimitePago } from '../../common/plazo-pago.util';
@@ -7,7 +7,16 @@ import { fechaLimitePago } from '../../common/plazo-pago.util';
 export class PeajesService {
     constructor(private prisma: PrismaService) { }
 
-    create(data: any, tenantId: string) {
+    async create(data: any, tenantId: string) {
+        // Peaje vinculado a una operación: NO se guarda como peaje suelto sino como
+        // gasto de esa operación (GastoOperacion tipo PEAJE). Así entra al costo de
+        // la ruta, al panel financiero y al reporte mensual — igual que si el
+        // supervisor lo hubiera cargado desde el formulario de la operación.
+        // Es lo que faltaba: los peajes "olvidados" se registraban desde Peajes y
+        // quedaban sueltos, sin trazabilidad hacia la entrega.
+        if (data.programacion_id) {
+            return this.crearGastoDeOperacion(data, data.programacion_id, tenantId);
+        }
         return this.prisma.peaje.create({
             data: {
                 id_multa: data.id_multa || null,
@@ -32,6 +41,106 @@ export class PeajesService {
                 tenant_id: tenantId,
             }
         });
+    }
+
+    // Crea un GastoOperacion tipo PEAJE colgado de una operación, con los mismos
+    // defaults que usa Operaciones (fecha de la op si no viene, límite +14, etc.).
+    private async crearGastoDeOperacion(data: any, programacionId: string, tenantId: string) {
+        const op = await this.prisma.programacion.findFirst({
+            where: { id: programacionId, tenant_id: tenantId },
+            select: { id: true, trabajador_id: true, vehiculo_id: true, fecha: true, fecha_retiro: true, fecha_entrega: true },
+        });
+        if (!op) throw new NotFoundException('La operación indicada no existe.');
+        const fecha: Date = data.fecha ? new Date(data.fecha) : (op.fecha_entrega || op.fecha_retiro || op.fecha || new Date());
+        const gasto = await this.prisma.gastoOperacion.create({
+            data: {
+                programacion_id: op.id,
+                tipo: 'PEAJE',
+                monto: data.monto !== undefined && data.monto !== '' ? parseFloat(data.monto) : 0,
+                fecha,
+                descripcion: data.comentarios || null,
+                numero_mancato: data.id_multa || data.numero_mancato || null,
+                link_peaje: data.link_peaje || null,
+                comprobantes: Array.isArray(data.comprobantes) ? data.comprobantes.filter(Boolean) : (data.archivo ? [data.archivo] : []),
+                estado: data.estado && data.estado !== 'PENDIENTE' ? data.estado : null,
+                fecha_limite_pago: data.fecha_limite_pago ? new Date(data.fecha_limite_pago) : fechaLimitePago(fecha),
+                // Registrado por el supervisor desde Peajes: por defecto lo paga el
+                // chofer (histórico), salvo que se marque como mancato de la empresa.
+                pagado_por_chofer: data.pagado_por_chofer !== false,
+                // Prioridad: chofer/placa de la operación (fuente de verdad del viaje).
+                trabajador_id: op.trabajador_id || data.trabajador_id || null,
+                targa: op.vehiculo_id || data.targa || null,
+                tenant_id: tenantId,
+            },
+        });
+        // Misma forma que devuelve findAll para las filas de operación.
+        return { ...gasto, id: `gasto:${gasto.id}`, _origen: 'operacion', programacion_id: op.id };
+    }
+
+    // Vincula un peaje SUELTO (tabla Peaje) a una operación: lo migra a
+    // GastoOperacion y borra el suelto. Idempotente por diseño: si el id ya es
+    // "gasto:…" es que ya está vinculado.
+    async vincular(id: string, programacionId: string, tenantId: string) {
+        if (!programacionId) throw new BadRequestException('Falta la operación a vincular.');
+        if (id.startsWith('gasto:')) {
+            // Ya es un gasto de operación: solo se permite moverlo de operación.
+            const gastoId = id.slice('gasto:'.length);
+            const op = await this.prisma.programacion.findFirst({ where: { id: programacionId, tenant_id: tenantId }, select: { id: true, trabajador_id: true, vehiculo_id: true } });
+            if (!op) throw new NotFoundException('La operación indicada no existe.');
+            const r = await this.prisma.gastoOperacion.updateMany({
+                where: { id: gastoId, tenant_id: tenantId, tipo: 'PEAJE' },
+                data: { programacion_id: op.id, trabajador_id: op.trabajador_id || undefined, targa: op.vehiculo_id || undefined },
+            });
+            if (!r.count) throw new NotFoundException('El peaje no existe.');
+            return { ok: true, id, programacion_id: op.id, movido: true };
+        }
+        const peaje = await this.prisma.peaje.findFirst({ where: { id, tenant_id: tenantId } });
+        if (!peaje) throw new NotFoundException('El peaje no existe.');
+        const creado = await this.crearGastoDeOperacion({
+            monto: peaje.monto, fecha: peaje.fecha, comentarios: peaje.comentarios,
+            id_multa: peaje.id_multa, archivo: peaje.archivo, estado: peaje.estado,
+            fecha_limite_pago: peaje.fecha_limite_pago, trabajador_id: peaje.trabajador_id, targa: peaje.targa,
+        }, programacionId, tenantId);
+        await this.prisma.peaje.delete({ where: { id: peaje.id } });
+        return { ok: true, id: creado.id, programacion_id: programacionId, migrado: true };
+    }
+
+    // Operaciones recientes para el selector "Vincular a operación". Se ordenan
+    // por cercanía a la fecha del peaje (si viene) y se pueden acotar por
+    // chofer/placa, que es como el supervisor identifica el viaje.
+    async operacionesCandidatas(tenantId: string, opts: { trabajadorId?: string; targa?: string; fecha?: string; q?: string; take?: number }) {
+        const take = Math.min(Math.max(opts.take || 30, 1), 100);
+        const where: Prisma.ProgramacionWhereInput = { tenant_id: tenantId };
+        if (opts.trabajadorId) where.trabajador_id = opts.trabajadorId;
+        if (opts.targa) where.vehiculo_id = { contains: opts.targa, mode: 'insensitive' };
+        if (opts.q) where.OR = [
+            { cliente: { contains: opts.q, mode: 'insensitive' } },
+            { lugar_entrega: { contains: opts.q, mode: 'insensitive' } },
+            { id_programacion: { contains: opts.q, mode: 'insensitive' } },
+        ];
+        // Ventana: ±30 días alrededor de la fecha del peaje; sin fecha, los últimos 60 días.
+        const centro = opts.fecha ? new Date(opts.fecha) : new Date();
+        const ms = 24 * 60 * 60 * 1000;
+        where.fecha = opts.fecha
+            ? { gte: new Date(centro.getTime() - 30 * ms), lte: new Date(centro.getTime() + 30 * ms) }
+            : { gte: new Date(centro.getTime() - 60 * ms) };
+        const ops = await this.prisma.programacion.findMany({
+            where,
+            orderBy: { fecha: 'desc' },
+            take,
+            select: { id: true, fecha: true, cliente: true, lugar_entrega: true, vehiculo_id: true, trabajador_id: true, estado_consegna: true, spedizione: true },
+        });
+        // Nombre del chofer (id UUID o código legacy).
+        const codes = Array.from(new Set(ops.map((o) => o.trabajador_id).filter((c): c is string => !!c)));
+        const nameByCode = new Map<string, string>();
+        if (codes.length) {
+            const ts = await this.prisma.trabajador.findMany({
+                where: { tenant_id: tenantId, OR: [{ id: { in: codes } }, { id_trabajador: { in: codes } }] },
+                select: { id: true, id_trabajador: true, nombre_completo: true },
+            });
+            ts.forEach((t) => { nameByCode.set(t.id, t.nombre_completo); if (t.id_trabajador) nameByCode.set(t.id_trabajador, t.nombre_completo); });
+        }
+        return ops.map((o) => ({ ...o, trabajador_nombre: (o.trabajador_id && nameByCode.get(o.trabajador_id)) || null }));
     }
 
     async findAll(
