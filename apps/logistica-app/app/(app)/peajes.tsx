@@ -179,6 +179,9 @@ export default function PeajesScreen() {
   const [sust, setSust] = useState<Sustento>({ comprobantes: [], numero_mancato: '', link_peaje: '' });
   const [savingSust, setSavingSust] = useState(false);
   const myCodes = [user?.trabajador_id, (user as any)?.trabajador_codigo].filter(Boolean) as string[];
+  // Chofer: puede registrar un peaje SOLO vinculándolo a una consegna suya, y
+  // vincular un peaje suelto SOLO si es suyo. El backend valida lo mismo.
+  const esMio = (p: Peaje | null) => !!p?.trabajador_id && myCodes.includes(p.trabajador_id);
   const canSustentar = (p: Peaje | null) =>
     !!p && p._origen === 'operacion' && (canEditAll || (!!p.trabajador_id && myCodes.includes(p.trabajador_id)));
   const openDetail = (p: Peaje) => {
@@ -312,7 +315,7 @@ export default function PeajesScreen() {
   // Acotar las operaciones candidatas al chofer/placa/fecha que va eligiendo
   // el supervisor en el formulario de creación.
   useEffect(() => {
-    if (!formVisible || editing || !canEditAll) return;
+    if (!formVisible || editing) return;
     loadOpsCand({ trabajadorId: form.trabajador_id || undefined, targa: form.targa || undefined, fecha: form.fecha || undefined });
   }, [formVisible, editing, canEditAll, form.trabajador_id, form.targa, form.fecha, loadOpsCand]);
 
@@ -355,6 +358,10 @@ export default function PeajesScreen() {
   const save = async () => {
     if (!form.targa.trim()) {
       Alert.alert('Falta la placa', 'La placa (targa) es obligatoria.');
+      return;
+    }
+    if (!editing && !canEditAll && !programacionId) {
+      Alert.alert('Falta la consegna', 'Elige la consegna a la que pertenece este peaje.');
       return;
     }
     setSaving(true);
@@ -493,7 +500,7 @@ export default function PeajesScreen() {
         )}
       </View>
 
-      {canEditAll && <Fab onPress={openCreate} />}
+      <Fab onPress={openCreate} />
 
       {/* Detalle */}
       <FormModal
@@ -525,7 +532,7 @@ export default function PeajesScreen() {
             <InfoRow label="Fecha límite" value={formatDate(detail.fecha_limite_pago || (detail.fecha ? sumarDias(String(detail.fecha).split('T')[0], PLAZO_PAGO_DIAS) : null))} />
             <InfoRow label="Subido" value={formatDateTime(detail.creado_en)} />
             <InfoRow label="Trabajador" value={trabajadorLabel(detail.trabajador_id)} />
-            {canEditAll && detail._origen !== 'operacion' && (
+            {(canEditAll || esMio(detail)) && detail._origen !== 'operacion' && (
               <View style={styles.vincBox}>
                 {!vincOpen ? (
                   <TouchableOpacity style={styles.vincBtn} onPress={abrirVincular}>
@@ -607,14 +614,16 @@ export default function PeajesScreen() {
           autoCapitalize="characters"
         />
 
-        <Select
-          label="Estado"
-          value={form.estado}
-          onChange={(v) => setForm({ ...form, estado: v as Estado })}
-          options={ESTADOS.map((e) => ({ value: e, label: e }))}
-          placeholder="Seleccionar estado"
-          searchable={false}
-        />
+        {canEditAll && (
+          <Select
+            label="Estado"
+            value={form.estado}
+            onChange={(v) => setForm({ ...form, estado: v as Estado })}
+            options={ESTADOS.map((e) => ({ value: e, label: e }))}
+            placeholder="Seleccionar estado"
+            searchable={false}
+          />
+        )}
 
         <Select
           label="Tipo"
@@ -656,19 +665,21 @@ export default function PeajesScreen() {
             searchable
           />
         )}
-        {!editing && canEditAll && (
+        {!editing && (
           <View style={{ marginBottom: S.md }}>
             <Select
-              label="Vincular a operación (opcional)"
+              label={canEditAll ? 'Vincular a operación (opcional)' : 'Consegna de este peaje *'}
               value={programacionId}
               onChange={setProgramacionId}
               options={opsCand.map((o) => ({ value: o.id, label: opLabel(o) }))}
-              placeholder={opsCand.length ? 'Elegir la entrega de este peaje…' : 'Sin operaciones recientes para este chofer/placa'}
+              placeholder={opsCand.length ? 'Elegir la entrega de este peaje…' : (canEditAll ? 'Sin operaciones recientes para este chofer/placa' : 'No tienes consegnas recientes')}
               searchable
-              clearable
+              clearable={canEditAll}
             />
             <Text style={styles.vincHelp}>
-              Si lo vinculas, el peaje queda como gasto de esa entrega: entra al costo de la ruta, a Finanzas y al reporte mensual.
+              {canEditAll
+                ? 'Si lo vinculas, el peaje queda como gasto de esa entrega: entra al costo de la ruta, a Finanzas y al reporte mensual.'
+                : 'Elige la consegna a la que pertenece este peaje. Solo aparecen tus consegnas; queda registrado como gasto de esa entrega.'}
             </Text>
           </View>
         )}
