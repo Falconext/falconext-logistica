@@ -8,27 +8,36 @@ import { PrismaService } from '../../prisma.service';
 //
 // API (deducida del SDK oficial chrisjohnleah/velocity-fleet-api):
 //   Base:  https://www.velocityfleet.com
-//   Auth:  Authorization: Bearer <token>  (token directo de la UI: Account →
-//          Account Settings → API Integrations), o flujo OAuth2 refresh en /o/token/.
-//   GET  /vapi/v1/accounts/users/customers/            → { <customerId>: {...}, ... }
+//   Auth (VERIFICADO 2026-09-13): el "API Token" del portal (Cuenta → Configuraciones
+//          → Integración API, producto Telemática; un UUID) es un REFRESH token. Se
+//          canjea por un JWT con
+//            POST /vapi/v1/accounts/users/oauth2/refresh/  { "token": "<API token>" }
+//              → { "token": "<JWT>" }   (exp ≈ 44 días; lo cacheamos en memoria)
+//          y el JWT va en `Authorization: Bearer <JWT>`. Usar el UUID directo como
+//          Bearer/Token da 401 (por eso fallaba el diag inicial).
+//   GET  /vapi/v1/accounts/users/customers/  → { <customerId>: { name, product:{"2":"Telematics"} } }
 //   POST /api/mobile/kinesis/device-live-positions/?customer=<id>
-//          → { deviceCount, devices:[{ vehicleRegistration, lat, lon, speed,
-//              ignition, occurredAt }], deviceGroups:[{ name, devices:[...] }] }
+//          → { device_count, devices:[{ id, vehicle_registration, lat, lon, speed (km/h),
+//              ignition:"Y"|"N", direction, timestamp:"<epoch s>", street, town, private }],
+//              device_groups:[{ name, devices:[...misma forma, REPETIDOS] }] }
+//          Deduplicar por `id`. `private:true` viene con lat/lon 0 → ignorar.
 //   Ojo: Django exige el slash final (APPEND_SLASH → 301 si falta).
 //
 // Config por variables de entorno:
-//   VELOCITY_FLEET_TOKEN            → token Bearer directo (forma recomendada)
-//   VELOCITY_FLEET_CLIENT_ID/_SECRET/_REFRESH_TOKEN → alternativa OAuth2 refresh
+//   VELOCITY_FLEET_TOKEN            → API Token del portal (forma recomendada)
+//   VELOCITY_FLEET_CLIENT_ID/_SECRET/_REFRESH_TOKEN → alternativa OAuth2 en /o/token/ (no verificada)
 //   VELOCITY_FLEET_BASE_URL        → override del host (opcional)
 
 interface RawDevice {
-    vehicleRegistration?: string; registration?: string; reg?: string; vrm?: string;
+    id?: number | string;
+    vehicle_registration?: string; vehicleRegistration?: string; registration?: string; reg?: string; vrm?: string;
     lat?: number | string; latitude?: number | string;
     lon?: number | string; lng?: number | string; longitude?: number | string;
     speed?: number | string;
-    ignition?: boolean; ignitionOn?: boolean;
+    ignition?: boolean | string; ignitionOn?: boolean;
     occurredAt?: string | number; occurred_at?: string | number; timestamp?: string | number; time?: string | number;
-    heading?: number | string; bearing?: number | string;
+    heading?: number | string; bearing?: number | string; direction?: number | string;
+    private?: boolean;
     [k: string]: any;
 }
 
@@ -44,19 +53,33 @@ export class VelocityService {
     // ---- Auth ---------------------------------------------------------------
 
     private async getAccessToken(): Promise<string> {
-        // 1) Token Bearer directo (forma recomendada).
-        const direct = process.env.VELOCITY_FLEET_TOKEN;
-        if (direct) return direct;
+        if (this.cachedAccess && this.cachedAccess.expiresAt > Date.now() + 60_000) {
+            return this.cachedAccess.token;
+        }
 
-        // 2) Flujo OAuth2 refresh_token (django-oauth-toolkit en /o/token/).
+        // 1) API Token del portal (UUID) → canje por JWT (forma verificada).
+        const apiToken = (process.env.VELOCITY_FLEET_TOKEN || '').trim();
+        if (apiToken) {
+            const res = await fetch(`${this.baseUrl}/vapi/v1/accounts/users/oauth2/refresh/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify({ token: apiToken }),
+                signal: AbortSignal.timeout(15000),
+            });
+            const json: any = await res.json().catch(() => ({}));
+            if (!res.ok || !json.token) {
+                throw new Error(`Canje del API Token falló (HTTP ${res.status}): ${JSON.stringify(json).slice(0, 200)}`);
+            }
+            this.cachedAccess = { token: json.token, expiresAt: this.jwtExpiry(json.token) };
+            return json.token;
+        }
+
+        // 2) Flujo OAuth2 refresh_token (django-oauth-toolkit en /o/token/). No verificado.
         const clientId = process.env.VELOCITY_FLEET_CLIENT_ID;
         const clientSecret = process.env.VELOCITY_FLEET_CLIENT_SECRET;
         const refresh = process.env.VELOCITY_FLEET_REFRESH_TOKEN;
         if (!clientId || !refresh) {
-            throw new Error('Falta configuración: define VELOCITY_FLEET_TOKEN (Bearer directo) o VELOCITY_FLEET_CLIENT_ID + VELOCITY_FLEET_REFRESH_TOKEN.');
-        }
-        if (this.cachedAccess && this.cachedAccess.expiresAt > Date.now() + 30_000) {
-            return this.cachedAccess.token;
+            throw new Error('Falta configuración: define VELOCITY_FLEET_TOKEN (API Token del portal) o VELOCITY_FLEET_CLIENT_ID + VELOCITY_FLEET_REFRESH_TOKEN.');
         }
         const body = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refresh, client_id: clientId });
         if (clientSecret) body.set('client_secret', clientSecret);
@@ -75,12 +98,21 @@ export class VelocityService {
 
     // Llamada base: agrega Authorization, asegura slash final y devuelve status + cuerpo.
     private async call(path: string, init?: RequestInit): Promise<{ status: number; ok: boolean; body: any }> {
-        const token = await this.getAccessToken();
         const url = `${this.baseUrl}${path}`;
-        const res = await fetch(url, {
-            ...init,
-            headers: { Accept: 'application/json', Authorization: `Bearer ${token}`, ...(init?.headers || {}) },
-        });
+        const doFetch = async () => {
+            const token = await this.getAccessToken();
+            return fetch(url, {
+                ...init,
+                headers: { Accept: 'application/json', Authorization: `Bearer ${token}`, ...(init?.headers || {}) },
+                signal: AbortSignal.timeout(20000),
+            });
+        };
+        let res = await doFetch();
+        // JWT vencido o revocado → se descarta el caché y se reintenta una vez.
+        if (res.status === 401 && this.cachedAccess) {
+            this.cachedAccess = null;
+            res = await doFetch();
+        }
         const text = await res.text();
         let body: any;
         try { body = text ? JSON.parse(text) : null; } catch { body = text; }
@@ -123,6 +155,32 @@ export class VelocityService {
             probe(`Bearer ${p}`, p, { Authorization: `Bearer ${token}` }),
             probe(`X-API-Key ${p}`, p, { 'X-API-Key': token }),
         ]);
+        // Flujo real (canje → JWT → clientes → posiciones). Es lo que usa el sync;
+        // si esto sale ok:true la integración está operativa.
+        const viaJwt = await (async () => {
+            try {
+                const res = await fetch(`${base}/vapi/v1/accounts/users/oauth2/refresh/`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                    body: JSON.stringify({ token }), signal: AbortSignal.timeout(9000),
+                });
+                const j: any = await res.json().catch(() => ({}));
+                if (!res.ok || !j.token) return { ok: false, step: 'canje', status: res.status, body: JSON.stringify(j).slice(0, 160) };
+                const H = { Accept: 'application/json', Authorization: `Bearer ${j.token}` };
+                const cr = await fetch(`${base}/vapi/v1/accounts/users/customers/`, { headers: H, signal: AbortSignal.timeout(9000) });
+                const cj: any = await cr.json().catch(() => ({}));
+                if (!cr.ok || typeof cj !== 'object') return { ok: false, step: 'customers', status: cr.status, body: JSON.stringify(cj).slice(0, 160) };
+                const customers = Object.entries(cj).map(([id, v]: [string, any]) => ({ id, name: v?.name, product: v?.product }));
+                const positions: any[] = [];
+                for (const c of customers) {
+                    const pr = await fetch(`${base}/api/mobile/kinesis/device-live-positions/?customer=${encodeURIComponent(c.id)}`, { method: 'POST', headers: H, signal: AbortSignal.timeout(9000) });
+                    const pj: any = await pr.json().catch(() => ({}));
+                    const devs: any[] = Array.isArray(pj?.devices) ? pj.devices : [];
+                    positions.push({ customer: c.id, status: pr.status, device_count: pj?.device_count ?? devs.length, placas: devs.map((d) => d?.vehicle_registration).filter(Boolean).slice(0, 30) });
+                }
+                return { ok: true, customers, positions };
+            } catch (e: any) { return { ok: false, step: 'excepcion', error: (e?.message || String(e)).slice(0, 120) }; }
+        })();
+
         const all = await Promise.all([...schemeJobs, ...discJobs]);
         const schemes = all.slice(0, schemeJobs.length);
         const discovery = all.slice(schemeJobs.length);
@@ -130,7 +188,7 @@ export class VelocityService {
         const isHtml = (d: any) => /<!doctype html|<html/i.test(d.body || '');
         const interesting = discovery.filter((d) => (d.ok && !isHtml(d)) || (d.status && ![200, 401, 403, 404].includes(d.status)));
         const hit = all.find((d) => d.ok && !isHtml(d)) || null;
-        return { base, tokenSet: !!token, tokenPreview: token ? token.slice(0, 8) + '…' : null, hit, schemes, interesting };
+        return { base, tokenSet: !!token, tokenPreview: token ? token.slice(0, 8) + '…' : null, viaJwt, hit, schemes, interesting };
     }
 
     // Lee la documentación (api-docs.velocityfleet.com) desde el server (egress limpio)
@@ -247,10 +305,17 @@ export class VelocityService {
         const b = r.body || {};
         const flat: RawDevice[] = [];
         if (Array.isArray(b.devices)) flat.push(...b.devices);
-        if (Array.isArray(b.deviceGroups)) {
-            for (const g of b.deviceGroups) if (Array.isArray(g?.devices)) flat.push(...g.devices);
+        for (const key of ['device_groups', 'deviceGroups']) {
+            if (Array.isArray(b[key])) for (const g of b[key]) if (Array.isArray(g?.devices)) flat.push(...g.devices);
         }
-        return flat;
+        // Los grupos repiten los mismos devices que la lista plana → dedupe por id
+        // (o por matrícula si no hay id).
+        const seen = new Set<string>();
+        return flat.filter((d) => {
+            const k = String(d?.id ?? d?.vehicle_registration ?? d?.vehicleRegistration ?? '');
+            if (!k || seen.has(k)) return false;
+            seen.add(k); return true;
+        });
     }
 
     // ---- Sync (poller) ------------------------------------------------------
@@ -281,10 +346,12 @@ export class VelocityService {
             }
             for (const d of devices) {
                 devicesVistos++;
-                const regRaw = d.vehicleRegistration || d.registration || d.reg || d.vrm || '';
+                const regRaw = d.vehicle_registration || d.vehicleRegistration || d.registration || d.reg || d.vrm || '';
                 const lat = Number(d.lat ?? d.latitude);
                 const lon = Number(d.lon ?? d.lng ?? d.longitude);
                 if (!regRaw || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+                // `private:true` (modo privado del chofer) llega con 0,0 → no es una posición.
+                if (d.private === true || (lat === 0 && lon === 0)) continue;
 
                 const veh = vehByPlaca.get(this.normPlaca(regRaw));
                 if (!veh) { unmatched.add(String(regRaw)); continue; }
@@ -292,8 +359,9 @@ export class VelocityService {
 
                 const ts = this.parseTs(d.occurredAt ?? d.occurred_at ?? d.timestamp ?? d.time);
                 const speed = d.speed != null ? Number(d.speed) : null;
-                const heading = d.heading != null ? Number(d.heading) : (d.bearing != null ? Number(d.bearing) : null);
+                const heading = d.heading != null ? Number(d.heading) : d.bearing != null ? Number(d.bearing) : d.direction != null ? Number(d.direction) : null;
                 const ignition = typeof d.ignition === 'boolean' ? d.ignition
+                    : typeof d.ignition === 'string' ? /^(y|yes|on|true|1)$/i.test(d.ignition)
                     : typeof d.ignitionOn === 'boolean' ? d.ignitionOn : null;
 
                 // Device por vehículo (imei estable derivado de la placa). Se crea/actualiza
@@ -347,6 +415,15 @@ export class VelocityService {
     // Normaliza una placa/matrícula para comparar (mayúsculas, sin separadores).
     private normPlaca(s: any): string {
         return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    }
+
+    // Vencimiento de un JWT (claim exp, en segundos). Si no se puede leer → 1 h.
+    private jwtExpiry(jwt: string): number {
+        try {
+            const payload = JSON.parse(Buffer.from(jwt.split('.')[1], 'base64url').toString('utf8'));
+            if (payload?.exp) return Number(payload.exp) * 1000;
+        } catch { /* token opaco */ }
+        return Date.now() + 3600_000;
     }
 
     // Parseo defensivo del timestamp: epoch (s o ms) o string ISO.
