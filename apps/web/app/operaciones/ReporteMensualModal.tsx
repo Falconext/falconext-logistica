@@ -48,7 +48,22 @@ export default function ReporteMensualModal({ onClose }: { onClose: () => void }
             if (rows.length === 0) return toast.error(t('operaciones.reporteMensual.toastSinDatos'));
 
             const xlsx = await import('xlsx');
-            const c = t('operaciones.reporteMensual.columnas') as unknown as Record<string, string>;
+            // t() solo devuelve strings (una clave por llamada) — no un objeto
+            // completo. Pedir cada nombre de columna aparte, no el grupo entero.
+            const c = {
+                fecha: t('operaciones.reporteMensual.columnas.fecha'),
+                conductor: t('operaciones.reporteMensual.columnas.conductor'),
+                vehiculo: t('operaciones.reporteMensual.columnas.vehiculo'),
+                origen: t('operaciones.reporteMensual.columnas.origen'),
+                destino: t('operaciones.reporteMensual.columnas.destino'),
+                compactada: t('operaciones.reporteMensual.columnas.compactada'),
+                cliente: t('operaciones.reporteMensual.columnas.cliente'),
+                spedizione: t('operaciones.reporteMensual.columnas.spedizione'),
+                kmFacturado: t('operaciones.reporteMensual.columnas.kmFacturado'),
+                ingreso: t('operaciones.reporteMensual.columnas.ingreso'),
+                gastos: t('operaciones.reporteMensual.columnas.gastos'),
+                neto: t('operaciones.reporteMensual.columnas.neto'),
+            };
             const data = rows.map((r) => ({
                 [c.fecha]: r.fecha ? new Date(r.fecha).toLocaleDateString() : '',
                 [c.conductor]: r.conductor || '',
