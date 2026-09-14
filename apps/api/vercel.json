@@ -15,7 +15,11 @@
   "crons": [
     {
       "path": "/api/gps/velocity/cron",
-      "schedule": "*/5 * * * *"
+      "schedule": "*/5 4-21 * * *"
+    },
+    {
+      "path": "/api/gps/velocity/cron",
+      "schedule": "*/15 22-23,0-3 * * *"
     }
   ]
 }
