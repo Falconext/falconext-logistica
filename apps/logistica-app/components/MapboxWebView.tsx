@@ -29,6 +29,11 @@ export interface MapRoute {
   waypoints?: string[]; // paradas intermedias (en orden) entre origen y destino
   coordinates?: [number, number][];
 }
+// Ruta coloreada por velocidad (Historial con Play): `base` es la guía gris fina
+// (map-matching, opcional) y `segments` son tramos consecutivos con el mismo color.
+// Coordenadas en [lng, lat], igual que `MapRoute.coordinates`.
+export interface SpeedSegment { path: [number, number][]; color: string; weight?: number; }
+export interface SpeedTrack { base?: [number, number][]; segments: SpeedSegment[]; }
 
 export interface MapboxWebViewProps {
   center?: [number, number]; // [lng, lat]
@@ -45,6 +50,12 @@ export interface MapboxWebViewProps {
   // Centra el mapa en estas coords (vuela sin recargar). nonce fuerza re-disparo
   // aunque se toque el mismo punto otra vez.
   focus?: { lng: number; lat: number; nonce?: number };
+  // Ruta coloreada por velocidad, ver SpeedTrack. Reemplaza a `route`/`markers`
+  // cuando está presente (Historial con reproducción).
+  speedTrack?: SpeedTrack;
+  // Posición del "cabezal" de reproducción — se mueve sin recargar el WebView
+  // (a diferencia de `speedTrack`, que sí reconstruye el mapa al cambiar).
+  cursor?: { lng: number; lat: number } | null;
   style?: ViewStyle;
 }
 
@@ -70,6 +81,22 @@ function stylesFor(p){return p==='night'?NIGHT_STYLE:DAY_STYLE;}
 function LL(lng,lat){return {lat:lat,lng:lng};}
 function dot(color){return {path:google.maps.SymbolPath.CIRCLE,scale:8,fillColor:color||'#2563EB',fillOpacity:1,strokeColor:'#fff',strokeWeight:3};}
 window.__markers=[];
+window.__cursorMarker=null;
+window.__setCursor=function(lng,lat){try{
+  var pos=LL(lng,lat);
+  if(!window.__cursorMarker){window.__cursorMarker=new google.maps.Marker({position:pos,map:window.__map,zIndex:999,icon:{path:google.maps.SymbolPath.CIRCLE,scale:7,fillColor:'#FFC933',fillOpacity:1,strokeColor:'#1a1a1c',strokeWeight:3}});}
+  else{window.__cursorMarker.setPosition(pos);}
+}catch(e){}};
+function drawSpeedTrack(map,st){
+  if(st.base&&st.base.length){new google.maps.Polyline({path:st.base.map(function(c){return LL(c[0],c[1]);}),map:map,strokeColor:'#94A3B8',strokeWeight:3,strokeOpacity:0.55});}
+  var bounds=new google.maps.LatLngBounds();var has=false;
+  (st.segments||[]).forEach(function(s){
+    var path=s.path.map(function(c){return LL(c[0],c[1]);});
+    new google.maps.Polyline({path:path,map:map,strokeColor:s.color,strokeWeight:s.weight||5,strokeOpacity:0.95,zIndex:s.color==='#DC2626'?6:5});
+    path.forEach(function(p){bounds.extend(p);has=true;});
+  });
+  if(has){window.__fitBounds=bounds;try{map.fitBounds(bounds,50);google.maps.event.addListenerOnce(map,'idle',function(){if(map.getZoom()>16)map.setZoom(16);});}catch(e){}}
+}
 window.initMap=function(){try{
   var isSat=(CFG.mapStyle||'streets')==='satellite';
   var center=CFG.center?LL(CFG.center[0],CFG.center[1]):LL(9.19,45.4642);
@@ -105,6 +132,7 @@ window.initMap=function(){try{
     bounds.extend(LL(dc.lng,dc.lat));has=true;
   }
   if(CFG.route){drawRoute(map,CFG.route);return;}
+  if(CFG.speedTrack){drawSpeedTrack(map,CFG.speedTrack);}
   if(CFG.fit&&has){try{window.__fitBounds=bounds;map.fitBounds(bounds,60);google.maps.event.addListenerOnce(map,'idle',function(){if(map.getZoom()>16)map.setZoom(16);});}catch(e){}}
 }catch(err){post({type:'error',message:String(err)});}};
 
@@ -180,6 +208,7 @@ export default function MapboxWebView(props: MapboxWebViewProps) {
       markers: props.markers,
       circles: props.circles,
       route: props.route,
+      speedTrack: props.speedTrack,
       fit: props.fit,
       draggableCenter: props.draggableCenter,
     }),
@@ -191,6 +220,7 @@ export default function MapboxWebView(props: MapboxWebViewProps) {
       JSON.stringify(props.markers),
       JSON.stringify(props.circles),
       JSON.stringify(props.route),
+      JSON.stringify(props.speedTrack),
       props.fit,
       props.draggableCenter?.lng,
       props.draggableCenter?.lat,
@@ -198,6 +228,15 @@ export default function MapboxWebView(props: MapboxWebViewProps) {
   );
 
   const html = useMemo(() => buildHtml(config), [config]);
+
+  // Cursor de reproducción: se mueve con injectJavaScript, sin recargar el mapa
+  // (el WebView sí recarga cuando cambia `config`/html, sería inviable a 10 fps).
+  const cursor = props.cursor;
+  useEffect(() => {
+    if (cursor && webRef.current) {
+      webRef.current.injectJavaScript(`window.__setCursor && window.__setCursor(${cursor.lng}, ${cursor.lat}); true;`);
+    }
+  }, [cursor?.lng, cursor?.lat]);
 
   const onMessage = (e: any) => {
     try {

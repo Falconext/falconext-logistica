@@ -1,6 +1,7 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, PanResponder } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Route as RouteIcon,
   Clock,
@@ -12,9 +13,14 @@ import {
   ChevronLeft,
   ChevronRight,
   Satellite,
+  Play,
+  Pause,
+  RotateCcw,
+  FastForward,
+  AlertTriangle,
 } from 'lucide-react-native';
 import { Theme } from './ui';
-import MapboxWebView from './MapboxWebView';
+import MapboxWebView, { SpeedSegment } from './MapboxWebView';
 import api from '../services/api';
 import { useTheme } from '../context/ThemeContext';
 
@@ -32,6 +38,9 @@ interface Trip {
   matchedGeometry?: { type: string; coordinates: [number, number][] } | null;
   stops: Stop[]; legs: Leg[];
 }
+// Posición GPS cruda con velocidad — solo se tiene en modo dispositivo/día (no en
+// la traza de operación, que solo trae la línea). Necesaria para el Play.
+interface RawPos { lng: number; lat: number; t: number; speedMs: number; }
 
 function fmtDur(min: number): string {
   if (!min || min < 1) return '0 min';
@@ -45,6 +54,11 @@ function fmtHora(iso: string | null): string {
   if (Number.isNaN(d.getTime())) return '--:--';
   return d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
 }
+function fmtHoraMs(ms: number): string {
+  const d = new Date(ms);
+  if (Number.isNaN(d.getTime())) return '--:--';
+  return d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
 function todayStr(): string { return new Date().toISOString().split('T')[0]; }
 function shiftDay(dateStr: string, delta: number): string {
   const d = new Date(dateStr + 'T12:00:00'); d.setDate(d.getDate() + delta);
@@ -57,6 +71,60 @@ function labelDay(dateStr: string): string {
   return d.toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' });
 }
 
+// ── Velocidad instantánea (mismo criterio que la web: MapboxHistoryMap) ──────
+// El equipo manda velocidad en m/s; si no reporta (0) se estima con distancia/
+// tiempo entre puntos consecutivos, marcada como "estimada" para no acusar al
+// chofer con un pico de GPS que nunca ocurrió.
+const MAX_KMH_VALIDA = 200;
+const MAX_GAP_ESTIMACION_MS = 5 * 60 * 1000;
+interface Velocidad { kmh: number; estimada: boolean; }
+function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+function calcularVelocidades(history: RawPos[]): Velocidad[] {
+  return history.map((p, i) => {
+    const dev = p.speedMs * 3.6;
+    if (p.speedMs > 0 && dev < MAX_KMH_VALIDA) return { kmh: dev, estimada: false };
+    if (i === 0) return { kmh: 0, estimada: false };
+    const prev = history[i - 1];
+    const dtMs = p.t - prev.t;
+    if (dtMs < 1000 || dtMs > MAX_GAP_ESTIMACION_MS) return { kmh: 0, estimada: false };
+    const kmh = haversineKm(prev, p) / (dtMs / 3600000);
+    if (!Number.isFinite(kmh) || kmh >= MAX_KMH_VALIDA) return { kmh: 0, estimada: false };
+    return { kmh, estimada: true };
+  });
+}
+type Banda = 'parado' | 'normal' | 'alta' | 'exceso';
+const COLOR_BANDA: Record<Banda, string> = { parado: '#94A3B8', normal: '#16A34A', alta: '#F59E0B', exceso: '#DC2626' };
+function bandaDe(kmh: number, umbral: number, estimada = false): Banda {
+  if (kmh > umbral) return estimada ? 'alta' : 'exceso';
+  if (kmh > umbral * 0.75) return 'alta';
+  if (kmh > 2) return 'normal';
+  return 'parado';
+}
+// Tramo continuo por encima del umbral — para saltar directo al momento del exceso.
+interface Exceso { startIdx: number; maxIdx: number; maxKmh: number; startTime: number; endTime: number; }
+function detectarExcesos(history: RawPos[], vel: Velocidad[], umbral: number): Exceso[] {
+  const out: Exceso[] = [];
+  let cur: Exceso | null = null;
+  vel.forEach((v, i) => {
+    if (v.kmh > umbral && !v.estimada) {
+      if (!cur) cur = { startIdx: i, maxIdx: i, maxKmh: v.kmh, startTime: history[i].t, endTime: history[i].t };
+      else { cur.endTime = history[i].t; if (v.kmh > cur.maxKmh) { cur.maxKmh = v.kmh; cur.maxIdx = i; } }
+    } else if (cur) { out.push(cur); cur = null; }
+  });
+  if (cur) out.push(cur);
+  return out;
+}
+const UMBRAL_KEY = 'historyMap.umbralKmh';
+const UMBRAL_DEFAULT = 130;
+const UMBRAL_MIN = 30;
+const UMBRAL_MAX = 200;
+
 interface Props {
   deviceId?: string | null;
   programacionId?: string; // modo operación: muestra la traza del recorrido (iniciar→finalizar)
@@ -66,7 +134,9 @@ interface Props {
 
 /**
  * Reporte de ruta GPS de un dispositivo para un día: mapa + estadísticas + timeline
- * de tramos/paradas. Reutilizable en Historial de Ruta y en el detalle de Operación.
+ * de tramos/paradas. En modo dispositivo (Historial) agrega el Play: la ruta se
+ * pinta por velocidad y se puede reproducir para revisar un incidente puntual.
+ * Reutilizable en Historial de Ruta y en el detalle de Operación.
  */
 export default function RouteReport({ deviceId, programacionId, initialDate, showDaySelector = true }: Props) {
   const { themeKey } = useTheme();
@@ -75,22 +145,46 @@ export default function RouteReport({ deviceId, programacionId, initialDate, sho
 
   const [dateStr, setDateStr] = useState<string>(initialDate || todayStr());
   const [coords, setCoords] = useState<[number, number][]>([]);
+  const [history, setHistory] = useState<RawPos[]>([]); // solo modo dispositivo
   const [trip, setTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState(false);
   const [noRecorrido, setNoRecorrido] = useState(false);
 
+  // ── Play ────────────────────────────────────────────────────────────────
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [umbral, setUmbral] = useState(UMBRAL_DEFAULT);
+  useEffect(() => {
+    AsyncStorage.getItem(UMBRAL_KEY).then((v) => {
+      const n = Number(v);
+      if (Number.isFinite(n) && n >= UMBRAL_MIN && n <= UMBRAL_MAX) setUmbral(n);
+    }).catch(() => {});
+  }, []);
+  const cambiarUmbral = (delta: number) => {
+    setUmbral((prev) => {
+      const n = Math.min(UMBRAL_MAX, Math.max(UMBRAL_MIN, prev + delta));
+      AsyncStorage.setItem(UMBRAL_KEY, String(n)).catch(() => {});
+      return n;
+    });
+  };
+
   const load = useCallback(async () => {
     if (!deviceId && !programacionId) { setLoading(false); return; }
     setLoading(true);
+    setIsPlaying(false);
+    setCurrentIndex(0);
     try {
       if (programacionId) {
-        // Modo operación: traza del recorrido (acotada a iniciar→finalizar).
+        // Modo operación: traza del recorrido (acotada a iniciar→finalizar). Sin
+        // velocidad por punto — el Play solo aplica al historial por dispositivo.
         const { data } = await api.get(`/recorridos/programacion/${programacionId}/traza`);
         setNoRecorrido(!data?.recorrido);
         const pts: [number, number][] = (data?.path || [])
           .map((p: any) => [Number(p.lng), Number(p.lat)] as [number, number])
           .filter((c: [number, number]) => !isNaN(c[0]) && !isNaN(c[1]));
         setCoords(pts);
+        setHistory([]);
         setTrip(data?.analisis || null);
       } else {
         const start = new Date(dateStr + 'T00:00:00');
@@ -100,22 +194,70 @@ export default function RouteReport({ deviceId, programacionId, initialDate, sho
           api.get(`/gps/history/${deviceId}`, { params: p }),
           api.get(`/gps/history/${deviceId}/analisis`, { params: p }),
         ]);
-        const pts: [number, number][] = (resHist.data || [])
-          .map((d: any) => [parseFloat(d.longitude), parseFloat(d.latitude)] as [number, number])
-          .filter((c: [number, number]) => !isNaN(c[0]) && !isNaN(c[1]))
-          .reverse();
-        setCoords(pts);
+        const raw: RawPos[] = (resHist.data || [])
+          .map((d: any) => ({ lng: parseFloat(d.longitude), lat: parseFloat(d.latitude), t: new Date(d.timestamp).getTime(), speedMs: d.speed || 0 }))
+          .filter((p: RawPos) => !isNaN(p.lat) && !isNaN(p.lng))
+          .reverse(); // API viene DESC -> cronológico
+        setHistory(raw);
+        setCoords(raw.map((p) => [p.lng, p.lat]));
         setTrip(resTrip.data || null);
       }
     } catch (e) {
       console.error('Error cargando reporte de ruta', e);
-      setTrip(null); setCoords([]);
+      setTrip(null); setCoords([]); setHistory([]);
     } finally {
       setLoading(false);
     }
   }, [deviceId, programacionId, dateStr]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const velocidades = useMemo(() => calcularVelocidades(history), [history]);
+  const excesos = useMemo(() => detectarExcesos(history, velocidades, umbral), [history, velocidades, umbral]);
+
+  // Segmentos coloreados por banda de velocidad: puntos consecutivos con la misma
+  // banda se agrupan en un solo tramo (una polilínea por punto sería inviable).
+  const speedSegments = useMemo<SpeedSegment[]>(() => {
+    if (history.length < 2) return [];
+    const segs: SpeedSegment[] = [];
+    let i = 0;
+    while (i < history.length - 1) {
+      const banda = bandaDe(velocidades[i]?.kmh ?? 0, umbral, velocidades[i]?.estimada);
+      let j = i;
+      while (j < history.length - 1 && bandaDe(velocidades[j]?.kmh ?? 0, umbral, velocidades[j]?.estimada) === banda) j++;
+      segs.push({
+        path: history.slice(i, j + 1).map((p) => [p.lng, p.lat] as [number, number]),
+        color: COLOR_BANDA[banda],
+        weight: banda === 'exceso' ? 6 : 5,
+      });
+      i = j;
+    }
+    return segs;
+  }, [history, velocidades, umbral]);
+
+  const irAlPunto = useCallback((idx: number) => {
+    setIsPlaying(false);
+    setCurrentIndex(idx);
+  }, []);
+
+  // Bucle de reproducción — mismo ritmo que la web (1000ms / velocidad).
+  useEffect(() => {
+    if (!isPlaying || history.length === 0) return;
+    const id = setInterval(() => {
+      setCurrentIndex((prev) => {
+        if (prev >= history.length - 1) { setIsPlaying(false); return prev; }
+        return prev + 1;
+      });
+    }, 1000 / playbackSpeed);
+    return () => clearInterval(id);
+  }, [isPlaying, playbackSpeed, history.length]);
+
+  const toggleSpeed = () => setPlaybackSpeed((prev) => (prev === 1 ? 5 : prev === 5 ? 10 : 1));
+
+  const cursorPos = history[currentIndex] || null;
+  const velActual = velocidades[currentIndex];
+  const bandaActual: Banda = velActual ? bandaDe(velActual.kmh, umbral, velActual.estimada) : 'parado';
+  const hasPlay = !opMode && history.length > 1;
 
   const markers = useMemo(() => {
     const ms: { lng: number; lat: number; color?: string; popup?: string }[] = [];
@@ -144,13 +286,14 @@ export default function RouteReport({ deviceId, programacionId, initialDate, sho
   // cambia `source.html` (la traza llega async DESPUÉS de montar), así que forzamos
   // un remonte limpio del mapa cuando cambian las coordenadas para que `initMap`
   // vuelva a correr y pinte el polyline. Solo afecta a este mapa (no al live).
+  // El umbral entra en la firma porque cambia los segmentos de color a dibujar.
   const mapKey = useMemo(() => {
     const geo = trip?.matchedGeometry?.coordinates;
     const src = geo?.length ? geo : coords;
     const first = src[0];
     const last = src[src.length - 1];
-    return `${opMode ? 'op' : dateStr}-${src.length}-${first ? first.join(',') : ''}-${last ? last.join(',') : ''}`;
-  }, [coords, trip?.matchedGeometry, opMode, dateStr]);
+    return `${opMode ? 'op' : dateStr}-${src.length}-${first ? first.join(',') : ''}-${last ? last.join(',') : ''}-${hasPlay ? umbral : 'na'}`;
+  }, [coords, trip?.matchedGeometry, opMode, dateStr, hasPlay, umbral]);
 
   // Sin dispositivo GPS asignado al chofer (evita el spinner infinito).
   if (!deviceId && !opMode) {
@@ -205,9 +348,9 @@ export default function RouteReport({ deviceId, programacionId, initialDate, sho
           key={mapKey}
           style={styles.map}
           mapStyle="streets"
-          route={{ coordinates: (trip?.matchedGeometry?.coordinates?.length ? trip.matchedGeometry.coordinates : coords) }}
-          markers={markers}
-          fit
+          {...(hasPlay
+            ? { speedTrack: { base: trip?.matchedGeometry?.coordinates?.length ? trip.matchedGeometry.coordinates : undefined, segments: speedSegments }, cursor: cursorPos ? { lng: cursorPos.lng, lat: cursorPos.lat } : null }
+            : { route: { coordinates: (trip?.matchedGeometry?.coordinates?.length ? trip.matchedGeometry.coordinates : coords) }, markers, fit: true })}
         />
       ) : null}
 
@@ -219,6 +362,44 @@ export default function RouteReport({ deviceId, programacionId, initialDate, sho
         </View>
       ) : (
         <>
+          {hasPlay && (
+            <PlayerCard
+              styles={styles}
+              isPlaying={isPlaying}
+              onTogglePlay={() => setIsPlaying((p) => !p)}
+              onReset={() => { setIsPlaying(false); setCurrentIndex(0); }}
+              playbackSpeed={playbackSpeed}
+              onToggleSpeed={toggleSpeed}
+              currentIndex={currentIndex}
+              total={history.length - 1}
+              onScrub={setCurrentIndex}
+              onScrubStart={() => setIsPlaying(false)}
+              horaActual={cursorPos ? fmtHoraMs(cursorPos.t) : '--:--:--'}
+              kmhActual={velActual ? Math.round(velActual.kmh) : 0}
+              estimada={!!velActual?.estimada}
+              banda={bandaActual}
+              umbral={umbral}
+              onUmbral={cambiarUmbral}
+            />
+          )}
+
+          {hasPlay && excesos.length > 0 && (
+            <View style={styles.excesosCard}>
+              <View style={styles.excesosHeader}>
+                <AlertTriangle size={15} color="#DC2626" />
+                <Text style={styles.excesosTitle}>Excesos de velocidad</Text>
+                <View style={styles.excesosCount}><Text style={styles.excesosCountText}>{excesos.length}</Text></View>
+              </View>
+              {excesos.map((e, i) => (
+                <TouchableOpacity key={i} style={styles.excesoRow} onPress={() => irAlPunto(e.maxIdx)}>
+                  <Text style={styles.excesoTime}>{fmtHoraMs(e.startTime)}</Text>
+                  <Text style={styles.excesoKmh}>{Math.round(e.maxKmh)} km/h</Text>
+                  <ChevronRight size={14} color={C.textFaint} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
           <View style={styles.statsGrid}>
             {stats.map((s) => (
               <View key={s.label} style={styles.statTile}>
@@ -279,6 +460,86 @@ export default function RouteReport({ deviceId, programacionId, initialDate, sho
   );
 }
 
+// ── Reproductor: play/pausa, velocidad, barra de progreso arrastrable y el
+// dato en vivo del punto actual (hora, km/h, banda) + umbral editable. ──────
+function PlayerCard({
+  styles, isPlaying, onTogglePlay, onReset, playbackSpeed, onToggleSpeed,
+  currentIndex, total, onScrub, onScrubStart, horaActual, kmhActual, estimada, banda, umbral, onUmbral,
+}: {
+  styles: ReturnType<typeof makeStyles>;
+  isPlaying: boolean; onTogglePlay: () => void; onReset: () => void;
+  playbackSpeed: number; onToggleSpeed: () => void;
+  currentIndex: number; total: number; onScrub: (idx: number) => void; onScrubStart: () => void;
+  horaActual: string; kmhActual: number; estimada: boolean; banda: Banda; umbral: number; onUmbral: (delta: number) => void;
+}) {
+  const trackWidth = useRef(1);
+  const pct = total > 0 ? currentIndex / total : 0;
+
+  const scrubTo = (x: number) => {
+    const ratio = Math.min(1, Math.max(0, x / trackWidth.current));
+    onScrub(Math.round(ratio * total));
+  };
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (e) => { onScrubStart(); scrubTo(e.nativeEvent.locationX); },
+      onPanResponderMove: (e) => scrubTo(e.nativeEvent.locationX),
+    })
+  ).current;
+
+  const bandaLabel: Record<Banda, string> = { parado: 'Detenido', normal: 'Normal', alta: 'Alta', exceso: 'Exceso' };
+  const bandaStyle: Record<Banda, any> = { parado: styles.bandaParado, normal: styles.bandaNormal, alta: styles.bandaAlta, exceso: styles.bandaExceso };
+
+  return (
+    <View style={styles.playerCard}>
+      <View style={styles.playerTop}>
+        <View style={styles.playerReadout}>
+          <Text style={styles.playerKmh}>{kmhActual}<Text style={styles.playerKmhUnit}> km/h{estimada ? ' ≈' : ''}</Text></Text>
+          <Text style={styles.playerHora}>{horaActual}</Text>
+        </View>
+        <View style={[styles.bandaPill, bandaStyle[banda]]}>
+          <Text style={styles.bandaPillText}>{bandaLabel[banda]}</Text>
+        </View>
+      </View>
+
+      <View
+        style={styles.scrubTrack}
+        onLayout={(e) => { trackWidth.current = e.nativeEvent.layout.width || 1; }}
+        {...pan.panHandlers}
+      >
+        <View style={[styles.scrubFill, { width: `${pct * 100}%` }]} />
+        <View style={[styles.scrubThumb, { left: `${pct * 100}%` }]} />
+      </View>
+
+      <View style={styles.playerControls}>
+        <TouchableOpacity style={styles.playerBtn} onPress={onReset}>
+          <RotateCcw size={16} color={C.text} />
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.playerBtn, styles.playerBtnMain]} onPress={onTogglePlay}>
+          {isPlaying ? <Pause size={20} color="#1a1a1c" /> : <Play size={20} color="#1a1a1c" />}
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.playerBtn} onPress={onToggleSpeed}>
+          <FastForward size={16} color={C.text} />
+          <Text style={styles.playerSpeedText}>{playbackSpeed}x</Text>
+        </TouchableOpacity>
+        <View style={{ flex: 1 }} />
+        <Text style={styles.umbralLabel}>Umbral</Text>
+        <TouchableOpacity style={styles.umbralBtn} onPress={() => onUmbral(-10)}><Text style={styles.umbralBtnText}>−</Text></TouchableOpacity>
+        <Text style={styles.umbralValue}>{umbral}</Text>
+        <TouchableOpacity style={styles.umbralBtn} onPress={() => onUmbral(10)}><Text style={styles.umbralBtnText}>+</Text></TouchableOpacity>
+      </View>
+
+      <View style={styles.legendRow}>
+        <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: COLOR_BANDA.normal }]} /><Text style={styles.legendText}>Normal</Text></View>
+        <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: COLOR_BANDA.alta }]} /><Text style={styles.legendText}>Alta ≥ {Math.round(umbral * 0.75)}</Text></View>
+        <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: COLOR_BANDA.exceso }]} /><Text style={styles.legendText}>Exceso &gt; {umbral}</Text></View>
+        <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: COLOR_BANDA.parado }]} /><Text style={styles.legendText}>Detenido</Text></View>
+      </View>
+    </View>
+  );
+}
+
 const makeStyles = () => StyleSheet.create({
   dateBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: C.surface, borderRadius: Theme.radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, padding: S.sm, marginBottom: S.md },
   dateBtn: { width: 40, height: 40, borderRadius: 10, backgroundColor: C.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
@@ -313,4 +574,43 @@ const makeStyles = () => StyleSheet.create({
   delayNeutral: { color: C.textMuted, backgroundColor: C.surfaceAlt },
   stopPill: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', backgroundColor: '#F9731618', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginTop: 8 },
   stopPillText: { fontSize: 12, color: '#F97316', fontWeight: '600' },
+
+  // Reproductor
+  playerCard: { backgroundColor: C.surface, borderRadius: Theme.radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, padding: S.md, marginBottom: S.md },
+  playerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: S.sm },
+  playerReadout: { flexDirection: 'row', alignItems: 'baseline', gap: S.sm },
+  playerKmh: { fontSize: 24, fontWeight: '800', color: C.text },
+  playerKmhUnit: { fontSize: 13, fontWeight: '600', color: C.textMuted },
+  playerHora: { fontSize: 13, color: C.textMuted, fontVariant: ['tabular-nums'] },
+  bandaPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
+  bandaPillText: { fontSize: 11, fontWeight: '700' },
+  bandaParado: { backgroundColor: '#94A3B822' },
+  bandaNormal: { backgroundColor: '#16A34A22' },
+  bandaAlta: { backgroundColor: '#F59E0B22' },
+  bandaExceso: { backgroundColor: '#DC262622' },
+  scrubTrack: { height: 28, justifyContent: 'center', marginBottom: S.sm },
+  scrubFill: { position: 'absolute', left: 0, height: 6, borderRadius: 3, backgroundColor: Theme.colors.accent },
+  scrubThumb: { position: 'absolute', width: 16, height: 16, borderRadius: 8, backgroundColor: Theme.colors.accent, borderWidth: 2, borderColor: '#1a1a1c', marginLeft: -8, top: 6 },
+  playerControls: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
+  playerBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: C.surfaceAlt, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4 },
+  playerBtnMain: { backgroundColor: Theme.colors.accent, width: 48, height: 48, borderRadius: 24 },
+  playerSpeedText: { fontSize: 10, fontWeight: '700', color: C.text },
+  umbralLabel: { fontSize: 11, color: C.textMuted, marginRight: 2 },
+  umbralBtn: { width: 28, height: 28, borderRadius: 8, backgroundColor: C.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  umbralBtnText: { fontSize: 16, fontWeight: '700', color: C.text, marginTop: -2 },
+  umbralValue: { fontSize: 13, fontWeight: '700', color: C.text, minWidth: 30, textAlign: 'center' },
+  legendRow: { flexDirection: 'row', flexWrap: 'wrap', gap: S.md, marginTop: S.md, paddingTop: S.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { fontSize: 11, color: C.textMuted },
+
+  // Excesos
+  excesosCard: { backgroundColor: '#DC262610', borderRadius: Theme.radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: '#DC262630', padding: S.md, marginBottom: S.md },
+  excesosHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: S.sm },
+  excesosTitle: { fontSize: 13, fontWeight: '700', color: C.text, flex: 1 },
+  excesosCount: { minWidth: 20, height: 20, borderRadius: 10, backgroundColor: '#DC2626', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
+  excesosCountText: { fontSize: 11, fontWeight: '800', color: '#fff' },
+  excesoRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm, paddingVertical: 6 },
+  excesoTime: { fontSize: 12, color: C.textMuted, fontVariant: ['tabular-nums'], flex: 1 },
+  excesoKmh: { fontSize: 13, fontWeight: '700', color: '#DC2626' },
 });
