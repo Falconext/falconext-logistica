@@ -16,30 +16,47 @@ export class PeajesController {
         }
     }
 
+    // Identidad del chofer (UUID y código legacy) para acotar lo "propio".
+    private ownerIds(req: any): string[] {
+        return [req.user.trabajadorId, req.user.trabajadorCodigo].filter(Boolean);
+    }
+
+    // Excepción a la regla de "solo supervisores": un CHOFER sí puede registrar
+    // un peaje olvidado, pero únicamente si lo vincula a una operación SUYA
+    // (así entra al costo de su consegna). No puede crear peajes sueltos ni
+    // fijar estado de pago; el chofer y la placa salen de la operación.
     @Post()
     create(@Body() data: any, @Req() req) {
-        this.assertPuedeEditar(req);
+        if (req.user.soloPropios) {
+            if (!data?.programacion_id) {
+                throw new ForbiddenException('Como chofer solo puedes registrar un peaje vinculándolo a una de tus consegnas.');
+            }
+            const { estado, pagado_por_chofer, trabajador_id, ...resto } = data;
+            return this.peajesService.create(resto, req.user.tenantId, { soloDeTrabajador: this.ownerIds(req) });
+        }
         return this.peajesService.create(data, req.user.tenantId);
     }
 
     // Operaciones recientes para vincular un peaje (debe ir antes de ':id').
+    // El chofer solo ve las suyas (se ignora cualquier trabajadorId que mande).
     @Get('operaciones-candidatas')
     operacionesCandidatas(@Req() req, @Query() query: any) {
-        this.assertPuedeEditar(req);
         return this.peajesService.operacionesCandidatas(req.user.tenantId, {
             trabajadorId: query.trabajadorId || undefined,
             targa: query.targa || undefined,
             fecha: query.fecha || undefined,
             q: query.q || undefined,
             take: query.take ? parseInt(query.take, 10) : undefined,
+            soloDeTrabajador: req.user.soloPropios ? this.ownerIds(req) : undefined,
         });
     }
 
-    // Vincula un peaje ya registrado (suelto) a una operación.
+    // Vincula un peaje ya registrado (suelto) a una operación. El chofer solo
+    // puede vincular un peaje SUYO a una operación SUYA.
     @Post(':id/vincular')
     vincular(@Param('id') id: string, @Body() body: { programacion_id: string }, @Req() req) {
-        this.assertPuedeEditar(req);
-        return this.peajesService.vincular(id, body?.programacion_id, req.user.tenantId);
+        return this.peajesService.vincular(id, body?.programacion_id, req.user.tenantId,
+            req.user.soloPropios ? { soloDeTrabajador: this.ownerIds(req) } : undefined);
     }
 
     @Get()

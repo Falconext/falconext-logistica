@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { fechaLimitePago } from '../../common/plazo-pago.util';
@@ -7,7 +7,9 @@ import { fechaLimitePago } from '../../common/plazo-pago.util';
 export class PeajesService {
     constructor(private prisma: PrismaService) { }
 
-    async create(data: any, tenantId: string) {
+    // `opts.soloDeTrabajador`: lista de ids/códigos del chofer que llama; si viene,
+    // la operación destino DEBE ser de ese chofer (regla para autistas).
+    async create(data: any, tenantId: string, opts?: { soloDeTrabajador?: string[] }) {
         // Peaje vinculado a una operación: NO se guarda como peaje suelto sino como
         // gasto de esa operación (GastoOperacion tipo PEAJE). Así entra al costo de
         // la ruta, al panel financiero y al reporte mensual — igual que si el
@@ -15,8 +17,9 @@ export class PeajesService {
         // Es lo que faltaba: los peajes "olvidados" se registraban desde Peajes y
         // quedaban sueltos, sin trazabilidad hacia la entrega.
         if (data.programacion_id) {
-            return this.crearGastoDeOperacion(data, data.programacion_id, tenantId);
+            return this.crearGastoDeOperacion(data, data.programacion_id, tenantId, opts?.soloDeTrabajador);
         }
+        if (opts?.soloDeTrabajador) throw new ForbiddenException('Como chofer solo puedes registrar un peaje vinculándolo a una de tus consegnas.');
         return this.prisma.peaje.create({
             data: {
                 id_multa: data.id_multa || null,
@@ -45,12 +48,15 @@ export class PeajesService {
 
     // Crea un GastoOperacion tipo PEAJE colgado de una operación, con los mismos
     // defaults que usa Operaciones (fecha de la op si no viene, límite +14, etc.).
-    private async crearGastoDeOperacion(data: any, programacionId: string, tenantId: string) {
+    private async crearGastoDeOperacion(data: any, programacionId: string, tenantId: string, soloDeTrabajador?: string[]) {
         const op = await this.prisma.programacion.findFirst({
             where: { id: programacionId, tenant_id: tenantId },
             select: { id: true, trabajador_id: true, vehiculo_id: true, fecha: true, fecha_retiro: true, fecha_entrega: true },
         });
         if (!op) throw new NotFoundException('La operación indicada no existe.');
+        if (soloDeTrabajador && !(op.trabajador_id && soloDeTrabajador.includes(op.trabajador_id))) {
+            throw new ForbiddenException('Solo puedes vincular peajes a tus propias consegnas.');
+        }
         const fecha: Date = data.fecha ? new Date(data.fecha) : (op.fecha_entrega || op.fecha_retiro || op.fecha || new Date());
         const gasto = await this.prisma.gastoOperacion.create({
             data: {
@@ -80,13 +86,20 @@ export class PeajesService {
     // Vincula un peaje SUELTO (tabla Peaje) a una operación: lo migra a
     // GastoOperacion y borra el suelto. Idempotente por diseño: si el id ya es
     // "gasto:…" es que ya está vinculado.
-    async vincular(id: string, programacionId: string, tenantId: string) {
+    async vincular(id: string, programacionId: string, tenantId: string, opts?: { soloDeTrabajador?: string[] }) {
         if (!programacionId) throw new BadRequestException('Falta la operación a vincular.');
+        const mio = opts?.soloDeTrabajador;
+        const esMio = (trabajadorId: string | null | undefined) => !mio || (!!trabajadorId && mio.includes(trabajadorId));
         if (id.startsWith('gasto:')) {
             // Ya es un gasto de operación: solo se permite moverlo de operación.
             const gastoId = id.slice('gasto:'.length);
             const op = await this.prisma.programacion.findFirst({ where: { id: programacionId, tenant_id: tenantId }, select: { id: true, trabajador_id: true, vehiculo_id: true } });
             if (!op) throw new NotFoundException('La operación indicada no existe.');
+            if (!esMio(op.trabajador_id)) throw new ForbiddenException('Solo puedes vincular peajes a tus propias consegnas.');
+            if (mio) {
+                const g = await this.prisma.gastoOperacion.findFirst({ where: { id: gastoId, tenant_id: tenantId }, select: { trabajador_id: true } });
+                if (!g || !esMio(g.trabajador_id)) throw new ForbiddenException('Solo puedes vincular tus propios peajes.');
+            }
             const r = await this.prisma.gastoOperacion.updateMany({
                 where: { id: gastoId, tenant_id: tenantId, tipo: 'PEAJE' },
                 data: { programacion_id: op.id, trabajador_id: op.trabajador_id || undefined, targa: op.vehiculo_id || undefined },
@@ -96,11 +109,12 @@ export class PeajesService {
         }
         const peaje = await this.prisma.peaje.findFirst({ where: { id, tenant_id: tenantId } });
         if (!peaje) throw new NotFoundException('El peaje no existe.');
+        if (!esMio(peaje.trabajador_id)) throw new ForbiddenException('Solo puedes vincular tus propios peajes.');
         const creado = await this.crearGastoDeOperacion({
             monto: peaje.monto, fecha: peaje.fecha, comentarios: peaje.comentarios,
             id_multa: peaje.id_multa, archivo: peaje.archivo, estado: peaje.estado,
             fecha_limite_pago: peaje.fecha_limite_pago, trabajador_id: peaje.trabajador_id, targa: peaje.targa,
-        }, programacionId, tenantId);
+        }, programacionId, tenantId, mio);
         await this.prisma.peaje.delete({ where: { id: peaje.id } });
         return { ok: true, id: creado.id, programacion_id: programacionId, migrado: true };
     }
@@ -108,10 +122,12 @@ export class PeajesService {
     // Operaciones recientes para el selector "Vincular a operación". Se ordenan
     // por cercanía a la fecha del peaje (si viene) y se pueden acotar por
     // chofer/placa, que es como el supervisor identifica el viaje.
-    async operacionesCandidatas(tenantId: string, opts: { trabajadorId?: string; targa?: string; fecha?: string; q?: string; take?: number }) {
+    async operacionesCandidatas(tenantId: string, opts: { trabajadorId?: string; targa?: string; fecha?: string; q?: string; take?: number; soloDeTrabajador?: string[] }) {
         const take = Math.min(Math.max(opts.take || 30, 1), 100);
         const where: Prisma.ProgramacionWhereInput = { tenant_id: tenantId };
-        if (opts.trabajadorId) where.trabajador_id = opts.trabajadorId;
+        // Chofer: SIEMPRE sus operaciones, ignorando cualquier filtro de trabajador.
+        if (opts.soloDeTrabajador) where.trabajador_id = { in: opts.soloDeTrabajador };
+        else if (opts.trabajadorId) where.trabajador_id = opts.trabajadorId;
         if (opts.targa) where.vehiculo_id = { contains: opts.targa, mode: 'insensitive' };
         if (opts.q) where.OR = [
             { cliente: { contains: opts.q, mode: 'insensitive' } },
