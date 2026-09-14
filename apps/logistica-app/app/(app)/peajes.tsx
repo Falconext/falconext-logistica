@@ -1,7 +1,7 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, Linking } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { Receipt, Calendar, Pencil, Trash2, Coins, ClipboardList, Clock, ExternalLink, Upload } from 'lucide-react-native';
+import { Receipt, Calendar, Pencil, Trash2, Coins, ClipboardList, Clock, ExternalLink, Upload, Link2 } from 'lucide-react-native';
 import {
   Screen,
   AppHeader,
@@ -183,8 +183,30 @@ export default function PeajesScreen() {
     !!p && p._origen === 'operacion' && (canEditAll || (!!p.trabajador_id && myCodes.includes(p.trabajador_id)));
   const openDetail = (p: Peaje) => {
     setSust({ comprobantes: p.comprobantes || [], numero_mancato: p.numero_mancato || '', link_peaje: p.link_peaje || '' });
+    setVincOpen(false); setVincOp('');
     setDetail(p);
   };
+  const vincular = async () => {
+    if (!detail || !vincOp) return;
+    setVinculando(true);
+    try {
+      await api.post(`/peajes/${detail.id}/vincular`, { programacion_id: vincOp });
+      setVincOpen(false); setVincOp('');
+      setDetail(null);
+      load();
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.message || 'No se pudo vincular el peaje.');
+    } finally {
+      setVinculando(false);
+    }
+  };
+  const abrirVincular = () => {
+    if (!detail) return;
+    setVincOp('');
+    loadOpsCand({ trabajadorId: detail.trabajador_id || undefined, targa: detail.targa || undefined, fecha: detail.fecha ? String(detail.fecha).split('T')[0] : undefined });
+    setVincOpen(true);
+  };
+
   const saveSustento = async () => {
     if (!detail) return;
     setSavingSust(true);
@@ -204,6 +226,26 @@ export default function PeajesScreen() {
     }
   };
   const [form, setForm] = useState<FormState>(emptyForm);
+  // "Vincular a operación" (opcional al crear; desde el detalle para un peaje ya
+  // guardado). Con operación elegida, el backend lo guarda como gasto de esa
+  // entrega en vez de peaje suelto: entra al costo de la ruta y al reporte.
+  type OpCand = { id: string; fecha: string; cliente?: string | null; lugar_entrega?: string | null; vehiculo_id?: string | null; trabajador_nombre?: string | null };
+  const [opsCand, setOpsCand] = useState<OpCand[]>([]);
+  const [programacionId, setProgramacionId] = useState('');
+  const [vincOpen, setVincOpen] = useState(false);
+  const [vincOp, setVincOp] = useState('');
+  const [vinculando, setVinculando] = useState(false);
+  const opLabel = (o: OpCand) => {
+    const f = o.fecha ? formatDate(o.fecha) : '';
+    const quien = [o.trabajador_nombre, o.vehiculo_id].filter(Boolean).join(' · ');
+    return `${f} · ${o.cliente || o.lugar_entrega || 'Sin cliente'}${quien ? ` · ${quien}` : ''}`;
+  };
+  const loadOpsCand = useCallback(async (params: { trabajadorId?: string; targa?: string; fecha?: string }) => {
+    try {
+      const res = await api.get('/peajes/operaciones-candidatas', { params: { ...params, take: 40 } });
+      setOpsCand(Array.isArray(res.data) ? res.data : []);
+    } catch { setOpsCand([]); }
+  }, []);
   // Mientras el usuario no toque el límite a mano, sigue a la fecha (+14 días).
   const [limiteManual, setLimiteManual] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -267,8 +309,16 @@ export default function PeajesScreen() {
     return { total, montoTotal, pendientes };
   }, [items]);
 
+  // Acotar las operaciones candidatas al chofer/placa/fecha que va eligiendo
+  // el supervisor en el formulario de creación.
+  useEffect(() => {
+    if (!formVisible || editing || !canEditAll) return;
+    loadOpsCand({ trabajadorId: form.trabajador_id || undefined, targa: form.targa || undefined, fecha: form.fecha || undefined });
+  }, [formVisible, editing, canEditAll, form.trabajador_id, form.targa, form.fecha, loadOpsCand]);
+
   const openCreate = () => {
     setEditing(null);
+    setProgramacionId('');
     // Formulario nuevo: fecha de hoy y límite recalculado (no el que quedó fijo al
     // cargar el módulo), sin la marca de "editado a mano" del registro anterior.
     setLimiteManual(false);
@@ -322,7 +372,7 @@ export default function PeajesScreen() {
       if (editing) {
         await api.patch(`/peajes/${editing.id}`, payload);
       } else {
-        await api.post('/peajes', payload);
+        await api.post('/peajes', programacionId ? { ...payload, programacion_id: programacionId } : payload);
       }
       setFormVisible(false);
       load();
@@ -475,6 +525,31 @@ export default function PeajesScreen() {
             <InfoRow label="Fecha límite" value={formatDate(detail.fecha_limite_pago || (detail.fecha ? sumarDias(String(detail.fecha).split('T')[0], PLAZO_PAGO_DIAS) : null))} />
             <InfoRow label="Subido" value={formatDateTime(detail.creado_en)} />
             <InfoRow label="Trabajador" value={trabajadorLabel(detail.trabajador_id)} />
+            {canEditAll && detail._origen !== 'operacion' && (
+              <View style={styles.vincBox}>
+                {!vincOpen ? (
+                  <TouchableOpacity style={styles.vincBtn} onPress={abrirVincular}>
+                    <Link2 size={15} color={C.primary} />
+                    <Text style={styles.vincBtnText}>Vincular a una operación</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View>
+                    <Select
+                      label="Operación"
+                      value={vincOp}
+                      onChange={setVincOp}
+                      options={opsCand.map((o) => ({ value: o.id, label: opLabel(o) }))}
+                      placeholder={opsCand.length ? 'Elegir la entrega de este peaje…' : 'Sin operaciones recientes'}
+                      searchable
+                    />
+                    <View style={{ flexDirection: 'row', gap: S.sm, marginTop: S.sm }}>
+                      <Button title="Cancelar" variant="secondary" style={{ flex: 1 }} onPress={() => { setVincOpen(false); setVincOp(''); }} />
+                      <Button title="Vincular" icon={Link2} loading={vinculando} disabled={!vincOp} style={{ flex: 1 }} onPress={vincular} />
+                    </View>
+                  </View>
+                )}
+              </View>
+            )}
             {(detail.link_peaje || detail.archivo) ? (
               <TouchableOpacity
                 style={styles.linkRow}
@@ -581,6 +656,22 @@ export default function PeajesScreen() {
             searchable
           />
         )}
+        {!editing && canEditAll && (
+          <View style={{ marginBottom: S.md }}>
+            <Select
+              label="Vincular a operación (opcional)"
+              value={programacionId}
+              onChange={setProgramacionId}
+              options={opsCand.map((o) => ({ value: o.id, label: opLabel(o) }))}
+              placeholder={opsCand.length ? 'Elegir la entrega de este peaje…' : 'Sin operaciones recientes para este chofer/placa'}
+              searchable
+              clearable
+            />
+            <Text style={styles.vincHelp}>
+              Si lo vinculas, el peaje queda como gasto de esa entrega: entra al costo de la ruta, a Finanzas y al reporte mensual.
+            </Text>
+          </View>
+        )}
         <FormField
           label="Comentarios"
           value={form.comentarios}
@@ -594,6 +685,10 @@ export default function PeajesScreen() {
 }
 
 const makeStyles = () => StyleSheet.create({
+  vincHelp: { fontSize: 11, color: C.textMuted, marginTop: 6, lineHeight: 16 },
+  vincBox: { marginTop: S.md, padding: S.md, borderRadius: Theme.radius.lg, borderWidth: 1, borderStyle: 'dashed', borderColor: C.primary + '55', backgroundColor: C.primary + '0D' },
+  vincBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 4 },
+  vincBtnText: { fontSize: 14, fontWeight: '700', color: C.primary },
   body: { flex: 1, paddingHorizontal: S.lg, paddingTop: S.md },
   statsRow: { flexDirection: 'row', gap: S.sm, marginBottom: S.md },
   card: {
