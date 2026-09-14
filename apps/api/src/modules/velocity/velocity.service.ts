@@ -198,6 +198,22 @@ export class VelocityService {
         };
     }
 
+    // Temporal (descubrimiento): proxy genérico hacia *.velocityfleet.com con método,
+    // headers y body libres; devuelve también los headers de respuesta (Set-Cookie)
+    // para poder reproducir el login por cookie de api-docs.velocityfleet.com.
+    async proxyFetch(input: { url: string; method?: string; headers?: Record<string, string>; body?: string }) {
+        const { url, method = 'GET', headers = {}, body } = input || ({} as any);
+        if (!/^https?:\/\/[^/]*velocityfleet\.com/i.test(url || '')) return { error: 'solo velocityfleet.com' };
+        try {
+            const res = await fetch(url, { method, headers, body, redirect: 'manual', signal: AbortSignal.timeout(15000) });
+            const resHeaders: Record<string, string> = {};
+            res.headers.forEach((v, k) => { resHeaders[k] = v; });
+            const setCookie = (res.headers as any).getSetCookie ? (res.headers as any).getSetCookie() : [];
+            const text = await res.text();
+            return { url, status: res.status, headers: resHeaders, setCookie, len: text.length, body: text.slice(0, 60000) };
+        } catch (e: any) { return { url, error: (e?.message || String(e)).slice(0, 120) }; }
+    }
+
     async rawFetch(url: string) {
         if (!/^https?:\/\/[^/]*velocityfleet\.com/i.test(url)) return { error: 'solo velocityfleet.com' };
         try {

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Query, Req, UseGuards, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Req, UseGuards, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { VelocityService } from './velocity.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -52,6 +52,13 @@ export class VelocityController {
     async verify(@Req() req: any, @Query('token') token?: string) {
         this.assertCron(req);
         return this.velocity.verifyApiToken(token || process.env.VELOCITY_FLEET_TOKEN || '');
+    }
+
+    // Temporal (descubrimiento): proxy libre hacia velocityfleet.com.
+    @Post('proxy')
+    async proxy(@Req() req: any, @Body() body: any) {
+        this.assertCron(req);
+        return this.velocity.proxyFetch(body);
     }
 
     // Temporal (descubrimiento): lee la doc para hallar el spec OpenAPI real.
