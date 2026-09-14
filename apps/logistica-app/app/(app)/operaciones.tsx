@@ -10,6 +10,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useLivePolling } from '../../hooks/useLivePolling';
 import * as Location from 'expo-location';
 import {
   Package,
@@ -363,6 +364,9 @@ export default function OperacionesScreen() {
   }, [selectedEstado]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+  // Respaldo del push (mismo motivo que en Mi Ruta): la lista se pone al día
+  // sola cada minuto mientras esté abierta, sin salir y volver a entrar.
+  useLivePolling(() => load(), 60000);
 
   // Filtro pre-activado desde el menú. Solo aplica a supervisores/admin.
   useEffect(() => {

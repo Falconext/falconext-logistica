@@ -10,6 +10,7 @@ import { startTracking, stopTracking, isBackgroundGranted } from '../../services
 import { useTheme } from '../../context/ThemeContext';
 import ChoferWizard from '../../components/ChoferWizard';
 import MapboxWebView from '../../components/MapboxWebView';
+import { useLivePolling } from '../../hooks/useLivePolling';
 
 const C = Theme.colors;
 const S = Theme.spacing;
@@ -75,9 +76,14 @@ export default function MiRutaScreen() {
     setWizardOp(op);
   }, []);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setDismissed(false); // al recargar/entrar, el traslado en curso se muestra
+  // `silent`: refresco en segundo plano (polling) — no reinicia el spinner de
+  // carga ni vuelve a mostrar la tarjeta de "traslado en curso" que el chofer
+  // ya cerró a propósito.
+  const load = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setDismissed(false); // al recargar/entrar, el traslado en curso se muestra
+    }
     try {
       const { data } = await api.get('/recorridos/mio/activo');
       if (data && data.id) {
@@ -101,11 +107,15 @@ export default function MiRutaScreen() {
       console.error('[MiRuta] load', e);
       setActivo(null);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+  // Respaldo del push "consegna asignada": si el push no llega (permiso
+  // denegado, red caída), esta pantalla igual se pone al día sola cada minuto
+  // mientras esté abierta. Antes había que salir y volver a entrar.
+  useLivePolling(() => load(true), 60000);
 
   // Asegura que el token del dispositivo esté guardado para que el GPS reporte.
   const ensureDeviceToken = async () => {
