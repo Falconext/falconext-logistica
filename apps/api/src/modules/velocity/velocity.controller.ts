@@ -47,6 +47,13 @@ export class VelocityController {
         return this.velocity.testConnection(token, host);
     }
 
+    // Temporal (descubrimiento): canjea un API Token por access token (oauth2/verify).
+    @Get('verify')
+    async verify(@Req() req: any, @Query('token') token?: string) {
+        this.assertCron(req);
+        return this.velocity.verifyApiToken(token || process.env.VELOCITY_FLEET_TOKEN || '');
+    }
+
     // Temporal (descubrimiento): lee la doc para hallar el spec OpenAPI real.
     @Get('docs')
     async docs(@Req() req: any) {

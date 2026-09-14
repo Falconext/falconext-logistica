@@ -165,6 +165,39 @@ export class VelocityService {
     }
 
     // Fetch crudo de una URL de velocityfleet (solo ese dominio) para inspección.
+    // Canje del API Token (UUID del portal "Integración API") por un access token.
+    // Es lo que hace el login de api-docs.velocityfleet.com: POST oauth2/verify
+    // con { token } (+ campos hCaptcha, que aquí probamos con y sin).
+    async verifyApiToken(token: string) {
+        const url = `${this.baseUrl}/vapi/v1/accounts/users/oauth2/verify/`;
+        const attempt = async (label: string, body: Record<string, unknown>) => {
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                    body: JSON.stringify(body),
+                    signal: AbortSignal.timeout(9000),
+                });
+                const text = await res.text();
+                let json: any = null; try { json = JSON.parse(text); } catch { /* html/text */ }
+                // No devolver secretos completos: solo forma y prefijos.
+                const shape = json && typeof json === 'object'
+                    ? Object.fromEntries(Object.entries(json).map(([k, v]) => [k, typeof v === 'string' ? `${v.slice(0, 12)}…(${v.length})` : v]))
+                    : text.slice(0, 200);
+                return { label, status: res.status, ok: res.ok, shape };
+            } catch (e: any) { return { label, error: (e?.message || String(e)).slice(0, 80) }; }
+        };
+        const t = token.trim();
+        return {
+            tokenPreview: t.slice(0, 8) + '…',
+            results: await Promise.all([
+                attempt('solo token', { token: t }),
+                attempt('token + hcaptcha vacío', { token: t, hcaptcha_token: null, hcaptcha_score: null, hcaptcha_reason: null }),
+                attempt('api_token', { api_token: t }),
+            ]),
+        };
+    }
+
     async rawFetch(url: string) {
         if (!/^https?:\/\/[^/]*velocityfleet\.com/i.test(url)) return { error: 'solo velocityfleet.com' };
         try {
