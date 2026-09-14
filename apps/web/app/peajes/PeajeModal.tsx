@@ -56,6 +56,9 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
     const myWorkerId = user?.trabajador_id || '';
     const hideConductor = !isAdmin && !!myWorkerId;
     const isEdit = !!record;
+    // Chofer (solo_propios): solo puede registrar un peaje si lo vincula a una
+    // consegna SUYA. El backend lo exige; aquí se refleja en la UI.
+    const isChofer = !!user && !!(user as any).solo_propios;
 
     const [mounted, setMounted] = useState(false);
     useEffect(() => setMounted(true), []);
@@ -122,6 +125,11 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
                 const payload = isAdmin ? formData : (({ estado, ...rest }) => rest)(formData);
                 await api.patch(`/peajes/${record.id}`, payload);
             } else {
+                if (isChofer && !programacionId) {
+                    setError('Elige la consegna a la que pertenece este peaje.');
+                    setSubmitting(false);
+                    return;
+                }
                 // Con operación elegida el backend lo guarda como gasto de esa
                 // operación (entra a costos y reporte), no como peaje suelto.
                 await api.post('/peajes', programacionId ? { ...formData, programacion_id: programacionId } : formData);
@@ -199,6 +207,7 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
                                 trabajadorId={formData.trabajador_id || undefined}
                                 targa={formData.targa || undefined}
                                 fecha={formData.fecha || undefined}
+                                required={isChofer}
                             />
                         )}
 

@@ -263,7 +263,14 @@ export default function PeajesPage() {
             </div>
 
             <PeajeModal isOpen={isModalOpen} onClose={closeModal} onSuccess={fetchItems} record={editing} />
-            <PeajeDetailModal item={viewing} onClose={() => setViewing(null)} canVincular={canEdit} onVinculado={fetchItems} />
+            {/* Vincular: supervisores sobre cualquiera; el chofer solo sobre SUS peajes
+                sueltos (el backend valida además que la operación destino sea suya). */}
+            <PeajeDetailModal
+                item={viewing}
+                onClose={() => setViewing(null)}
+                canVincular={canEdit || (!!viewing?.trabajador_id && [user?.trabajador_id, (user as any)?.trabajador_codigo].filter(Boolean).includes(viewing.trabajador_id))}
+                onVinculado={fetchItems}
+            />
             <GastoSustentoModal item={sustentando} tipo="PEAJE" onClose={() => setSustentando(null)} onSaved={fetchItems} />
 
             {/* Search */}
