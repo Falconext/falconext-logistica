@@ -326,16 +326,9 @@ export class VelocityService {
     async sync() {
         const customerIds = await this.listCustomerIds();
 
-        // Índice placa-normalizada → vehículo (una sola query; el token es de una
-        // cuenta, pero mapeamos sobre todos los vehículos por si hay varios tenants).
-        const vehiculos = await this.prisma.vehiculo.findMany({ select: { id: true, placa: true, tenant_id: true } });
-        const vehByPlaca = new Map<string, { id: string; placa: string; tenant_id: string }>();
-        for (const v of vehiculos) vehByPlaca.set(this.normPlaca(v.placa), v);
-
-        let matched = 0, inserted = 0, skippedOld = 0;
-        const unmatched = new Set<string>();
-        let devicesVistos = 0;
-
+        // 1) Posiciones de todos los clientes, deduplicadas: la cuenta Gamonal tiene
+        //    2 "customers" (Fuel y Telematics) que devuelven LOS MISMOS devices.
+        const byKey = new Map<string, RawDevice>();
         for (const customerId of customerIds) {
             let devices: RawDevice[] = [];
             try {
@@ -345,67 +338,101 @@ export class VelocityService {
                 continue;
             }
             for (const d of devices) {
-                devicesVistos++;
-                const regRaw = d.vehicle_registration || d.vehicleRegistration || d.registration || d.reg || d.vrm || '';
-                const lat = Number(d.lat ?? d.latitude);
-                const lon = Number(d.lon ?? d.lng ?? d.longitude);
-                if (!regRaw || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-                // `private:true` (modo privado del chofer) llega con 0,0 → no es una posición.
-                if (d.private === true || (lat === 0 && lon === 0)) continue;
+                const k = String(d?.id ?? d?.vehicle_registration ?? d?.vehicleRegistration ?? '');
+                if (k && !byKey.has(k)) byKey.set(k, d);
+            }
+        }
+        const devicesVistos = byKey.size;
 
-                const veh = vehByPlaca.get(this.normPlaca(regRaw));
-                if (!veh) { unmatched.add(String(regRaw)); continue; }
-                matched++;
+        // 2) Índice placa-normalizada → vehículo (una sola query; el token es de una
+        //    cuenta, pero mapeamos sobre todos los vehículos por si hay varios tenants).
+        const vehiculos = await this.prisma.vehiculo.findMany({ select: { id: true, placa: true, tenant_id: true } });
+        const vehByPlaca = new Map<string, { id: string; placa: string; tenant_id: string }>();
+        for (const v of vehiculos) vehByPlaca.set(this.normPlaca(v.placa), v);
 
-                const ts = this.parseTs(d.occurredAt ?? d.occurred_at ?? d.timestamp ?? d.time);
-                const speed = d.speed != null ? Number(d.speed) : null;
-                const heading = d.heading != null ? Number(d.heading) : d.bearing != null ? Number(d.bearing) : d.direction != null ? Number(d.direction) : null;
-                const ignition = typeof d.ignition === 'boolean' ? d.ignition
-                    : typeof d.ignition === 'string' ? /^(y|yes|on|true|1)$/i.test(d.ignition)
-                    : typeof d.ignitionOn === 'boolean' ? d.ignitionOn : null;
+        // 3) Normalizar + emparejar.
+        type Punto = { veh: { id: string; placa: string; tenant_id: string }; imei: string; lat: number; lon: number; ts: Date; speed: number | null; heading: number | null; ignition: boolean | null };
+        const puntos: Punto[] = [];
+        const unmatched = new Set<string>();
+        let privados = 0;
+        for (const d of byKey.values()) {
+            const regRaw = d.vehicle_registration || d.vehicleRegistration || d.registration || d.reg || d.vrm || '';
+            const lat = Number(d.lat ?? d.latitude);
+            const lon = Number(d.lon ?? d.lng ?? d.longitude);
+            if (!regRaw || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+            // `private:true` (modo privado del chofer) llega con 0,0 → no es una posición.
+            if (d.private === true || (lat === 0 && lon === 0)) { privados++; continue; }
+            const veh = vehByPlaca.get(this.normPlaca(regRaw));
+            if (!veh) { unmatched.add(String(regRaw)); continue; }
+            const speed = d.speed != null ? Number(d.speed) : null;
+            const heading = d.heading != null ? Number(d.heading) : d.bearing != null ? Number(d.bearing) : d.direction != null ? Number(d.direction) : null;
+            const ignition = typeof d.ignition === 'boolean' ? d.ignition
+                : typeof d.ignition === 'string' ? /^(y|yes|on|true|1)$/i.test(d.ignition)
+                : typeof d.ignitionOn === 'boolean' ? d.ignitionOn : null;
+            puntos.push({
+                veh, imei: `VF-${this.normPlaca(regRaw)}`, lat, lon,
+                ts: this.parseTs(d.occurredAt ?? d.occurred_at ?? d.timestamp ?? d.time),
+                speed: speed != null && Number.isFinite(speed) ? speed : null,
+                heading: heading != null && Number.isFinite(heading) ? heading : null,
+                ignition,
+            });
+        }
+        const matched = puntos.length;
 
-                // Device por vehículo (imei estable derivado de la placa). Se crea/actualiza
-                // y se enlaza al vehículo para que Rastreo lo muestre en la pestaña Vehículos.
-                const imei = `VF-${this.normPlaca(regRaw)}`;
-                let device = await this.prisma.device.findUnique({ where: { imei } });
-                if (!device) {
-                    device = await this.prisma.device.create({
-                        data: { imei, name: `GPS ${veh.placa}`, model: 'VelocityFleet', tenant_id: veh.tenant_id, vehiculo_id: veh.id },
-                    });
-                } else if (device.vehiculo_id !== veh.id || device.tenant_id !== veh.tenant_id) {
-                    device = await this.prisma.device.update({ where: { id: device.id }, data: { vehiculo_id: veh.id, tenant_id: veh.tenant_id } });
-                }
-
-                // Dedupe: la posición live es una foto del momento. Solo insertamos si es
-                // MÁS NUEVA que la última guardada de ese device (evita repetir el mismo punto).
-                const last = await this.prisma.position.findFirst({
-                    where: { device_id: device.id },
-                    orderBy: { timestamp: 'desc' },
-                    select: { timestamp: true },
+        // 4) Devices por vehículo (imei estable derivado de la placa), en lote.
+        const imeis = puntos.map((p) => p.imei);
+        const existentes = await this.prisma.device.findMany({ where: { imei: { in: imeis } } });
+        const deviceByImei = new Map(existentes.map((d) => [d.imei, d]));
+        for (const p of puntos) {
+            const dev = deviceByImei.get(p.imei);
+            if (!dev) {
+                const created = await this.prisma.device.create({
+                    data: { imei: p.imei, name: `GPS ${p.veh.placa}`, model: 'VelocityFleet', tenant_id: p.veh.tenant_id, vehiculo_id: p.veh.id },
                 });
-                if (last && ts.getTime() <= new Date(last.timestamp).getTime()) { skippedOld++; continue; }
-
-                await this.prisma.position.create({
-                    data: {
-                        device_id: device.id,
-                        latitude: lat, longitude: lon,
-                        speed: speed != null && Number.isFinite(speed) ? speed : undefined,
-                        heading: heading != null && Number.isFinite(heading) ? heading : undefined,
-                        ignition: ignition ?? undefined,
-                        timestamp: ts,
-                    },
-                });
-                inserted++;
-
-                await this.prisma.device.update({ where: { id: device.id }, data: { last_activity: new Date() } });
-                await this.prisma.vehiculo.update({
-                    where: { id: veh.id },
-                    data: { ultima_latitud: lat, ultima_longitud: lon, ultima_actualizacion: ts },
-                }).catch(() => { /* no bloquear el sync por el espejo en vehiculo */ });
+                deviceByImei.set(p.imei, created);
+            } else if (dev.vehiculo_id !== p.veh.id || dev.tenant_id !== p.veh.tenant_id) {
+                const upd = await this.prisma.device.update({ where: { id: dev.id }, data: { vehiculo_id: p.veh.id, tenant_id: p.veh.tenant_id } });
+                deviceByImei.set(p.imei, upd);
             }
         }
 
-        const resumen = { customers: customerIds.length, devicesVistos, matched, inserted, skippedOld, unmatched: Array.from(unmatched) };
+        // 5) Dedupe temporal: la posición live es una foto del momento. Solo se inserta
+        //    si es MÁS NUEVA que la última guardada de ese device (una query agrupada).
+        const deviceIds = puntos.map((p) => deviceByImei.get(p.imei)!.id);
+        const ultimas: Array<{ device_id: string; max: Date | null }> = deviceIds.length
+            ? await (this.prisma.position.groupBy as any)({ by: ['device_id'], where: { device_id: { in: deviceIds } }, _max: { timestamp: true } })
+                .then((rows: any[]) => rows.map((r) => ({ device_id: r.device_id, max: r._max?.timestamp ?? null })))
+            : [];
+        const lastByDevice = new Map(ultimas.map((u) => [u.device_id, u.max ? new Date(u.max).getTime() : 0]));
+
+        let inserted = 0, skippedOld = 0;
+        const nuevos = puntos.filter((p) => {
+            const devId = deviceByImei.get(p.imei)!.id;
+            const last = lastByDevice.get(devId) || 0;
+            if (p.ts.getTime() <= last) { skippedOld++; return false; }
+            return true;
+        });
+        if (nuevos.length) {
+            await this.prisma.position.createMany({
+                data: nuevos.map((p) => ({
+                    device_id: deviceByImei.get(p.imei)!.id,
+                    latitude: p.lat, longitude: p.lon,
+                    speed: p.speed ?? undefined, heading: p.heading ?? undefined,
+                    ignition: p.ignition ?? undefined, timestamp: p.ts,
+                })),
+            });
+            inserted = nuevos.length;
+            const now = new Date();
+            await Promise.all(nuevos.map((p) => Promise.all([
+                this.prisma.device.update({ where: { id: deviceByImei.get(p.imei)!.id }, data: { last_activity: now } }),
+                this.prisma.vehiculo.update({
+                    where: { id: p.veh.id },
+                    data: { ultima_latitud: p.lat, ultima_longitud: p.lon, ultima_actualizacion: p.ts },
+                }).catch(() => { /* no bloquear el sync por el espejo en vehiculo */ }),
+            ])));
+        }
+
+        const resumen = { customers: customerIds.length, devicesVistos, matched, privados, inserted, skippedOld, unmatched: Array.from(unmatched) };
         this.logger.log(`sync → ${JSON.stringify(resumen)}`);
         return resumen;
     }
