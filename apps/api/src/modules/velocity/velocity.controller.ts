@@ -61,6 +61,13 @@ export class VelocityController {
         return this.velocity.proxyFetch(body);
     }
 
+    // Temporal: limpia las posiciones VF-* cargadas con la hora mal (2026-09-13).
+    @Post('reset-positions')
+    async resetPositions(@Req() req: any) {
+        this.assertCron(req);
+        return this.velocity.resetVelocityPositions();
+    }
+
     // Temporal (descubrimiento): lee la doc para hallar el spec OpenAPI real.
     @Get('docs')
     async docs(@Req() req: any) {

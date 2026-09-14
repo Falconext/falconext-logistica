@@ -21,6 +21,11 @@ import { PrismaService } from '../../prisma.service';
 //              ignition:"Y"|"N", direction, timestamp:"<epoch s>", street, town, private }],
 //              device_groups:[{ name, devices:[...misma forma, REPETIDOS] }] }
 //          Deduplicar por `id`. `private:true` viene con lat/lon 0 → ignorar.
+//          OJO (verificado): `timestamp` viene 1 h ADELANTADO en horario de verano
+//          (toman la hora local italiana como UTC+1 fijo). El texto `time`
+//          ("HH:MM </br> DD/MM/YYYY", hora de Italia) sí es correcto → se usa como
+//          fuente de verdad y `timestamp` solo aporta los segundos.
+//          `speed` viene en km/h; nuestra Position.speed es m/s (la web × 3.6).
 //   Ojo: Django exige el slash final (APPEND_SLASH → 301 si falta).
 //
 // Config por variables de entorno:
@@ -371,8 +376,9 @@ export class VelocityService {
                 : typeof d.ignitionOn === 'boolean' ? d.ignitionOn : null;
             puntos.push({
                 veh, imei: `VF-${this.normPlaca(regRaw)}`, lat, lon,
-                ts: this.parseTs(d.occurredAt ?? d.occurred_at ?? d.timestamp ?? d.time),
-                speed: speed != null && Number.isFinite(speed) ? speed : null,
+                ts: this.resolveTs(d),
+                // km/h → m/s (unidad de Position.speed).
+                speed: speed != null && Number.isFinite(speed) ? speed / 3.6 : null,
                 heading: heading != null && Number.isFinite(heading) ? heading : null,
                 ignition,
             });
@@ -437,11 +443,57 @@ export class VelocityService {
         return resumen;
     }
 
+    // Temporal: borra las posiciones de los devices VF-* (las cargó este mismo sync
+    // con la hora adelantada) para que el cron las vuelva a poblar correctas.
+    async resetVelocityPositions() {
+        const devices = await this.prisma.device.findMany({ where: { imei: { startsWith: 'VF-' } }, select: { id: true } });
+        const ids = devices.map((d) => d.id);
+        const del = ids.length ? await this.prisma.position.deleteMany({ where: { device_id: { in: ids } } }) : { count: 0 };
+        return { devices: ids.length, posicionesBorradas: del.count };
+    }
+
     // ---- Helpers ------------------------------------------------------------
 
     // Normaliza una placa/matrícula para comparar (mayúsculas, sin separadores).
     private normPlaca(s: any): string {
         return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    }
+
+    // Fecha/hora real del reporte. Prioriza el texto `time` ("HH:MM </br> DD/MM/YYYY",
+    // en la zona de la cuenta, VELOCITY_FLEET_TZ, default Europe/Rome) porque el
+    // epoch `timestamp` viene 1 h adelantado en horario de verano. Los segundos se
+    // toman del epoch para conservar el orden entre lecturas del mismo minuto.
+    // Nunca devuelve una fecha futura (rompería el "último punto" de la web).
+    private resolveTs(d: RawDevice): Date {
+        const epoch = this.parseTs(d.occurredAt ?? d.occurred_at ?? d.timestamp ?? null);
+        const now = Date.now();
+        const m = typeof d.time === 'string' ? d.time.match(/(\d{1,2}):(\d{2})\D+(\d{1,2})\/(\d{1,2})\/(\d{4})/) : null;
+        if (m) {
+            const [, hh, mi, dd, mo, yy] = m.map(Number);
+            const secs = d.timestamp != null ? epoch.getUTCSeconds() : 0;
+            const local = this.zonedToUtc(yy, mo, dd, hh, mi, secs, process.env.VELOCITY_FLEET_TZ || 'Europe/Rome');
+            if (local && local.getTime() <= now + 120_000) return local;
+        }
+        return epoch.getTime() > now + 120_000 ? new Date(now) : epoch;
+    }
+
+    // Convierte una fecha/hora "de pared" en una zona IANA a un Date UTC (sin libs):
+    // se asume UTC, se mide el offset real de la zona en ese instante y se corrige.
+    private zonedToUtc(y: number, mo: number, d: number, h: number, mi: number, s: number, tz: string): Date | null {
+        try {
+            const guess = Date.UTC(y, mo - 1, d, h, mi, s);
+            const fmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const offsetAt = (t: number) => {
+                const p: Record<string, number> = {};
+                for (const part of fmt.formatToParts(new Date(t))) if (part.type !== 'literal') p[part.type] = Number(part.value);
+                return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - t;
+            };
+            // Dos pasadas por si el instante cae cerca de un cambio de horario.
+            let utc = guess - offsetAt(guess);
+            utc = guess - offsetAt(utc);
+            const out = new Date(utc);
+            return isNaN(out.getTime()) ? null : out;
+        } catch { return null; }
     }
 
     // Vencimiento de un JWT (claim exp, en segundos). Si no se puede leer → 1 h.
