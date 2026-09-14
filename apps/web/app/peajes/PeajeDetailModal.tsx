@@ -40,6 +40,7 @@ export default function PeajeDetailModal({ item, onClose }: PeajeDetailModalProp
     if (!item || !mounted) return null;
 
     const fmtDate = (d?: string | null) => d ? new Date(d).toLocaleDateString(dateLocale, { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    const fmtDateTime = (d?: string | null) => d ? new Date(d).toLocaleString(dateLocale, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
     const comprobantes: string[] = item.comprobantes?.length ? item.comprobantes : (item.archivo ? [item.archivo] : []);
 
     return createPortal(
@@ -62,6 +63,7 @@ export default function PeajeDetailModal({ item, onClose }: PeajeDetailModalProp
                         <Field label="Spedizione">{item.spedizione || '—'}</Field>
                         <Field label="Cliente">{item.cliente || '—'}</Field>
                         <Field label={t('peajes.columnas.fecha')}>{fmtDate(item.fecha)}</Field>
+                        <Field label={t('peajes.detalle.fechaSubida')}>{fmtDateTime(item.creado_en)}</Field>
                         <Field label={t('peajes.detalle.fechaLimitePago')}>{fmtDate(item.fecha_limite_pago || sumarDiasIso(item.fecha, 14))}</Field>
                         <Field label={t('peajes.columnas.monto')}>{format(item.monto || 0)}</Field>
                         <Field label={t('peajes.detalle.pagadoPorChofer')}>{item.pagado_por_chofer === false ? t('peajes.detalle.no') : t('peajes.detalle.si')}</Field>

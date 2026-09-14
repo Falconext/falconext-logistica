@@ -29,44 +29,57 @@ function limiteEfectivo(r: { fecha?: string | null; fecha_limite_pago?: string |
     return { fecha: d, calculada: true };
 }
 
-const ESTADOS = ['Todos', 'PENDIENTE', 'PAGADO', 'ANULADO'] as const;
+const ESTADOS = ['Todos', 'PENDIENTE', 'OBSERVADO', 'PAGADO', 'ANULADO'] as const;
 
 const ESTADO_LABEL_KEY: Record<string, string> = {
     Todos: 'todos',
     PENDIENTE: 'pendiente',
+    OBSERVADO: 'observado',
     PAGADO: 'pagado',
     ANULADO: 'anulado',
 };
 
-const ESTADO_BADGE: Record<string, string> = {
-    PAGADO: 'text-emerald-600 border-emerald-200 bg-emerald-50',
-    PENDIENTE: 'text-amber-600 border-amber-200 bg-amber-50',
-    ANULADO: 'text-slate-500 border-slate-200 bg-slate-50',
-};
+const EMPTY_COUNTS = { Todos: 0, PENDIENTE: 0, OBSERVADO: 0, PAGADO: 0, ANULADO: 0 };
 
 // Color por BUCKET (agrupa los estados de texto libre) — para diferenciar de un
 // vistazo lo PAGADO (verde) de lo que FALTA pagar (ámbar) y lo anulado (gris).
 const DOT_BY_BUCKET: Record<string, string> = {
     PAGADO: 'bg-emerald-500',
     PENDIENTE: 'bg-amber-500',
+    OBSERVADO: 'bg-rose-500',
     ANULADO: 'bg-slate-400',
 };
 const BADGE_BY_BUCKET: Record<string, string> = {
     PAGADO: 'text-emerald-700 border-emerald-200 bg-emerald-50',
     PENDIENTE: 'text-amber-700 border-amber-200 bg-amber-50',
+    OBSERVADO: 'text-rose-700 border-rose-200 bg-rose-50',
     ANULADO: 'text-slate-500 border-slate-200 bg-slate-50',
 };
 
-// Espejo del bucketOf() del backend — solo para decidir si mostrar la fecha
-// límite en rojo (vencida y aún sin resolver).
+// Espejo del bucketOf() del backend — para el color y para decidir si mostrar la
+// fecha límite en rojo (vencida y aún sin resolver). OBSERVADO = no se puede pagar
+// por algún motivo; el admin lo aparta de lo pendiente.
 const PAGADO_VALS = ['PAGADO', 'PAGADO POR AUTISTA', 'PAGO BONIFICO'];
 const ANULADO_VALS = ['ANULADO'];
-function bucketOfEstado(e?: string | null): 'PAGADO' | 'ANULADO' | 'PENDIENTE' {
+const OBSERVADO_VALS = ['OBSERVADO', 'OBSERVACIÓN', 'OBSERVACION'];
+function bucketOfEstado(e?: string | null): 'PAGADO' | 'ANULADO' | 'OBSERVADO' | 'PENDIENTE' {
     const v = (e || '').trim().toUpperCase();
     if (PAGADO_VALS.includes(v)) return 'PAGADO';
     if (ANULADO_VALS.includes(v)) return 'ANULADO';
+    if (OBSERVADO_VALS.includes(v)) return 'OBSERVADO';
     return 'PENDIENTE';
 }
+
+// Fecha + hora en que se subió el peaje (el admin da 48 h para subirlos).
+const fmtSubido = (iso: string | null | undefined, locale: string) => {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return null;
+    return {
+        fecha: d.toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' }),
+        hora: d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
+    };
+};
 
 export default function PeajesPage() {
     const t = useT();
@@ -78,7 +91,7 @@ export default function PeajesPage() {
     const canEdit = !checkIsChofer(user);
     const [items, setItems] = useState<any[]>([]);
     const [total, setTotal] = useState(0);
-    const [counts, setCounts] = useState<Record<string, number>>({ Todos: 0, PENDIENTE: 0, PAGADO: 0, ANULADO: 0 });
+    const [counts, setCounts] = useState<Record<string, number>>(EMPTY_COUNTS);
     const [loading, setLoading] = useState(true);
     const [query, setQuery] = useState('');
     const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -143,7 +156,7 @@ export default function PeajesPage() {
             .then(res => {
                 setItems(res.data.items ?? []);
                 setTotal(res.data.total ?? 0);
-                setCounts(res.data.counts ?? { Todos: 0, PENDIENTE: 0, PAGADO: 0, ANULADO: 0 });
+                setCounts({ ...EMPTY_COUNTS, ...(res.data.counts ?? {}) });
             })
             .catch(err => console.error(err))
             .finally(() => setLoading(false));
@@ -190,6 +203,7 @@ export default function PeajesPage() {
                 Spedizione: r.spedizione || '—',
                 [t('peajes.columnas.comentario')]: r.comentarios || '',
                 [t('peajes.columnas.fecha')]: r.fecha ? new Date(r.fecha).toLocaleDateString() : '',
+                [t('peajes.columnas.subido')]: r.creado_en ? new Date(r.creado_en).toLocaleString() : '',
                 [t('peajes.detalle.fechaLimitePago')]: limiteEfectivo(r).fecha?.toLocaleDateString() ?? '',
                 [t('peajes.detalle.numeroMancato')]: r.numero_mancato || r.id_multa || '',
                 [t('peajes.columnas.monto')]: r.monto || 0,
@@ -333,6 +347,7 @@ export default function PeajesPage() {
                                 <th className="px-3.5 py-3 font-medium whitespace-nowrap">{t('peajes.columnas.nroMancato')}</th>
                                 <th className="px-3.5 py-3 font-medium whitespace-nowrap">{t('peajes.columnas.linkPago')}</th>
                                 <th className="px-3.5 py-3 font-medium whitespace-nowrap">{t('peajes.columnas.fecha')}</th>
+                                <th className="px-3.5 py-3 font-medium whitespace-nowrap">{t('peajes.columnas.subido')}</th>
                                 <th className="px-3.5 py-3 font-medium whitespace-nowrap">{t('peajes.detalle.fechaLimitePago')}</th>
                                 <th className="px-3.5 py-3 font-medium whitespace-nowrap text-right">{t('peajes.columnas.monto')}</th>
                                 <th className="px-3.5 py-3 font-medium text-right whitespace-nowrap">{t('peajes.columnas.acciones')}</th>
@@ -340,15 +355,30 @@ export default function PeajesPage() {
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={9} className="text-center py-16 text-slate-400">{t('peajes.cargando')}</td></tr>
+                                <tr><td colSpan={10} className="text-center py-16 text-slate-400">{t('peajes.cargando')}</td></tr>
                             ) : items.length === 0 ? (
-                                <tr><td colSpan={9} className="text-center py-16 text-slate-400">{t('peajes.vacio')}</td></tr>
+                                <tr><td colSpan={10} className="text-center py-16 text-slate-400">{t('peajes.vacio')}</td></tr>
                             ) : pageRows.map((item) => {
                                 const { fecha: limite, calculada: limiteCalculada } = limiteEfectivo(item);
                                 const bucket = bucketOfEstado(item.estado);
                                 const vencido = !!limite && limite.getTime() < Date.now() && bucket === 'PENDIENTE';
                                 const nroMancato = item.numero_mancato || item.id_multa || null;
                                 const linkPago = item.link_peaje || item.archivo || null;
+                                const subido = fmtSubido(item.creado_en, dateLocale);
+                                // Valor del selector: los estados nativos (PENDIENTE / null) caen en la
+                                // opción vacía; un texto legacy (p. ej. "PAGO BONIFICO") se agrega como
+                                // opción extra para que el selector lo muestre en vez de "Seleccionar…".
+                                const estadoUpper = (item.estado || '').trim().toUpperCase();
+                                const estadoSel = !estadoUpper || estadoUpper === 'PENDIENTE' ? '' : item.estado;
+                                const estadoOptions = [
+                                    { value: '', label: t('peajes.estados.pendiente') },
+                                    { value: 'OBSERVADO', label: t('peajes.estados.observado') },
+                                    { value: 'PAGADO', label: t('peajes.estados.pagado') },
+                                    { value: 'ANULADO', label: t('peajes.estados.anulado') },
+                                ];
+                                if (estadoSel && !estadoOptions.some(o => o.value === estadoSel)) {
+                                    estadoOptions.push({ value: estadoSel, label: estadoSel });
+                                }
                                 return (
                                 <tr key={item.id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
                                     {/* Estado — con color por bucket para diferenciar pagado / por pagar / anulado */}
@@ -359,14 +389,10 @@ export default function PeajesPage() {
                                                 <Select
                                                     className="w-36"
                                                     searchable={false}
-                                                    value={item.estado || ''}
+                                                    value={estadoSel}
                                                     disabled={busyEstado.has(item.id)}
                                                     onChange={(v) => patchEstado(item, v)}
-                                                    options={[
-                                                        { value: '', label: t('peajes.estados.pendiente') },
-                                                        { value: 'PAGADO', label: t('peajes.estados.pagado') },
-                                                        { value: 'ANULADO', label: t('peajes.estados.anulado') },
-                                                    ]}
+                                                    options={estadoOptions}
                                                 />
                                             </div>
                                         ) : (
@@ -405,6 +431,15 @@ export default function PeajesPage() {
                                     {/* Fecha */}
                                     <td className="px-3.5 py-3 text-slate-600 whitespace-nowrap">
                                         {item.fecha ? new Date(item.fecha).toLocaleDateString(dateLocale, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                                    </td>
+                                    {/* Subido: fecha + hora en que el chofer/admin cargó el peaje */}
+                                    <td className="px-3.5 py-3 whitespace-nowrap">
+                                        {subido ? (
+                                            <div className="leading-tight">
+                                                <div className="text-slate-600">{subido.fecha}</div>
+                                                <div className="text-[11px] text-slate-400 tabular-nums">{subido.hora}</div>
+                                            </div>
+                                        ) : <span className="text-slate-300">—</span>}
                                     </td>
                                     {/* Fecha límite */}
                                     <td className={`px-3.5 py-3 whitespace-nowrap ${vencido ? 'text-red-600 font-semibold' : 'text-slate-600'}`}

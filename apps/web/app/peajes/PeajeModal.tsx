@@ -153,6 +153,7 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
                                 onChange={(v) => setFormData({ ...formData, estado: v })}
                                 options={[
                                     { value: 'PENDIENTE', label: 'PENDIENTE' },
+                                    { value: 'OBSERVADO', label: 'OBSERVADO' },
                                     { value: 'PAGADO', label: 'PAGADO' },
                                     { value: 'ANULADO', label: 'ANULADO' },
                                 ]} />

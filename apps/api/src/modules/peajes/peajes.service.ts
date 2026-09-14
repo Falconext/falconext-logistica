@@ -63,24 +63,30 @@ export class PeajesService {
             ];
         }
         // Los estados en BD son texto libre (PAGADO, NO PAGADO, PAGADO POR AUTISTA,
-        // PAGO BONIFICO, VENCIDO, OBSERVACIÓN, …). Los agrupamos en 3 buckets para
-        // que las pestañas Pendiente/Pagado/Anulado sumen bien. Desconocido → Pendiente.
+        // PAGO BONIFICO, VENCIDO, OBSERVACIÓN, …). Los agrupamos en 4 buckets para
+        // que las pestañas Pendiente/Observado/Pagado/Anulado sumen bien.
+        // OBSERVADO = peajes que por algún motivo no se pueden pagar todavía (el admin
+        // los aparta para no mezclarlos con lo pendiente normal). Desconocido → Pendiente.
         const PAGADO_VALS = ['PAGADO', 'PAGADO POR AUTISTA', 'PAGO BONIFICO'];
         const ANULADO_VALS = ['ANULADO'];
-        const bucketOf = (e?: string | null): 'PAGADO' | 'ANULADO' | 'PENDIENTE' => {
+        const OBSERVADO_VALS = ['OBSERVADO', 'OBSERVACIÓN', 'OBSERVACION'];
+        const NO_PENDIENTE_VALS = [...PAGADO_VALS, ...ANULADO_VALS, ...OBSERVADO_VALS];
+        const bucketOf = (e?: string | null): 'PAGADO' | 'ANULADO' | 'OBSERVADO' | 'PENDIENTE' => {
             const v = (e || '').trim().toUpperCase();
             if (PAGADO_VALS.includes(v)) return 'PAGADO';
             if (ANULADO_VALS.includes(v)) return 'ANULADO';
+            if (OBSERVADO_VALS.includes(v)) return 'OBSERVADO';
             return 'PENDIENTE';
         };
 
         const itemsWhere: Prisma.PeajeWhereInput = { ...baseWhere };
         if (estado === 'PAGADO') itemsWhere.estado = { in: PAGADO_VALS };
         else if (estado === 'ANULADO') itemsWhere.estado = { in: ANULADO_VALS };
+        else if (estado === 'OBSERVADO') itemsWhere.estado = { in: OBSERVADO_VALS };
         else if (estado === 'PENDIENTE') {
-            // Pendiente = todo lo que no es pagado ni anulado (incluye null).
+            // Pendiente = todo lo que no es pagado, anulado ni observado (incluye null).
             // Vía AND para no pisar el OR de búsqueda que pueda venir en baseWhere.
-            itemsWhere.AND = [{ OR: [{ estado: { notIn: [...PAGADO_VALS, ...ANULADO_VALS] } }, { estado: null }] }];
+            itemsWhere.AND = [{ OR: [{ estado: { notIn: NO_PENDIENTE_VALS } }, { estado: null }] }];
         }
 
         // Gastos de tipo PEAJE registrados por choferes en operaciones. Se fusionan
@@ -105,8 +111,9 @@ export class PeajesService {
         const gastoItemsWhere: Prisma.GastoOperacionWhereInput = { ...gastoBaseWhere };
         if (estado === 'PAGADO') gastoItemsWhere.estado = { in: PAGADO_VALS };
         else if (estado === 'ANULADO') gastoItemsWhere.estado = { in: ANULADO_VALS };
+        else if (estado === 'OBSERVADO') gastoItemsWhere.estado = { in: OBSERVADO_VALS };
         else if (estado === 'PENDIENTE') {
-            gastoItemsWhere.AND = [{ OR: [{ estado: { notIn: [...PAGADO_VALS, ...ANULADO_VALS] } }, { estado: null }] }];
+            gastoItemsWhere.AND = [{ OR: [{ estado: { notIn: NO_PENDIENTE_VALS } }, { estado: null }] }];
         }
 
         // Traemos los peajes nativos + gastos que matchean el filtro (sin paginar) para
@@ -115,6 +122,8 @@ export class PeajesService {
             id: true, targa: true, estado: true, comentarios: true, fecha: true, hora: true, tipo: true, monto: true,
             archivo: true, id_multa: true, recibo_pago: true, fecha_recepcion: true, fecha_limite_pago: true,
             trabajador_id: true,
+            // Cuándo se subió el peaje al sistema (el admin da 48 h para subirlos).
+            creado_en: true,
         } as const;
         const [nativeItems, gastos, gastosParaContar] = await this.prisma.$transaction([
             this.prisma.peaje.findMany({ where: itemsWhere, orderBy: { fecha: 'desc' }, select: nativeSelect }),
@@ -149,6 +158,7 @@ export class PeajesService {
             fecha: g.fecha,
             fecha_recepcion: g.fecha,
             fecha_limite_pago: g.fecha_limite_pago || null,
+            creado_en: g.creado_en,
             hora: null,
             tipo: 'PEAJE',
             monto: g.monto,
@@ -189,7 +199,7 @@ export class PeajesService {
                 where: baseWhere,
                 _count: { _all: true },
             });
-        const counts: Record<string, number> = { Todos: 0, PENDIENTE: 0, PAGADO: 0, ANULADO: 0 };
+        const counts: Record<string, number> = { Todos: 0, PENDIENTE: 0, OBSERVADO: 0, PAGADO: 0, ANULADO: 0 };
         grouped.forEach((g) => {
             counts.Todos += g._count._all;
             counts[bucketOf(g.estado)] += g._count._all;

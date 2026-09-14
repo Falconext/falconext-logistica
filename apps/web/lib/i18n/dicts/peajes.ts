@@ -7,6 +7,7 @@ export const es = {
     estados: {
         todos: 'Todos',
         pendiente: 'Pendiente',
+        observado: 'Observado',
         pagado: 'Pagado',
         anulado: 'Anulado',
     },
@@ -19,6 +20,7 @@ export const es = {
         comentario: 'Comentario',
         fecha: 'Fecha',
         hora: 'Hora',
+        subido: 'Subido',
         multa: 'Multa',
         tipo: 'Tipo',
         monto: 'Monto',
@@ -37,6 +39,7 @@ export const es = {
     detalle: {
         titulo: 'Detalle del peaje',
         fechaLimitePago: 'Fecha límite de pago',
+        fechaSubida: 'Subido el (fecha y hora)',
         numeroMancato: 'Nº mancato',
         linkPago: 'Link de pago',
         abrirLink: 'Abrir link',
@@ -75,6 +78,7 @@ export const it: typeof es = {
     estados: {
         todos: 'Tutti',
         pendiente: 'In sospeso',
+        observado: 'Osservato',
         pagado: 'Pagato',
         anulado: 'Annullato',
     },
@@ -87,6 +91,7 @@ export const it: typeof es = {
         comentario: 'Commento',
         fecha: 'Data',
         hora: 'Ora',
+        subido: 'Caricato',
         multa: 'Multa',
         tipo: 'Tipo',
         monto: 'Importo',
@@ -105,6 +110,7 @@ export const it: typeof es = {
     detalle: {
         titulo: 'Dettaglio pedaggio',
         fechaLimitePago: 'Scadenza pagamento',
+        fechaSubida: 'Caricato il (data e ora)',
         numeroMancato: 'N. mancato',
         linkPago: 'Link di pagamento',
         abrirLink: 'Apri link',
