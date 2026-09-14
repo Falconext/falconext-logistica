@@ -91,9 +91,11 @@ export class VelocityService {
 
     // Descubrimiento de auth + endpoints para el API Token opaco de Velocity. Corre
     // TODO en PARALELO con timeout por request (evita el timeout de la función de 60s).
-    async testConnection() {
-        const token = process.env.VELOCITY_FLEET_TOKEN || '';
-        const base = this.baseUrl; // https://www.velocityfleet.com
+    // Diagnóstico. `tokenOverride`/`hostOverride` permiten probar otro token u otro
+    // host sin tocar las env vars (p. ej. un token recién creado en el portal).
+    async testConnection(tokenOverride?: string, hostOverride?: string) {
+        const token = (tokenOverride || process.env.VELOCITY_FLEET_TOKEN || '').trim();
+        const base = (hostOverride ? `https://${hostOverride.replace(/^https?:\/\//, '').replace(/\/+$/, '')}` : this.baseUrl);
         const probe = async (label: string, path: string, headers: Record<string, string>, method: string = 'GET') => {
             try {
                 const res = await fetch(`${base}${path}`, { method, headers: { Accept: 'application/json', ...headers }, signal: AbortSignal.timeout(6000) });
@@ -102,24 +104,33 @@ export class VelocityService {
             } catch (e: any) { return { label, path, error: (e?.message || String(e)).slice(0, 50) } as any; }
         };
         const cust = '/vapi/v1/accounts/users/customers/';
-        const schemeJobs = [
-            probe('cust:Bearer', cust, { Authorization: `Bearer ${token}` }),
-            probe('cust:Token', cust, { Authorization: `Token ${token}` }),
-            probe('cust:Api-Key', cust, { Authorization: `Api-Key ${token}` }),
+        // Todos los esquemas de auth razonables para un API token opaco (UUID).
+        const headerSchemes: Array<[string, Record<string, string>]> = [
+            ['Bearer', { Authorization: `Bearer ${token}` }],
+            ['Token', { Authorization: `Token ${token}` }],
+            ['Api-Key', { Authorization: `Api-Key ${token}` }],
+            ['ApiKey', { Authorization: `ApiKey ${token}` }],
+            ['X-API-Key', { 'X-API-Key': token }],
+            ['X-Api-Token', { 'X-Api-Token': token }],
+            ['X-Auth-Token', { 'X-Auth-Token': token }],
+            ['api-token', { 'api-token': token }],
         ];
+        const schemeJobs = headerSchemes.map(([name, h]) => probe(`cust:${name}`, cust, h));
         // Rutas públicas candidatas (el API Token no es para las del app móvil).
-        const paths = ['/vapi/v1/vehicles/', '/vapi/v1/devices/', '/vapi/v1/positions/', '/vapi/v1/device-positions/', '/vapi/v1/tracking/', '/vapi/v1/fleet/', '/api/v1/vehicles/', '/api/v1/positions/', '/api/v1/', '/vapi/v1/'];
+        const paths = ['/vapi/v1/vehicles/', '/vapi/v1/devices/', '/vapi/v1/positions/', '/vapi/v1/device-positions/', '/vapi/v1/tracking/', '/vapi/v1/fleet/', '/api/v1/vehicles/', '/api/v1/positions/', '/api/v1/', '/vapi/v1/', '/api/', '/v1/', '/v1/vehicles/', '/v1/positions/'];
         const discJobs = paths.flatMap((p) => [
             probe(`Token ${p}`, p, { Authorization: `Token ${token}` }),
             probe(`Bearer ${p}`, p, { Authorization: `Bearer ${token}` }),
+            probe(`X-API-Key ${p}`, p, { 'X-API-Key': token }),
         ]);
         const all = await Promise.all([...schemeJobs, ...discJobs]);
         const schemes = all.slice(0, schemeJobs.length);
         const discovery = all.slice(schemeJobs.length);
-        // Solo lo interesante: 200 o status distinto de 401/403/404 (endpoint que existe).
-        const interesting = discovery.filter((d) => d.ok || (d.status && d.status !== 401 && d.status !== 403 && d.status !== 404));
-        const hit = all.find((d) => d.ok) || null;
-        return { tokenSet: !!token, tokenPreview: token ? token.slice(0, 8) + '…' : null, hit, schemes, interesting };
+        // Solo lo interesante: JSON (no HTML de la SPA) o status distinto de 401/403/404.
+        const isHtml = (d: any) => /<!doctype html|<html/i.test(d.body || '');
+        const interesting = discovery.filter((d) => (d.ok && !isHtml(d)) || (d.status && ![200, 401, 403, 404].includes(d.status)));
+        const hit = all.find((d) => d.ok && !isHtml(d)) || null;
+        return { base, tokenSet: !!token, tokenPreview: token ? token.slice(0, 8) + '…' : null, hit, schemes, interesting };
     }
 
     // Lee la documentación (api-docs.velocityfleet.com) desde el server (egress limpio)

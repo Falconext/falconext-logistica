@@ -42,9 +42,9 @@ export class VelocityController {
     // máquina del operador tiene un firewall que bloquea velocityfleet.com directo pero
     // sí llega a nuestro dominio en Vercel, que a su vez sale limpio hacia Velocity).
     @Get('diag')
-    async diag(@Req() req: any) {
+    async diag(@Req() req: any, @Query('token') token?: string, @Query('host') host?: string) {
         this.assertCron(req);
-        return this.velocity.testConnection();
+        return this.velocity.testConnection(token, host);
     }
 
     // Temporal (descubrimiento): lee la doc para hallar el spec OpenAPI real.
