@@ -90,6 +90,22 @@ export default function ReporteMensualModal({ onClose }: { onClose: () => void }
             });
 
             const ws = xlsx.utils.json_to_sheet(data);
+            // Ancho de columna (en caracteres) — por defecto Excel las deja todas
+            // iguales y angostas; aquí cada una según lo que realmente contiene.
+            ws['!cols'] = [
+                { wch: 12 }, // Fecha
+                { wch: 22 }, // Conductor
+                { wch: 12 }, // Vehículo
+                { wch: 32 }, // Origen
+                { wch: 32 }, // Destino
+                { wch: 11 }, // Compactada
+                { wch: 18 }, // Cliente
+                { wch: 20 }, // Spedizione
+                { wch: 13 }, // Km facturado
+                { wch: 13 }, // Ingreso
+                { wch: 13 }, // Gastos
+                { wch: 13 }, // Neto
+            ];
             const wb = xlsx.utils.book_new();
             xlsx.utils.book_append_sheet(wb, ws, t('operaciones.reporteMensual.hoja'));
             xlsx.writeFile(wb, `Reporte_Mensual_${from}_a_${to}.xlsx`);
