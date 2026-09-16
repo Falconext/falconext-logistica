@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
-import { num, minutosDiaNoche, tarifasFromTenant, TARIFAS_TENANT_SELECT } from '../../common/tarifas-chofer.util';
+import { num, tarifasFromTenant, TARIFAS_TENANT_SELECT, RECORRIDO_METRICAS_SELECT, kmDeRecorrido, horasDeRecorrido } from '../../common/tarifas-chofer.util';
 import { tarifasIngresoFromTenant, TARIFAS_INGRESO_TENANT_SELECT } from '../../common/ingreso-vehiculo.util';
 
 // Los partes son "de un día": se guardan como medianoche UTC. Las ventanas de
@@ -129,7 +129,7 @@ export class RegistrosService {
         const [recorridos, reperibilita, attesaAgg] = await Promise.all([
             this.prisma.recorrido.findMany({
                 where: { tenant_id: tenantId, trabajador_id: trabajadorId, finalizado_en: { gte: desde, lte: hasta } },
-                select: { total_km: true, manejo_min: true, ida_km: true, vuelta_km: true, ida_min: true, vuelta_min: true, iniciado_en: true, llegada_en: true, retorno_en: true, finalizado_en: true, descanso_min: true },
+                select: RECORRIDO_METRICAS_SELECT,
             }),
             this.prisma.programacion.count({
                 where: { tenant_id: tenantId, trabajador_id: trabajadorId, reperibilita: true, fecha: { gte: desde, lte: hasta } },
@@ -142,37 +142,15 @@ export class RegistrosService {
             }),
         ]);
 
-        // Tope defensivo: km de un tramo no puede implicar > 160 km/h respecto a
-        // sus minutos. Protege el total de valores GPS basura ya guardados
-        // (p. ej. 19194 km en 2 min) sin necesidad de una migración.
-        const capKm = (kmLeg: number, min: number) => {
-            const k = num(kmLeg);
-            const maxPlausible = (Math.max(0, num(min)) / 60) * 160;
-            return maxPlausible > 0 ? Math.min(k, maxPlausible) : 0;
-        };
-
+        // km y horas por recorrido con la MISMA regla que el detalle del mes y el
+        // costo por operación (kmDeRecorrido/horasDeRecorrido): con km_fuente='ruta'
+        // es el estimado de la ruta desde "Iniciar"; recorridos viejos, GPS.
         let km = 0, diaMin = 0, nocheMin = 0;
         for (const r of recorridos) {
-            // km FIEL: total del recorrido (GPS real con respaldo del estimado) cuando
-            // existe; para recorridos viejos, suma de tramos con tope anti-basura.
-            km += (r as any).total_km != null
-                ? num((r as any).total_km)
-                : capKm(r.ida_km as any, r.ida_min as any) + capKm(r.vuelta_km as any, r.vuelta_min as any);
-            const ida = minutosDiaNoche(r.iniciado_en, r.llegada_en, tar.corte);
-            const vuelta = minutosDiaNoche(r.retorno_en, r.finalizado_en, tar.corte);
-            const diaEl = ida.dia + vuelta.dia;
-            const nocheEl = ida.noche + vuelta.noche;
-            const elapsed = diaEl + nocheEl;
-            // Horas de MANEJO reales: si el recorrido tiene manejo_min (tiempo GPS en
-            // movimiento), repartimos ESE tiempo entre día/noche en la misma proporción
-            // que el transcurrido. Los recorridos viejos (sin manejo_min) caen al
-            // transcurrido menos descanso (comportamiento previo).
-            const manejo = (r as any).manejo_min;
-            const factor = elapsed > 0
-                ? (manejo != null ? Math.min(1, num(manejo) / elapsed) : Math.max(0, elapsed - num(r.descanso_min)) / elapsed)
-                : 0;
-            diaMin += diaEl * factor;
-            nocheMin += nocheEl * factor;
+            km += kmDeRecorrido(r);
+            const h = horasDeRecorrido(r, tar.corte);
+            diaMin += h.diaMin;
+            nocheMin += h.nocheMin;
         }
 
         const oreDia = Math.round((diaMin / 60) * 100) / 100;
@@ -279,11 +257,7 @@ export class RegistrosService {
         const hasta = new Date(Date.UTC(anio, mes, 0, 23, 59, 59));
         const recorridos = await this.prisma.recorrido.findMany({
             where: { tenant_id: tenantId, trabajador_id: trabajadorId, finalizado_en: { gte: desde, lte: hasta } },
-            select: {
-                id: true, origen_label: true, destino_label: true, total_km: true, manejo_min: true, ida_km: true, vuelta_km: true,
-                ida_min: true, vuelta_min: true, iniciado_en: true, llegada_en: true, retorno_en: true,
-                finalizado_en: true, descanso_min: true, programacion_id: true,
-            },
+            select: { ...RECORRIDO_METRICAS_SELECT, id: true, origen_label: true, destino_label: true, programacion_id: true },
             orderBy: { finalizado_en: 'desc' },
         });
         // Cliente de cada recorrido (por su programación).
@@ -292,33 +266,17 @@ export class RegistrosService {
             ? await this.prisma.programacion.findMany({ where: { id: { in: progIds } }, select: { id: true, cliente: true } })
             : [];
         const clienteById = new Map(progs.map((p) => [p.id, p.cliente]));
-        const capKm = (kmLeg: any, min: any) => {
-            const k = num(kmLeg); const maxP = (Math.max(0, num(min)) / 60) * 160;
-            return maxP > 0 ? Math.min(k, maxP) : 0;
-        };
         const items = recorridos.map((r) => {
-            // Mismo criterio que el TOTAL del mes (calcularMetricas): total_km fiel
-            // cuando existe; suma de tramos con tope anti-basura para recorridos viejos.
-            // Así el desglose por recorrido suma EXACTO al total mostrado.
-            const km = (r as any).total_km != null
-                ? Math.round(num((r as any).total_km) * 10) / 10
-                : Math.round((capKm(r.ida_km, r.ida_min) + capKm(r.vuelta_km, r.vuelta_min)) * 10) / 10;
-            const ida = minutosDiaNoche(r.iniciado_en, r.llegada_en, tar.corte);
-            const vuelta = minutosDiaNoche(r.retorno_en, r.finalizado_en, tar.corte);
-            const diaEl = ida.dia + vuelta.dia, nocheEl = ida.noche + vuelta.noche, elapsed = diaEl + nocheEl;
-            // Mismo criterio que el total: horas de manejo reales (manejo_min) repartidas
-            // por día/noche; recorridos viejos caen al transcurrido menos descanso.
-            const manejo = (r as any).manejo_min;
-            const factor = elapsed > 0
-                ? (manejo != null ? Math.min(1, num(manejo) / elapsed) : Math.max(0, elapsed - num(r.descanso_min)) / elapsed)
-                : 0;
+            // Mismo criterio que el TOTAL del mes (calcularMetricas), así el desglose
+            // por recorrido suma EXACTO al total mostrado.
+            const h = horasDeRecorrido(r, tar.corte);
             return {
                 fecha: r.finalizado_en,
                 cliente: (r.programacion_id && clienteById.get(r.programacion_id)) || r.destino_label || 'Recorrido',
                 origen: r.origen_label, destino: r.destino_label,
-                km,
-                oreDia: Math.round((diaEl * factor / 60) * 100) / 100,
-                oreNoche: Math.round((nocheEl * factor / 60) * 100) / 100,
+                km: kmDeRecorrido(r),
+                oreDia: h.horasDia,
+                oreNoche: h.horasNoche,
             };
         });
         return { anio, mes, items };

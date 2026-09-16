@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { GASTO_SYNC_SELECT, GastoEntrante, aplicarPlanGastos, planificarSyncGastos } from '../../common/gastos-sync.util';
 import { PrismaService } from '../../prisma.service';
 import { GpsService } from '../gps/gps.service';
+import { offsetRomaMin } from '../../common/tarifas-chofer.util';
 
 // Estados que cuentan como recorrido "en curso".
 const ACTIVOS = ['EN_RUTA_IDA', 'EN_DESTINO', 'EN_RUTA_VUELTA'];
@@ -77,6 +78,20 @@ export class RecorridosService {
             console.warn('[Recorridos] directionsRoute Google falló:', (e as any)?.message);
             return null;
         }
+    }
+
+    // Estimado de la RUTA COMPLETA de una operación (bucle origen→retiros→entrega→
+    // destinos→origen) según Google Directions. Es el km/tiempo que se muestra sobre
+    // el mapa en Operaciones y, por regla del empresario (2026-09-16), el que cuenta
+    // para el recorrido y el mes del chofer. Se incluyen los RETIROS (almacenes
+    // adicionales) igual que los destinos: si no, quedaba corto con recogidas
+    // intermedias (los choferes lo reportaban como "no suman").
+    async estimarRuta(prog: { lugar_retiro?: string | null; lugar_entrega?: string | null; retiros?: any; destinos?: any }): Promise<{ km: number; min: number } | null> {
+        const retirosProg = Array.isArray(prog.retiros) ? prog.retiros : [];
+        const destinosProg = Array.isArray(prog.destinos) ? prog.destinos : [];
+        const loopStops = [...retirosProg, prog.lugar_entrega, ...destinosProg].map((s: any) => (s || '').trim()).filter(Boolean);
+        if (!prog.lugar_retiro || !loopStops.length) return null;
+        return this.directionsRoute(prog.lugar_retiro, loopStops, prog.lugar_retiro);
     }
 
     private haversineKm(a: LatLng, b: LatLng): number {
@@ -302,17 +317,9 @@ export class RecorridosService {
         ]);
         // "Esperado": ETA por carretera origen→destino al iniciar (base del esperado vs real).
         const esperadoIda = oGeo && dGeo ? await this.etaMin(oGeo, dGeo) : null;
-        // Estimado de la RUTA COMPLETA (bucle origen→retiros→entrega→destinos→origen).
-        // Respaldo del GPS real al finalizar: si el chofer no manejó o el GPS falló, se
-        // usa esto. Se incluyen los RETIROS (orígenes/almacenes adicionales) igual que
-        // los destinos: si no, el km/tiempo estimado se quedaba corto cuando había
-        // recogidas intermedias (el chofer los reportaba como "no suman").
-        const retirosProg = Array.isArray((prog as any).retiros) ? (prog as any).retiros : [];
-        const destinosProg = Array.isArray((prog as any).destinos) ? (prog as any).destinos : [];
-        const loopStops = [...retirosProg, prog.lugar_entrega, ...destinosProg].map((s: any) => (s || '').trim()).filter(Boolean);
-        const est = prog.lugar_retiro && loopStops.length
-            ? await this.directionsRoute(prog.lugar_retiro, loopStops, prog.lugar_retiro)
-            : null;
+        // Estimado de la RUTA COMPLETA: es lo que cuenta como km/tiempo del recorrido
+        // al finalizar (ver estimarRuta / finalizar).
+        const est = await this.estimarRuta(prog);
 
         const recorrido = await this.prisma.recorrido.create({
             data: {
@@ -498,28 +505,34 @@ export class RecorridosService {
             data.ida_min = Math.round((now.getTime() - r.iniciado_en.getTime()) / 60000);
         }
 
-        // ----- Total FIEL del recorrido: km y tiempo de MANEJO reales (GPS en
-        // movimiento, mismo cálculo que el Reporte de Ruta). Así el km/horas que suma
-        // al total del mes es EXACTAMENTE lo que se manejó (excluye paradas). -----
-        const idaMin = data.ida_min ?? r.ida_min;
-        const vueltaMin = data.vuelta_min ?? r.vuelta_min;
-        const realMin = (Number(idaMin) || 0) + (Number(vueltaMin) || 0);
-        // km real GPS/carretera (distancia manejada) + minutos EN MOVIMIENTO.
-        const { distanceKm: gpsKm, movingMin } = await this.gps.getTripKmForPay(r.device_id, r.iniciado_en, now);
-        // Respaldo del estimado SOLO si el GPS FALLÓ (device apagado / sin señal): capturó
-        // menos del 15% de la ruta planeada. NO se usa cuando el chofer simplemente manejó
-        // menos que el estimado (p. ej. una consegna de solo IDA) — antes ese caso inflaba
-        // el km al estimado de viaje redondo. Con GPS válido, el GPS es la fuente de verdad.
-        const estKm = Number(r.esperado_km) || 0;
-        const estMin = Number(r.esperado_min) || 0;
-        const usarEstimado = estKm > 5 && gpsKm < Math.max(2, 0.15 * estKm);
-        const finalKm = Math.round((usarEstimado ? estKm : gpsKm) * 10) / 10;
-        const finalMin = Math.round(usarEstimado && estMin > 0 ? estMin : realMin);
+        // ----- Total del recorrido = RUTA PLANEADA (regla del empresario, 2026-09-16):
+        // el km y el tiempo que suman al mes son los del estimado de Google que se ve
+        // sobre el mapa en Operaciones (esperado_km/esperado_min), NO el GPS. El celular
+        // pierde tramos (batería, túneles, app en segundo plano) y dejaba a los choferes
+        // con km recortados (p. ej. 23.8 km de un viaje de 132). El GPS se sigue
+        // guardando (ida_km/vuelta_km, posiciones) como historial: Reporte de Ruta,
+        // multas, consultas — pero no decide el pago. -----
+        let estKm = Number(r.esperado_km) || 0;
+        let estMin = Number(r.esperado_min) || 0;
+        if (!(estKm > 0) && r.programacion_id) {
+            // Al iniciar no se pudo estimar (Google caído / dirección no geocodificable):
+            // se reintenta ahora para no cerrar sin km.
+            const prog = await this.prisma.programacion.findFirst({ where: { id: r.programacion_id, tenant_id: tenantId } });
+            const est = prog ? await this.estimarRuta(prog) : null;
+            if (est) { estKm = est.km; estMin = est.min; data.esperado_km = est.km; data.esperado_min = est.min; }
+        }
+        // Respaldo si NO hay estimado: el GPS en movimiento (mismo cálculo que el
+        // Reporte de Ruta). Queda marcado 'gps' para distinguirlo en pantalla.
+        const conRuta = estKm > 0;
+        const { distanceKm: gpsKm, movingMin } = !conRuta && r.device_id
+            ? await this.gps.getTripKmForPay(r.device_id, r.iniciado_en, now)
+            : { distanceKm: 0, movingMin: 0 };
+        const finalKm = Math.round((conRuta ? estKm : gpsKm) * 10) / 10;
+        const finalMin = Math.round(conRuta && estMin > 0 ? estMin : movingMin);
         data.total_km = finalKm;
         data.total_min = finalMin;
-        // Tiempo de manejo real (base de las horas del pago). Si se usó el estimado
-        // (GPS vacío), aproximamos el manejo al estimado de conducción.
-        data.manejo_min = Math.round(usarEstimado && estMin > 0 ? estMin : movingMin);
+        data.manejo_min = finalMin;
+        data.km_fuente = conRuta ? 'ruta' : 'gps';
 
         const updated = await this.prisma.recorrido.update({ where: { id: r.id }, data });
 
@@ -541,6 +554,200 @@ export class RecorridosService {
             await this.prisma.vehiculo.updateMany({ where: { id: r.vehiculo_id, tenant_id: tenantId }, data: { disponible: true } });
         }
         return updated;
+    }
+
+    // Instante "Iniciar" de una consegna que se marcó entregada SIN usar Mi Ruta:
+    // fecha de la operación + hora de retiro (hora italiana). Sin hora de retiro,
+    // 08:00. Es la base del corte día/noche de sus horas.
+    private inicioDesdeProgramacion(prog: { fecha: Date; hora_retiro?: string | null }): Date {
+        const m = /^(\d{1,2})[:.h](\d{2})/.exec(String(prog.hora_retiro || '').trim());
+        const hh = m ? Math.min(23, parseInt(m[1], 10)) : 8;
+        const mm = m ? Math.min(59, parseInt(m[2], 10)) : 0;
+        const f = prog.fecha;
+        const local = Date.UTC(f.getUTCFullYear(), f.getUTCMonth(), f.getUTCDate(), hh, mm);
+        return new Date(local - offsetRomaMin(new Date(local)) * 60000);
+    }
+
+    /**
+     * Consegna marcada entregada (ENTREGADO/CONSEGNATO) sin que el chofer haya
+     * usado "Iniciar ruta": crea un recorrido COMPLETADO automático (auto=true) con
+     * el estimado de la ruta como km/tiempo, para que igual sume a su mes. El mes
+     * y el pago leen SOLO recorridos, así que sin esto la consegna no contaba.
+     * Idempotente: si ya existe un recorrido (no cancelado) de la operación, no hace
+     * nada. `aplicar=false` solo calcula (para el reproceso en modo prueba).
+     */
+    async asegurarRecorridoDeEntrega(
+        tenantId: string,
+        prog: { id: string; trabajador_id?: string | null; fecha: Date; hora_retiro?: string | null; lugar_retiro?: string | null; lugar_entrega?: string | null; retiros?: any; destinos?: any; km?: any; tiempo_min?: any },
+        aplicar = true,
+    ): Promise<{ creado: boolean; trabajador_id?: string; km?: number; min?: number; motivo?: string }> {
+        if (!prog.trabajador_id) return { creado: false, motivo: 'sin chofer' };
+        const existente = await this.prisma.recorrido.findFirst({
+            where: { tenant_id: tenantId, programacion_id: prog.id, estado: { not: 'CANCELADO' } },
+            select: { id: true },
+        });
+        if (existente) return { creado: false, motivo: 'ya tiene recorrido' };
+        // trabajador_id de la operación puede ser UUID o código (G036).
+        const trab = await this.prisma.trabajador.findFirst({
+            where: { tenant_id: tenantId, OR: [{ id: prog.trabajador_id }, { id_trabajador: prog.trabajador_id }] },
+            select: { id: true },
+        });
+        if (!trab) return { creado: false, motivo: 'chofer no encontrado' };
+        const est = await this.estimarRuta(prog);
+        if (!est) return { creado: false, motivo: 'sin estimado de ruta (direcciones)' };
+        const iniciado = this.inicioDesdeProgramacion(prog);
+        const finalizado = new Date(iniciado.getTime() + est.min * 60000);
+        if (aplicar) {
+            await this.prisma.recorrido.create({
+                data: {
+                    tenant_id: tenantId, trabajador_id: trab.id, programacion_id: prog.id, auto: true,
+                    origen_label: prog.lugar_retiro ?? null, destino_label: prog.lugar_entrega ?? null,
+                    estado: 'COMPLETADO', iniciado_en: iniciado, llegada_en: finalizado, finalizado_en: finalizado,
+                    esperado_km: est.km, esperado_min: est.min,
+                    total_km: est.km, total_min: est.min, manejo_min: est.min, km_fuente: 'ruta',
+                },
+            });
+            // Km/tiempo de la operación solo si no los tenía (un km escrito a mano se respeta).
+            const dataProg: any = {};
+            if (!(Number(prog.km) > 0)) dataProg.km = est.km;
+            if (!(Number(prog.tiempo_min) > 0)) dataProg.tiempo_min = est.min;
+            if (Object.keys(dataProg).length) await this.prisma.programacion.updateMany({ where: { id: prog.id, tenant_id: tenantId }, data: dataProg });
+        }
+        return { creado: true, trabajador_id: trab.id, km: est.km, min: est.min };
+    }
+
+    /**
+     * Un supervisor corrigió a mano el km/tiempo de la operación: se refleja en su
+     * recorrido (total_km/total_min, km_fuente='manual') para que el mes del chofer
+     * cuadre con lo corregido. El reproceso respeta los 'manual'.
+     */
+    async aplicarCorreccionManual(tenantId: string, programacionId: string, km?: number | null, tiempoMin?: number | null) {
+        const r = await this.prisma.recorrido.findFirst({
+            where: { tenant_id: tenantId, programacion_id: programacionId, estado: 'COMPLETADO' },
+            orderBy: { finalizado_en: 'desc' },
+            select: { id: true, total_km: true, total_min: true },
+        });
+        if (!r) return;
+        const data: any = {};
+        if (km != null && Number.isFinite(km) && Math.abs(km - (Number(r.total_km) || 0)) > 0.15) data.total_km = Math.round(km * 10) / 10;
+        if (tiempoMin != null && Number.isFinite(tiempoMin) && Math.abs(tiempoMin - (Number(r.total_min) || 0)) > 0.5) {
+            data.total_min = Math.round(tiempoMin); data.manejo_min = Math.round(tiempoMin);
+        }
+        if (!Object.keys(data).length) return;
+        await this.prisma.recorrido.update({ where: { id: r.id }, data: { ...data, km_fuente: 'manual' } });
+    }
+
+    /**
+     * Reproceso masivo (one-off, regla 2026-09-16): pasa TODOS los recorridos
+     * completados del rango a km/tiempo = estimado de la ruta, y crea recorridos
+     * automáticos para las consegnas entregadas sin recorrido. `aplicar=false`
+     * (modo prueba) solo devuelve el antes/después por chofer sin escribir nada.
+     * Respeta los recorridos marcados 'manual'.
+     */
+    async reprocesarKmRuta(opts: { desde: Date; hasta: Date; tenantId?: string; aplicar: boolean }) {
+        const { desde, hasta, aplicar } = opts;
+        const whereTenant = opts.tenantId ? { tenant_id: opts.tenantId } : {};
+        const recorridos = await this.prisma.recorrido.findMany({
+            where: { ...whereTenant, estado: 'COMPLETADO', finalizado_en: { gte: desde, lte: hasta } },
+            orderBy: { finalizado_en: 'asc' },
+        });
+        const progIds = Array.from(new Set(recorridos.map((r) => r.programacion_id).filter(Boolean) as string[]));
+        const progs = progIds.length ? await this.prisma.programacion.findMany({ where: { id: { in: progIds } } }) : [];
+        const progById = new Map(progs.map((p) => [p.id, p]));
+
+        type Fila = { recorrido_id: string; programacion_id: string | null; cliente: string | null; fecha: Date | null; km_antes: number; km_despues: number; min_antes: number; min_despues: number; fuente_antes: string | null; accion: string };
+        const filas: Fila[] = [];
+        const porChofer = new Map<string, { km_antes: number; km_despues: number; recorridos: number; auto_creados: number }>();
+        const acc = (tid: string, antes: number, despues: number, auto = false) => {
+            const c = porChofer.get(tid) || { km_antes: 0, km_despues: 0, recorridos: 0, auto_creados: 0 };
+            c.km_antes += antes; c.km_despues += despues; c.recorridos += 1; if (auto) c.auto_creados += 1;
+            porChofer.set(tid, c);
+        };
+
+        for (const r of recorridos) {
+            const prog = r.programacion_id ? progById.get(r.programacion_id) : null;
+            const kmAntes = Number(r.total_km) || 0;
+            const minAntes = Number(r.total_min) || 0;
+            if (r.km_fuente === 'manual') {
+                filas.push({ recorrido_id: r.id, programacion_id: r.programacion_id, cliente: prog?.cliente ?? null, fecha: r.finalizado_en, km_antes: kmAntes, km_despues: kmAntes, min_antes: minAntes, min_despues: minAntes, fuente_antes: r.km_fuente, accion: 'respetado (manual)' });
+                acc(r.trabajador_id, kmAntes, kmAntes);
+                continue;
+            }
+            let estKm = Number(r.esperado_km) || 0;
+            let estMin = Number(r.esperado_min) || 0;
+            let recalculado = false;
+            if (!(estKm > 0) && prog) {
+                const est = await this.estimarRuta(prog);
+                if (est) { estKm = est.km; estMin = est.min; recalculado = true; }
+            }
+            if (!(estKm > 0)) {
+                filas.push({ recorrido_id: r.id, programacion_id: r.programacion_id, cliente: prog?.cliente ?? null, fecha: r.finalizado_en, km_antes: kmAntes, km_despues: kmAntes, min_antes: minAntes, min_despues: minAntes, fuente_antes: r.km_fuente, accion: 'sin estimado: se deja como está' });
+                acc(r.trabajador_id, kmAntes, kmAntes);
+                continue;
+            }
+            const kmDespues = Math.round(estKm * 10) / 10;
+            const minDespues = Math.round(estMin > 0 ? estMin : minAntes);
+            filas.push({ recorrido_id: r.id, programacion_id: r.programacion_id, cliente: prog?.cliente ?? null, fecha: r.finalizado_en, km_antes: kmAntes, km_despues: kmDespues, min_antes: minAntes, min_despues: minDespues, fuente_antes: r.km_fuente, accion: recalculado ? 'ruta (estimado recalculado)' : 'ruta' });
+            acc(r.trabajador_id, kmAntes, kmDespues);
+            if (aplicar) {
+                await this.prisma.recorrido.update({
+                    where: { id: r.id },
+                    data: {
+                        total_km: kmDespues, total_min: minDespues, manejo_min: minDespues, km_fuente: 'ruta',
+                        ...(recalculado ? { esperado_km: estKm, esperado_min: estMin } : {}),
+                    },
+                });
+                if (r.programacion_id) {
+                    await this.prisma.programacion.updateMany({ where: { id: r.programacion_id }, data: { km: kmDespues, tiempo_min: minDespues } });
+                }
+            }
+        }
+
+        // Consegnas entregadas en el rango SIN recorrido → recorrido automático.
+        const entregadas = await this.prisma.programacion.findMany({
+            where: {
+                ...whereTenant,
+                fecha: { gte: desde, lte: hasta },
+                OR: [{ estado_consegna: 'CONSEGNATO' }, { estado: { in: ['ENTREGADO', 'COMPLETED'] } }],
+            },
+            orderBy: { fecha: 'asc' },
+        });
+        const conRecorrido = new Set(
+            (await this.prisma.recorrido.findMany({
+                where: { programacion_id: { in: entregadas.map((p) => p.id) }, estado: { not: 'CANCELADO' } },
+                select: { programacion_id: true },
+            })).map((x) => x.programacion_id),
+        );
+        const autos: Array<{ programacion_id: string; cliente: string | null; fecha: Date; km?: number; min?: number; motivo?: string }> = [];
+        for (const p of entregadas) {
+            if (conRecorrido.has(p.id)) continue;
+            const res = await this.asegurarRecorridoDeEntrega(p.tenant_id, p, aplicar);
+            autos.push({ programacion_id: p.id, cliente: p.cliente, fecha: p.fecha, km: res.km, min: res.min, motivo: res.creado ? undefined : res.motivo });
+            if (res.creado && res.trabajador_id) acc(res.trabajador_id, 0, res.km || 0, true);
+        }
+
+        const trabIds = Array.from(porChofer.keys());
+        const trabs = trabIds.length ? await this.prisma.trabajador.findMany({ where: { id: { in: trabIds } }, select: { id: true, nombre_completo: true, id_trabajador: true } }) : [];
+        const nombre = new Map(trabs.map((t) => [t.id, `${t.id_trabajador ? t.id_trabajador + ' · ' : ''}${t.nombre_completo}`]));
+        const resumen = trabIds.map((id) => {
+            const c = porChofer.get(id)!;
+            return { trabajador: nombre.get(id) || id, recorridos: c.recorridos, auto_creados: c.auto_creados, km_antes: Math.round(c.km_antes * 10) / 10, km_despues: Math.round(c.km_despues * 10) / 10, diferencia: Math.round((c.km_despues - c.km_antes) * 10) / 10 };
+        }).sort((a, b) => b.diferencia - a.diferencia);
+
+        return {
+            modo: aplicar ? 'APLICADO' : 'PRUEBA (sin cambios)',
+            rango: { desde, hasta },
+            totales: {
+                recorridos: recorridos.length,
+                km_antes: Math.round(resumen.reduce((s, x) => s + x.km_antes, 0) * 10) / 10,
+                km_despues: Math.round(resumen.reduce((s, x) => s + x.km_despues, 0) * 10) / 10,
+                consegnas_sin_recorrido: autos.length,
+                auto_creados: autos.filter((a) => !a.motivo).length,
+            },
+            por_chofer: resumen,
+            consegnas_sin_recorrido: autos,
+            detalle: filas,
+        };
     }
 
     /** Cancelar: aborta el recorrido y libera al chofer (sin marcar entregado). */

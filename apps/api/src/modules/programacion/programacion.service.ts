@@ -4,13 +4,27 @@ import { GASTO_SYNC_SELECT, aplicarPlanGastos, borradoProtegiendoRecibos, planif
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { NotificacionesService } from '../notificaciones/notificaciones.service';
+import { RecorridosService } from '../recorridos/recorridos.service';
 import { fechaLimitePago } from '../../common/plazo-pago.util';
-import { num, horasDeRecorrido, tarifasFromTenant, TARIFAS_TENANT_SELECT, TarifasChofer } from '../../common/tarifas-chofer.util';
+import { num, horasDeRecorrido, tarifasFromTenant, TARIFAS_TENANT_SELECT, TarifasChofer, RECORRIDO_METRICAS_SELECT } from '../../common/tarifas-chofer.util';
 import { ingresoSugerido, tarifasIngresoFromTenant, TARIFAS_INGRESO_TENANT_SELECT } from '../../common/ingreso-vehiculo.util';
 
 @Injectable()
 export class ProgramacionService {
-    constructor(private prisma: PrismaService, private notificaciones: NotificacionesService) { }
+    constructor(private prisma: PrismaService, private notificaciones: NotificacionesService, private recorridos: RecorridosService) { }
+
+    // ¿La operación quedó entregada? (Consegnato y Entregado son el mismo hecho.)
+    private esEntregada(op: { estado?: string | null; estado_consegna?: string | null }) {
+        return op.estado_consegna === 'CONSEGNATO' || op.estado === 'ENTREGADO' || op.estado === 'COMPLETED';
+    }
+
+    // Consegna entregada sin que el chofer usara "Iniciar ruta" → recorrido automático
+    // con el estimado de la ruta, para que sume a su mes (regla 2026-09-16). Best-effort:
+    // nunca rompe el guardado de la operación.
+    private async asegurarRecorridoSiEntregada(op: any) {
+        if (!op || !this.esEntregada(op)) return;
+        try { await this.recorridos.asegurarRecorridoDeEntrega(op.tenant_id, op); } catch (e) { console.warn('[Programacion] recorrido automático falló:', (e as any)?.message); }
+    }
 
     // Only the columns the operaciones list/map actually render — keeps the
     // payload small (drops nota + audit timestamps + tenant_id).
@@ -237,27 +251,26 @@ export class ProgramacionService {
     }
 
     /**
-     * De dónde salió `Programacion.km` (audio de Diego, 2026-09-03: "¿está jalando
-     * bien los km?"). Se compara contra el recorrido más reciente de la operación:
-     *  - 'gps'      — coincide con el total real medido por GPS del recorrido.
-     *  - 'estimado' — coincide con el estimado de Google (el GPS captó <15% de la
-     *                 ruta y el backend usó el respaldo). Mismo número que 'gps' en
-     *                 pantalla, pero NO es lo que el chofer manejó.
+     * De dónde salió `Programacion.km`. Se compara contra el recorrido más reciente
+     * de la operación:
+     *  - 'ruta'     — estimado de la ruta planeada (Google Directions), regla vigente
+     *                 del empresario (2026-09-16): es lo que suma al mes del chofer.
+     *  - 'gps'      — total real medido por GPS (recorridos previos a la regla).
+     *  - 'estimado' — respaldo viejo: el GPS captó <15% y se usó el estimado.
      *  - 'manual'   — no hay recorrido, o alguien escribió un km distinto al del
-     *                 recorrido (edición a mano en el formulario, que pisa el GPS).
+     *                 recorrido (edición a mano en el formulario).
      *  - null       — la operación no tiene km cargado.
-     * Auditoría sobre 60 recorridos de la última semana: 42 cayeron en 'estimado'
-     * (22 de ellos con GPS en cero durante todo un viaje real, no solo un tramo).
      */
-    private async kmFuente(op: { id: string; tenant_id: string; km: number | null }): Promise<'gps' | 'estimado' | 'manual' | null> {
+    private async kmFuente(op: { id: string; tenant_id: string; km: number | null }): Promise<'ruta' | 'gps' | 'estimado' | 'manual' | null> {
         if (op.km == null) return null;
         const recorrido = await this.prisma.recorrido.findFirst({
             where: { tenant_id: op.tenant_id, programacion_id: op.id, estado: 'COMPLETADO' },
             orderBy: { finalizado_en: 'desc' },
-            select: { total_km: true, esperado_km: true },
+            select: { total_km: true, esperado_km: true, km_fuente: true },
         });
         if (!recorrido || recorrido.total_km == null) return 'manual';
         if (Math.abs(op.km - recorrido.total_km) > 0.15) return 'manual';
+        if (recorrido.km_fuente === 'ruta' || recorrido.km_fuente === 'manual') return recorrido.km_fuente;
         if (recorrido.esperado_km != null && Math.abs(recorrido.total_km - recorrido.esperado_km) < 0.05) return 'estimado';
         return 'gps';
     }
@@ -498,7 +511,7 @@ export class ProgramacionService {
             this.prisma.recorrido.findFirst({
                 where: { tenant_id: op.tenant_id, programacion_id: op.id },
                 orderBy: { iniciado_en: 'desc' },
-                select: { iniciado_en: true, llegada_en: true, retorno_en: true, finalizado_en: true, descanso_min: true },
+                select: RECORRIDO_METRICAS_SELECT,
             }),
         ]);
         const tar = tarPrecalculada ?? tarifasFromTenant(tenant);
@@ -723,6 +736,7 @@ export class ProgramacionService {
         // Push al chofer asignado (si la operación nace ya con uno). Fire-and-forget:
         // la creación no espera ni falla por el push.
         if (created.trabajador_id) void this.notificarConsegnaAsignada(created);
+        await this.asegurarRecorridoSiEntregada(created);
         return this.findOne(created.id);
     }
 
@@ -769,6 +783,19 @@ export class ProgramacionService {
         if (previo && updated.trabajador_id && updated.trabajador_id !== previo.trabajador_id) {
             void this.notificarConsegnaAsignada(updated);
         }
+        // Km/tiempo escritos a mano por un supervisor → se reflejan en el recorrido
+        // (km_fuente='manual') para que el mes del chofer cuadre con la corrección.
+        // Solo cambia algo si el valor difiere del que tiene el recorrido.
+        if (!opts?.isChofer && (rest.km !== undefined || rest.tiempo_min !== undefined)) {
+            try {
+                await this.recorridos.aplicarCorreccionManual(
+                    updated.tenant_id, id,
+                    rest.km !== undefined ? (rest.km === null || rest.km === '' ? null : Number(rest.km)) : null,
+                    rest.tiempo_min !== undefined ? (rest.tiempo_min === null || rest.tiempo_min === '' ? null : Number(rest.tiempo_min)) : null,
+                );
+            } catch (e) { console.warn('[Programacion] corrección manual de km falló:', (e as any)?.message); }
+        }
+        await this.asegurarRecorridoSiEntregada(updated);
 
         // Si el cliente envía `gastos`, la lista del formulario es la lista completa de la
         // operación — pero se aplica por FUSIÓN (no delete+create): un gasto que sigue en la

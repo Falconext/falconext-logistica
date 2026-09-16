@@ -1185,8 +1185,14 @@ export default function OperacionesScreen() {
             <InfoRow label="Conductor" value={detail.trabajador_nombre || trabajadorNombre(detail.trabajador_id) || 'Sin asignar'} />
             {detail.km != null && detail.km !== 0 ? (
               <InfoRow
-                label="KM (real, GPS)"
-                value={detail.km_fuente && detail.km_fuente !== 'gps' ? `${detail.km} km · ${detail.km_fuente === 'estimado' ? 'ESTIMADO (no real)' : 'editado a mano'}` : `${detail.km} km`}
+                label="KM (ruta)"
+                value={(() => {
+                  // Regla 2026-09-16: el km que cuenta es el de la ruta planeada
+                  // (mapa). Solo se etiqueta cuando viene de otra fuente.
+                  const f = detail.km_fuente;
+                  const sufijo = f === 'gps' ? ' · GPS' : f === 'estimado' ? ' · estimado' : f === 'manual' ? ' · editado a mano' : '';
+                  return `${detail.km} km${sufijo}`;
+                })()}
               />
             ) : null}
             {detail.km_facturable != null ? <InfoRow label="Km facturable (ida)" value={`${detail.km_facturable} km`} /> : null}

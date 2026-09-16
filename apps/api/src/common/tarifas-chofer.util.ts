@@ -65,21 +65,70 @@ export function tarifasFromTenant(t: {
     };
 }
 
-// Split día/noche de UN recorrido (ida + vuelta), con el descanso descontado
-// proporcionalmente. Reusado para el agregado mensual y para el costo de UNA operación.
+// Campos de Recorrido que necesitan kmDeRecorrido()/horasDeRecorrido(). Un solo
+// `select` reusable para que el mes, el detalle del mes y el costo por operación
+// lean exactamente lo mismo y sumen igual.
+export const RECORRIDO_METRICAS_SELECT = {
+    total_km: true, total_min: true, manejo_min: true, km_fuente: true,
+    ida_km: true, vuelta_km: true, ida_min: true, vuelta_min: true,
+    iniciado_en: true, llegada_en: true, retorno_en: true, finalizado_en: true, descanso_min: true,
+} as const;
+
+export interface RecorridoMetricas {
+    total_km?: any; total_min?: any; manejo_min?: any; km_fuente?: string | null;
+    ida_km?: any; vuelta_km?: any; ida_min?: any; vuelta_min?: any;
+    iniciado_en?: Date | null; llegada_en?: Date | null; retorno_en?: Date | null; finalizado_en?: Date | null;
+    descanso_min?: any;
+}
+
+// Km de UN recorrido que cuenta para el mes/pago: total_km cuando existe (con
+// km_fuente='ruta' es el estimado de la ruta; recorridos viejos, su total GPS).
+// Recorridos anteriores a total_km: suma de tramos con tope anti-basura (un tramo
+// no puede implicar > 160 km/h respecto a sus minutos; protege de GPS basura ya
+// guardado, p. ej. 19194 km en 2 min, sin migración).
+export function kmDeRecorrido(r: RecorridoMetricas): number {
+    if (r.total_km != null) return Math.round(num(r.total_km) * 10) / 10;
+    const capKm = (kmLeg: any, min: any) => {
+        const k = num(kmLeg);
+        const maxPlausible = (Math.max(0, num(min)) / 60) * 160;
+        return maxPlausible > 0 ? Math.min(k, maxPlausible) : 0;
+    };
+    return Math.round((capKm(r.ida_km, r.ida_min) + capKm(r.vuelta_km, r.vuelta_min)) * 10) / 10;
+}
+
+// Split día/noche de UN recorrido. Devuelve minutos (para que los agregados sumen
+// sin arrastre de redondeo) y horas ya redondeadas (para mostrar).
+//
+// Regla vigente (km_fuente='ruta'): las horas son el TIEMPO DE LA RUTA PLANEADA
+// (total_min) contadas DESDE QUE EL CHOFER DIO "INICIAR" (iniciado_en) hacia
+// adelante — así el corte día/noche cae donde realmente estaba manejando, sin
+// depender de que el GPS haya captado el viaje.
+//
+// Recorridos previos a la regla: transcurrido real ida+vuelta repartido día/noche
+// y escalado al manejo GPS (manejo_min) si existe; si no, transcurrido menos descanso.
 export function horasDeRecorrido(
-    r: { iniciado_en?: Date | null; llegada_en?: Date | null; retorno_en?: Date | null; finalizado_en?: Date | null; descanso_min?: number | null },
+    r: RecorridoMetricas,
     corte: number,
-): { horasDia: number; horasNoche: number } {
-    const ida = minutosDiaNoche(r.iniciado_en, r.llegada_en, corte);
-    const vuelta = minutosDiaNoche(r.retorno_en, r.finalizado_en, corte);
-    const diaEl = ida.dia + vuelta.dia;
-    const nocheEl = ida.noche + vuelta.noche;
-    const elapsed = diaEl + nocheEl;
-    // Solo cuenta el manejo: se descuenta el descanso proporcionalmente.
-    const factor = elapsed > 0 ? Math.max(0, elapsed - num(r.descanso_min)) / elapsed : 0;
+): { diaMin: number; nocheMin: number; horasDia: number; horasNoche: number } {
+    let diaMin = 0, nocheMin = 0;
+    if (r.km_fuente === 'ruta' && r.iniciado_en && r.total_min != null) {
+        const fin = new Date(r.iniciado_en.getTime() + Math.max(0, num(r.total_min)) * 60000);
+        const s = minutosDiaNoche(r.iniciado_en, fin, corte);
+        diaMin = s.dia; nocheMin = s.noche;
+    } else {
+        const ida = minutosDiaNoche(r.iniciado_en, r.llegada_en, corte);
+        const vuelta = minutosDiaNoche(r.retorno_en, r.finalizado_en, corte);
+        const diaEl = ida.dia + vuelta.dia;
+        const nocheEl = ida.noche + vuelta.noche;
+        const elapsed = diaEl + nocheEl;
+        const factor = elapsed > 0
+            ? (r.manejo_min != null ? Math.min(1, num(r.manejo_min) / elapsed) : Math.max(0, elapsed - num(r.descanso_min)) / elapsed)
+            : 0;
+        diaMin = diaEl * factor; nocheMin = nocheEl * factor;
+    }
     return {
-        horasDia: Math.round((diaEl * factor / 60) * 100) / 100,
-        horasNoche: Math.round((nocheEl * factor / 60) * 100) / 100,
+        diaMin, nocheMin,
+        horasDia: Math.round((diaMin / 60) * 100) / 100,
+        horasNoche: Math.round((nocheMin / 60) * 100) / 100,
     };
 }

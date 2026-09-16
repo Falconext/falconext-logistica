@@ -158,16 +158,19 @@ function RouteDetailCard({ selected, format, onEdit, onDelete, canDelete = true 
     );
 }
 
-// De dónde salió el km real de la operación (audio de Diego, 2026-09-03).
+// De dónde salió el km de la operación. Regla 2026-09-16: el km que cuenta (y suma
+// al mes del chofer) es el de la RUTA PLANEADA ('ruta', el mismo que se ve sobre el
+// mapa) — caso normal, sin badge. Se etiqueta solo cuando viene de otra fuente.
 function kmFuenteBadge(fuente?: string | null) {
-    if (!fuente || fuente === 'gps') return null; // GPS real: es el caso normal, sin ruido visual.
-    const map: Record<string, { label: string; cls: string }> = {
-        estimado: { label: 'Estimado', cls: 'text-amber-600 bg-amber-50 border-amber-200' },
-        manual: { label: 'Manual', cls: 'text-slate-500 bg-slate-50 border-slate-200' },
+    if (!fuente || fuente === 'ruta') return null;
+    const map: Record<string, { label: string; cls: string; title: string }> = {
+        gps: { label: 'GPS', cls: 'text-sky-600 bg-sky-50 border-sky-200', title: 'Km medido por GPS (recorrido anterior a la regla de km por ruta).' },
+        estimado: { label: 'Estimado', cls: 'text-amber-600 bg-amber-50 border-amber-200', title: 'El GPS no captó el viaje: km estimado de Google (recorrido anterior a la regla de km por ruta).' },
+        manual: { label: 'Manual', cls: 'text-slate-500 bg-slate-50 border-slate-200', title: 'Este km fue editado a mano por un supervisor.' },
     };
     const m = map[fuente];
     if (!m) return null;
-    return <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium border ${m.cls}`} title={fuente === 'estimado' ? 'El GPS no captó suficiente movimiento: este km es una estimación de Google, no lo que se manejó realmente.' : 'Este km fue editado a mano.'}>{m.label}</span>;
+    return <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium border ${m.cls}`} title={m.title}>{m.label}</span>;
 }
 
 export default function OperacionesPage() {

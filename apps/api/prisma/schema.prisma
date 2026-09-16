@@ -625,15 +625,25 @@ model Recorrido {
   ida_min    Float?
   vuelta_km  Float?
   vuelta_min Float?
-  // Totales FIELES del recorrido al finalizar: GPS real (ida+vuelta, con tope
-  // anti-basura) y, si el GPS es implausiblemente bajo, el estimado de la ruta.
-  // Es la fuente de verdad del km/tiempo de la operación y del perfil del mes.
+  // Totales del recorrido al finalizar. Fuente de verdad del km/tiempo de la
+  // operación y del perfil del mes. Regla vigente (empresario, 2026-09-16): el km y
+  // el tiempo que cuentan son los de la RUTA PLANEADA (esperado_km/esperado_min,
+  // Google Directions), NO lo que captó el GPS — el celular pierde tramos (batería,
+  // túneles, app en segundo plano) y dejaba a los choferes con km recortados. El
+  // GPS sigue disponible como historial (Reporte de Ruta), no para el pago.
   total_km   Float?
   total_min  Float?
-  // Tiempo REAL de MANEJO (GPS en movimiento, excluye paradas/detenido), en minutos.
-  // Base de las "horas de manejo" del pago mensual. Se persiste al finalizar; para
-  // recorridos viejos (null) el resumen cae al tiempo transcurrido menos descanso.
+  // Minutos de manejo que alimentan las horas del pago. Con km_fuente='ruta' es el
+  // esperado_min (se reparte día/noche desde iniciado_en). Recorridos viejos: GPS
+  // en movimiento; null ⇒ transcurrido menos descanso.
   manejo_min Float?
+  // De dónde salió total_km/total_min: 'ruta' (estimado de la ruta, regla vigente),
+  // 'gps' (GPS real, recorridos previos a la regla), 'estimado' (respaldo viejo por
+  // GPS vacío), 'manual' (corregido a mano por un supervisor; el reproceso lo respeta).
+  km_fuente String?
+  // true ⇒ creado automáticamente al marcar la consegna entregada sin que el chofer
+  // usara "Iniciar ruta" (para que igual sume al mes). Sin GPS ni hitos reales.
+  auto Boolean @default(false)
 
   creado_en      DateTime @default(now())
   actualizado_en DateTime @updatedAt

@@ -232,7 +232,8 @@ export default function MiResumenScreen() {
       {/* "Registrar parte del día" se quitó: las horas/km ahora son automáticas
           (desde los recorridos), el chofer ya no registra parte manual. */}
 
-      {/* Km y horas del mes (base del pago). Ya cuadran con los recorridos GPS —
+      {/* Km y horas del mes (base del pago). Regla 2026-09-16: cada consegna suma el
+          km/tiempo de la RUTA PLANEADA (el estimado del mapa), no lo que captó el GPS —
           el km/horas que se muestra es el mismo que suma al total del mes. */}
       <SectionTitle style={{ marginTop: S.lg }}>Mi mes</SectionTitle>
       <View style={styles.statsRow}>
