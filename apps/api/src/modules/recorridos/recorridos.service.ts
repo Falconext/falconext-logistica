@@ -4,6 +4,10 @@ import { PrismaService } from '../../prisma.service';
 import { GpsService } from '../gps/gps.service';
 import { offsetRomaMin } from '../../common/tarifas-chofer.util';
 
+// Tope de plausibilidad de una ruta estimada (ver estimarRuta).
+const RUTA_MAX_MIN = 24 * 60;
+const RUTA_MAX_KM = 2500;
+
 // Estados que cuentan como recorrido "en curso".
 const ACTIVOS = ['EN_RUTA_IDA', 'EN_DESTINO', 'EN_RUTA_VUELTA'];
 
@@ -91,7 +95,37 @@ export class RecorridosService {
         const destinosProg = Array.isArray(prog.destinos) ? prog.destinos : [];
         const loopStops = [...retirosProg, prog.lugar_entrega, ...destinosProg].map((s: any) => (s || '').trim()).filter(Boolean);
         if (!prog.lugar_retiro || !loopStops.length) return null;
-        return this.directionsRoute(prog.lugar_retiro, loopStops, prog.lugar_retiro);
+        const est = await this.directionsRoute(prog.lugar_retiro, loopStops, prog.lugar_retiro);
+        // Plausibilidad: una consegna no lleva más de 24 h de manejo ni 2 500 km (Milán→Bari
+        // y vuelta son ~1 800 km / 14 h). Por encima es una dirección mal escrita que Google
+        // resolvió en otro país (caso real: "SIZINO" por Siziano → 6 110 km / 64 h). Se
+        // trata como "sin estimado" para que el supervisor corrija la dirección o el km.
+        if (est && (est.min > RUTA_MAX_MIN || est.km > RUTA_MAX_KM)) {
+            console.warn(`[Recorridos] estimado implausible descartado: ${est.km} km / ${est.min} min (${prog.lugar_retiro} → ${loopStops.join(' → ')})`);
+            return null;
+        }
+        return est;
+    }
+
+    /**
+     * El supervisor corrigió las direcciones de una operación: se vuelve a estimar la
+     * ruta y se actualiza el recorrido vigente (solo si su km viene de la ruta, no si
+     * fue corregido a mano) y el km/tiempo de la operación. Así "arreglo la dirección y
+     * se arregla el mes" sin tener que escribir el km.
+     */
+    async reestimarPorCambioDeDireccion(tenantId: string, prog: { id: string; lugar_retiro?: string | null; lugar_entrega?: string | null; retiros?: any; destinos?: any }) {
+        const r = await this.prisma.recorrido.findFirst({
+            where: { tenant_id: tenantId, programacion_id: prog.id, estado: 'COMPLETADO' },
+            orderBy: { finalizado_en: 'desc' },
+            select: { id: true, km_fuente: true, auto: true, iniciado_en: true },
+        });
+        if (!r || r.km_fuente === 'manual') return;
+        const est = await this.estimarRuta(prog);
+        if (!est) return;
+        const data: any = { esperado_km: est.km, esperado_min: est.min, total_km: est.km, total_min: est.min, manejo_min: est.min, km_fuente: 'ruta' };
+        if (r.auto) { const fin = new Date(r.iniciado_en.getTime() + est.min * 60000); data.llegada_en = fin; data.finalizado_en = fin; }
+        await this.prisma.recorrido.update({ where: { id: r.id }, data });
+        await this.prisma.programacion.updateMany({ where: { id: prog.id, tenant_id: tenantId }, data: { km: est.km, tiempo_min: est.min } });
     }
 
     private haversineKm(a: LatLng, b: LatLng): number {

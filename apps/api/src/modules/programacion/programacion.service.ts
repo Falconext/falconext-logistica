@@ -785,8 +785,11 @@ export class ProgramacionService {
             rest.attesa_autorizado_por = null;
         }
         // Para saber si el chofer CAMBIÓ (y avisarle al nuevo) hace falta el valor previo.
-        const previo = rest.trabajador_id !== undefined
-            ? await this.prisma.programacion.findUnique({ where: { id }, select: { trabajador_id: true } })
+        // Lo mismo con las direcciones: si cambian, el recorrido se re-estima (ruta).
+        const DIRS = ['lugar_retiro', 'lugar_entrega', 'retiros', 'destinos'] as const;
+        const tocaDirs = DIRS.some((k) => rest[k] !== undefined);
+        const previo = rest.trabajador_id !== undefined || tocaDirs
+            ? await this.prisma.programacion.findUnique({ where: { id }, select: { trabajador_id: true, lugar_retiro: true, lugar_entrega: true, retiros: true, destinos: true } })
             : null;
         const updated = await this.prisma.programacion.update({
             where: { id },
@@ -808,6 +811,10 @@ export class ProgramacionService {
             } catch (e) { console.warn('[Programacion] corrección manual de km falló:', (e as any)?.message); }
         }
         await this.asegurarRecorridoSiEntregada(updated);
+        // Direcciones corregidas → re-estimar la ruta del recorrido (no toca los 'manual').
+        if (previo && tocaDirs && DIRS.some((k) => JSON.stringify((updated as any)[k] ?? null) !== JSON.stringify((previo as any)[k] ?? null))) {
+            try { await this.recorridos.reestimarPorCambioDeDireccion(updated.tenant_id, updated); } catch (e) { console.warn('[Programacion] re-estimación por cambio de dirección falló:', (e as any)?.message); }
+        }
 
         // Si el cliente envía `gastos`, la lista del formulario es la lista completa de la
         // operación — pero se aplica por FUSIÓN (no delete+create): un gasto que sigue en la

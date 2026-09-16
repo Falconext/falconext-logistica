@@ -1,7 +1,5 @@
 #!/bin/bash
-# QA funcional (casos duros) de la regla km/horas = ruta planeada. Además de token.txt
-# requiere chofer.txt = JWT de un usuario con rol "Autista / Chofer" (solo_propios)
-# vinculado a G005 (misma contraseña que admin en local). Ver km-ruta-run-all.sh.
+# QA funcional ampliada (casos duros) — regla km/horas = ruta planeada.
 API=http://localhost:3005/api; T=$(cat token.txt); CH=$(cat chofer.txt); H1="Authorization: Bearer $T"; HC="Authorization: Bearer $CH"; H2="Content-Type: application/json"; HS="Authorization: Bearer testsecret"
 export PGPASSWORD=$(grep '^DATABASE_URL' /Users/tradercode/logistica/apps/api/.env | sed -E 's/.*:\/\/[^:]+:([^@]+)@.*/\1/')
 SQL() { psql -h localhost -p 5439 -U logistica -d logistica -X -A -t -F'|' -c "$1"; }
@@ -99,6 +97,22 @@ check "M7 rango inválido → 401" "$(curl -s -o /dev/null -w '%{http_code}' -X 
 echo "== N. Reperibilità / attesa siguen sumando aparte =="
 OP=$(mkop "{\"cliente\":\"QA N\",\"fecha\":\"2026-09-15T00:00:00.000Z\",\"hora_retiro\":\"09:00\",\"lugar_retiro\":\"$RET\",\"lugar_entrega\":\"$ENT\",\"trabajador_id\":\"G004\",\"reperibilita\":true,\"estado_consegna\":\"CONSEGNATO\"}")
 C=$(curl -s $API/programacion/$OP -H "$H1"); check "N1 costo = horas + reperibilità 10" "$(echo "$C" | J "round(d['costo_chofer']['total']-d['costo_chofer']['pago_horas'],2)")" "10"
+
+echo "== Q. Ruta implausible (typo de dirección) y re-estimación al corregir la dirección =="
+OP=$(mkop "{\"cliente\":\"QA Q1\",\"fecha\":\"2026-09-17T00:00:00.000Z\",\"hora_retiro\":\"09:00\",\"lugar_retiro\":\"$RET\",\"lugar_entrega\":\"Lisboa, Portugal\",\"trabajador_id\":\"G004\",\"estado_consegna\":\"CONSEGNATO\"}")
+check "Q1 ruta > 2 500 km se descarta → sin auto (no inventa 3 800 km)" "$(SQL "select count(*) from recorridos where programacion_id='$OP'")" "0"
+curl -s -X PATCH $API/programacion/$OP -H "$H1" -H "$H2" -d "{\"lugar_entrega\":\"$ENT\"}" >/dev/null
+check "Q2 corregida la dirección → auto creado con ruta corta" "$(SQL "select count(*)||'|'||km_fuente||'|'||(total_km<60)::text from recorridos where programacion_id='$OP' group by km_fuente, total_km")" "1|ruta|true"
+KQ=$(SQL "select total_km from recorridos where programacion_id='$OP'")
+curl -s -X PATCH $API/programacion/$OP -H "$H1" -H "$H2" -d '{"destinos":["Malpensa Airport"]}' >/dev/null
+check "Q3 agregar destino Malpensa re-estima (km sube > 80)" "$(SQL "select (total_km > $KQ + 80)::text||'|'||km_fuente||'|'||(select (km = (select total_km from recorridos where programacion_id='$OP'))::text from programacion where id='$OP') from recorridos where programacion_id='$OP'")" "true|ruta|true"
+curl -s -X PATCH $API/programacion/$OP -H "$H1" -H "$H2" -d '{"km":99}' >/dev/null
+curl -s -X PATCH $API/programacion/$OP -H "$H1" -H "$H2" -d '{"destinos":[]}' >/dev/null
+check "Q4 con km manual, cambiar dirección NO lo pisa" "$(SQL "select km_fuente||'|'||total_km from recorridos where programacion_id='$OP'")" "manual|99"
+OPQ=$(mkop "{\"cliente\":\"QA Q5\",\"fecha\":\"2026-09-17T00:00:00.000Z\",\"lugar_retiro\":\"$RET\",\"lugar_entrega\":\"Lisboa, Portugal\",\"trabajador_id\":\"G004\",\"estado\":\"PENDIENTE\"}")
+RID=$(curl -s -X POST $API/recorridos/iniciar -H "$H1" -H "$H2" -d "{\"programacionId\":\"$OPQ\"}" | J "d['id']")
+F=$(curl -s -X POST $API/recorridos/$RID/finalizar -H "$H1")
+check "Q5 Mi Ruta con destino implausible → cierra en gps 0 (no 3 800 km)" "$(echo "$F" | J "d['km_fuente']+'|'+str(d['total_km'])")" "gps|0"
 
 echo "== O. Consistencia global G004 tras todo =="
 MR=$(curl -s "$API/registros/mias/resumen?from=2026-09-01&to=2026-09-30T23:59:59Z" -H "$H1"); MD=$(curl -s "$API/registros/mias/mes-detalle?anio=2026&mes=9" -H "$H1")
