@@ -708,13 +708,29 @@ export class RecorridosService {
      * recorrido (total_km/total_min, km_fuente='manual') para que el mes del chofer
      * cuadre con lo corregido. El reproceso respeta los 'manual'.
      */
-    async aplicarCorreccionManual(tenantId: string, programacionId: string, km?: number | null, tiempoMin?: number | null) {
+    async aplicarCorreccionManual(tenantId: string, programacionId: string, km?: number | null, tiempoMin?: number | null, opts?: { borrarKm?: boolean }) {
         const r = await this.prisma.recorrido.findFirst({
             where: { tenant_id: tenantId, programacion_id: programacionId, estado: 'COMPLETADO' },
             orderBy: { finalizado_en: 'desc' },
-            select: { id: true, total_km: true, total_min: true },
+            select: { id: true, total_km: true, total_min: true, km_fuente: true, auto: true, iniciado_en: true, esperado_km: true, esperado_min: true },
         });
         if (!r) return;
+        // Borrar el km a mano = "volver a la ruta": el recorrido deja de ser 'manual' y
+        // toma el estimado de la ruta (se re-estima si hace falta); la operación se rellena.
+        if (opts?.borrarKm) {
+            // Siempre con las direcciones ACTUALES (pueden haber cambiado mientras era manual);
+            // el estimado guardado solo como respaldo si Google no responde.
+            const prog = await this.prisma.programacion.findFirst({ where: { id: programacionId, tenant_id: tenantId } });
+            const est = prog ? await this.estimarRuta(prog) : null;
+            const estKm = est?.km ?? (Number(r.esperado_km) || 0);
+            const estMin = est?.min ?? (Number(r.esperado_min) || 0);
+            if (!(estKm > 0)) return;
+            const data: any = { esperado_km: estKm, esperado_min: estMin, total_km: estKm, total_min: estMin, manejo_min: estMin, km_fuente: 'ruta' };
+            if (r.auto) { const fin = new Date(r.iniciado_en.getTime() + estMin * 60000); data.llegada_en = fin; data.finalizado_en = fin; }
+            await this.prisma.recorrido.update({ where: { id: r.id }, data });
+            await this.prisma.programacion.updateMany({ where: { id: programacionId, tenant_id: tenantId }, data: { km: estKm, tiempo_min: estMin } });
+            return;
+        }
         const data: any = {};
         if (km != null && Number.isFinite(km) && Math.abs(km - (Number(r.total_km) || 0)) > 0.15) data.total_km = Math.round(km * 10) / 10;
         if (tiempoMin != null && Number.isFinite(tiempoMin) && Math.abs(tiempoMin - (Number(r.total_min) || 0)) > 0.5) {

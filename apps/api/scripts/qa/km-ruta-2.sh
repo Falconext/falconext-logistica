@@ -109,6 +109,10 @@ check "Q3 agregar destino Malpensa re-estima (km sube > 80)" "$(SQL "select (tot
 curl -s -X PATCH $API/programacion/$OP -H "$H1" -H "$H2" -d '{"km":99}' >/dev/null
 curl -s -X PATCH $API/programacion/$OP -H "$H1" -H "$H2" -d '{"destinos":[]}' >/dev/null
 check "Q4 con km manual, cambiar dirección NO lo pisa" "$(SQL "select km_fuente||'|'||total_km from recorridos where programacion_id='$OP'")" "manual|99"
+curl -s -X PATCH $API/programacion/$OP -H "$H1" -H "$H2" -d '{"km":null}' >/dev/null
+check "Q4b borrar el km manual → vuelve a la ruta (op y recorrido iguales)" "$(SQL "select r.km_fuente||'|'||(r.total_km=r.esperado_km)::text||'|'||(p.km=r.total_km)::text||'|'||(r.total_km<60)::text from recorridos r join programacion p on p.id=r.programacion_id where r.programacion_id='$OP'")" "ruta|true|true|true"
+curl -s -X PATCH $API/programacion/$OP -H "$H1" -H "$H2" -d "{\"cliente\":\"QA Q1\",\"km\":$(SQL "select total_km from recorridos where programacion_id='$OP'")}" >/dev/null
+check "Q4c re-guardar el formulario con el mismo km no lo vuelve manual" "$(SQL "select km_fuente from recorridos where programacion_id='$OP'")" "ruta"
 OPQ=$(mkop "{\"cliente\":\"QA Q5\",\"fecha\":\"2026-09-17T00:00:00.000Z\",\"lugar_retiro\":\"$RET\",\"lugar_entrega\":\"Lisboa, Portugal\",\"trabajador_id\":\"G004\",\"estado\":\"PENDIENTE\"}")
 RID=$(curl -s -X POST $API/recorridos/iniciar -H "$H1" -H "$H2" -d "{\"programacionId\":\"$OPQ\"}" | J "d['id']")
 F=$(curl -s -X POST $API/recorridos/$RID/finalizar -H "$H1")

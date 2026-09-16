@@ -803,10 +803,13 @@ export class ProgramacionService {
         // Solo cambia algo si el valor difiere del que tiene el recorrido.
         if (!opts?.isChofer && (rest.km !== undefined || rest.tiempo_min !== undefined)) {
             try {
+                // km vacío/0 enviado a propósito = "volver a la ruta" (quita el manual).
+                const borrarKm = rest.km !== undefined && (rest.km === null || rest.km === '' || Number(rest.km) === 0);
                 await this.recorridos.aplicarCorreccionManual(
                     updated.tenant_id, id,
                     rest.km !== undefined ? (rest.km === null || rest.km === '' ? null : Number(rest.km)) : null,
                     rest.tiempo_min !== undefined ? (rest.tiempo_min === null || rest.tiempo_min === '' ? null : Number(rest.tiempo_min)) : null,
+                    { borrarKm },
                 );
             } catch (e) { console.warn('[Programacion] corrección manual de km falló:', (e as any)?.message); }
         }
