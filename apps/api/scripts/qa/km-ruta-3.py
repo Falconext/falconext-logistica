@@ -64,7 +64,8 @@ print(f'===== qa3 seed={SEED} =====')
 print('== P1. 6 consegnas entregadas sin Iniciar, hora/fecha/ruta aleatorias ==')
 esperado_km = 0; esperado_d = 0; esperado_n = 0
 for i in range(6):
-    dia = random.randint(1, 28); hh = random.randint(0, 23); mm = random.choice([0, 15, 30, 45])
+    # día 1 excluido: 00:00-02:00 Roma cae en el mes anterior por UTC (borde conocido)
+    dia = random.randint(2, 28); hh = random.randint(0, 23); mm = random.choice([0, 15, 30, 45])
     op = mkop({'fecha': f'2026-09-{dia:02d}T00:00:00.000Z', 'hora_retiro': f'{hh:02d}:{mm:02d}', 'estado_consegna': 'CONSEGNATO', **route()}, f'QA P1-{i}')
     row = sql(f"select auto, km_fuente, iniciado_en, total_km, total_min, esperado_km from recorridos where programacion_id='{op['id']}'")
     if not row: check(f'P1.{i} auto creado ({op["lugar_retiro"][:18]}→{op["lugar_entrega"][:18]})', 'NO', 'sí'); continue

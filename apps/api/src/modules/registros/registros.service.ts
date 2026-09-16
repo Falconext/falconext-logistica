@@ -132,8 +132,11 @@ export class RegistrosService {
         const trab = await this.prisma.trabajador.findFirst({ where: { id: trabajadorId, tenant_id: tenantId }, select: { id_trabajador: true } });
         const codigos = [trabajadorId, trab?.id_trabajador].filter(Boolean) as string[];
         const [recorridos, reperibilita, attesaAgg] = await Promise.all([
+            // Solo recorridos COMPLETADOS: un CANCELADO (p. ej. cerrado por el supervisor
+            // días después) no suma km ni horas — antes entraba y un recorrido cancelado
+            // abierto 12 días llegó a contar como 300+ h de manejo.
             this.prisma.recorrido.findMany({
-                where: { tenant_id: tenantId, trabajador_id: trabajadorId, finalizado_en: { gte: desde, lte: hasta } },
+                where: { tenant_id: tenantId, trabajador_id: trabajadorId, estado: 'COMPLETADO', finalizado_en: { gte: desde, lte: hasta } },
                 select: RECORRIDO_METRICAS_SELECT,
             }),
             this.prisma.programacion.count({
@@ -263,7 +266,8 @@ export class RegistrosService {
         const desde = new Date(Date.UTC(anio, mes - 1, 1));
         const hasta = new Date(Date.UTC(anio, mes, 0, 23, 59, 59));
         const recorridos = await this.prisma.recorrido.findMany({
-            where: { tenant_id: tenantId, trabajador_id: trabajadorId, finalizado_en: { gte: desde, lte: hasta } },
+            // Mismo criterio que el total del mes: solo COMPLETADOS.
+            where: { tenant_id: tenantId, trabajador_id: trabajadorId, estado: 'COMPLETADO', finalizado_en: { gte: desde, lte: hasta } },
             select: { ...RECORRIDO_METRICAS_SELECT, id: true, origen_label: true, destino_label: true, programacion_id: true },
             orderBy: { finalizado_en: 'desc' },
         });

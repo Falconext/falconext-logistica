@@ -1,7 +1,7 @@
 #!/bin/bash
 # QA funcional (casos duros) de la regla km/horas = ruta planeada. Además de token.txt
 # requiere chofer.txt = JWT de un usuario con rol "Autista / Chofer" (solo_propios)
-# vinculado a G005 (misma contraseña que admin en local). Ver km-ruta-run5.sh.
+# vinculado a G005 (misma contraseña que admin en local). Ver km-ruta-run-all.sh.
 API=http://localhost:3005/api; T=$(cat token.txt); CH=$(cat chofer.txt); H1="Authorization: Bearer $T"; HC="Authorization: Bearer $CH"; H2="Content-Type: application/json"; HS="Authorization: Bearer testsecret"
 export PGPASSWORD=$(grep '^DATABASE_URL' /Users/tradercode/logistica/apps/api/.env | sed -E 's/.*:\/\/[^:]+:([^@]+)@.*/\1/')
 SQL() { psql -h localhost -p 5439 -U logistica -d logistica -X -A -t -F'|' -c "$1"; }
@@ -38,6 +38,11 @@ curl -s -X PATCH $API/programacion/$OP -H "$H1" -H "$H2" -d '{"estado":"ENTREGAD
 check "H2 cancelado no cuenta → auto creado" "$(SQL "select string_agg(estado||':'||auto::text, ',' order by auto) from recorridos where programacion_id='$OP'")" "CANCELADO:false,COMPLETADO:true"
 C=$(curl -s $API/programacion/$OP -H "$H1"); check "H3 22:00 Roma → todo noche" "$(echo "$C" | J "d['costo_chofer']['horas_dia']==0 and d['costo_chofer']['horas_noche']>0")" "True"
 check "H4 estado_consegna sincronizado" "$(echo "$C" | J "d['estado_consegna']")" "CONSEGNATO"
+# Cancelado "abierto" 12 días (cerrado tarde por supervisor): NO debe sumar horas ni km al mes.
+RIDC=$(SQL "select id from recorridos where programacion_id='$OP' and estado='CANCELADO'")
+SQL "update recorridos set retorno_en=iniciado_en, finalizado_en=iniciado_en + interval '12 days' where id='$RIDC'" >/dev/null
+MRH=$(curl -s "$API/registros/mias/resumen?from=2026-09-01&to=2026-09-30T23:59:59Z" -H "$H1"); check "H5 cancelado de 12 días no suma horas (oreTotal < 50)" "$(echo "$MRH" | J "d['oreTotal']<50")" "True"
+MDH=$(curl -s "$API/registros/mias/mes-detalle?anio=2026&mes=9" -H "$H1"); check "H6 detalle del mes no lista el cancelado" "$(echo "$MDH" | J "len([i for i in d['items'] if i['cliente']=='QA H'])")" "1"
 
 echo "== I. Multi-parada: retiros + destinos adicionales suman en el bucle =="
 OP1=$(mkop "{\"cliente\":\"QA I1\",\"fecha\":\"2026-09-13T00:00:00.000Z\",\"lugar_retiro\":\"$RET\",\"lugar_entrega\":\"$ENT\",\"trabajador_id\":\"G004\",\"estado_consegna\":\"CONSEGNATO\"}")
@@ -98,7 +103,7 @@ C=$(curl -s $API/programacion/$OP -H "$H1"); check "N1 costo = horas + reperibil
 echo "== O. Consistencia global G004 tras todo =="
 MR=$(curl -s "$API/registros/mias/resumen?from=2026-09-01&to=2026-09-30T23:59:59Z" -H "$H1"); MD=$(curl -s "$API/registros/mias/mes-detalle?anio=2026&mes=9" -H "$H1")
 check "O1 resumen = detalle (km)" "$(echo "$MR" | J "float(d['km'])")" "$(echo "$MD" | J "float(round(sum(i['km'] for i in d['items']),1))")"
-check "O2 resumen = BD (km)" "$(echo "$MR" | J "float(d['km'])")" "$(SQL "select round(sum(total_km)::numeric,1)::float from recorridos where trabajador_id='$G004' and estado='COMPLETADO' and finalizado_en between '2026-09-01' and '2026-09-30 23:59:59'")"
+check "O2 resumen = BD (km)" "$(echo "$MR" | J "float(d['km'])")" "$(python3 -c "print(float($(SQL "select round(sum(total_km)::numeric,1) from recorridos where trabajador_id='$G004' and estado='COMPLETADO' and finalizado_en between '2026-09-01' and '2026-09-30 23:59:59'")))")"
 DIR=$(curl -s "$API/registros/direccion/resumen?from=2026-09-01&to=2026-09-30T23:59:59Z" -H "$H1")
 check "O3 dirección G004 = resumen (€)" "$(echo "$DIR" | J "[float(x['gananciaTotal']) for x in d['choferes'] if 'NATALIA' in x['nombre']][0]")" "$(echo "$MR" | J "float(d['gananciaTotal'])")"
 FIN=$(curl -s "$API/programacion/financiero?from=2026-09-01&to=2026-09-30T23:59:59Z&trabajadorId=G004" -H "$H1")
