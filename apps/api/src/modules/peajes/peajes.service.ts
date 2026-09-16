@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { fechaLimitePago } from '../../common/plazo-pago.util';
@@ -20,6 +20,12 @@ export class PeajesService {
             return this.crearGastoDeOperacion(data, data.programacion_id, tenantId, opts?.soloDeTrabajador);
         }
         if (opts?.soloDeTrabajador) throw new ForbiddenException('Como chofer solo puedes registrar un peaje vinculándolo a una de tus consegnas.');
+        // El nº de mancato es único: si ya existe, avisar claro (el chofer quiere saber
+        // justamente si ya está registrado) en vez de un 500.
+        if (data.id_multa) {
+            const dup = await this.prisma.peaje.findFirst({ where: { id_multa: String(data.id_multa) }, select: { id: true, targa: true, fecha: true } });
+            if (dup) throw new ConflictException(`El mancato ${data.id_multa} ya está registrado (${dup.targa || 'sin placa'}, ${dup.fecha ? new Date(dup.fecha).toISOString().slice(0, 10) : 'sin fecha'}).`);
+        }
         return this.prisma.peaje.create({
             data: {
                 id_multa: data.id_multa || null,
@@ -58,6 +64,12 @@ export class PeajesService {
             throw new ForbiddenException('Solo puedes vincular peajes a tus propias consegnas.');
         }
         const fecha: Date = data.fecha ? new Date(data.fecha) : (op.fecha_entrega || op.fecha_retiro || op.fecha || new Date());
+        const nro = data.id_multa || data.numero_mancato;
+        if (nro) {
+            const dup = await this.prisma.gastoOperacion.findFirst({ where: { tenant_id: tenantId, tipo: 'PEAJE', numero_mancato: String(nro) }, select: { id: true, fecha: true, targa: true } })
+                || await this.prisma.peaje.findFirst({ where: { tenant_id: tenantId, id_multa: String(nro) }, select: { id: true, fecha: true, targa: true } });
+            if (dup) throw new ConflictException(`El mancato ${nro} ya está registrado (${dup.targa || 'sin placa'}, ${dup.fecha ? new Date(dup.fecha).toISOString().slice(0, 10) : 'sin fecha'}).`);
+        }
         const gasto = await this.prisma.gastoOperacion.create({
             data: {
                 programacion_id: op.id,

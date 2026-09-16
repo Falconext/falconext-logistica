@@ -40,6 +40,7 @@ interface Peaje {
   targa?: string | null;
   monto?: number | null;
   trabajador_id?: string | null;
+  trabajador_nombre?: string | null;
   comentarios?: string | null;
   tipo?: string | null;
   // Plazo de pago (~14 días desde el paso por el peaje). Vital: si vence hay multa.
@@ -63,7 +64,7 @@ type Sustento = { comprobantes: string[]; numero_mancato: string; link_peaje: st
 const ESTADOS = ['PENDIENTE', 'OBSERVADO', 'PAGADO', 'ANULADO'] as const;
 type Estado = (typeof ESTADOS)[number];
 
-const TIPOS = ['Peaje', 'Multa'] as const;
+// (Solo peajes: el tipo ya no se elige en el formulario.)
 
 function estadoVariant(estado?: string | null): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
   switch ((estado || '').toUpperCase()) {
@@ -123,6 +124,12 @@ type FormState = {
   monto: string;
   estado: Estado;
   tipo: string;
+  // Nº de mancato y link de pago (audio Diego 2026-09-16): los choferes los escribían
+  // en comentarios porque el formulario móvil no los tenía, y el supervisor no los
+  // encontraba. En Peaje van como id_multa/archivo; en GastoOperacion como
+  // numero_mancato/link_peaje — se mandan ambos y el backend usa el que corresponde.
+  numero_mancato: string;
+  link_peaje: string;
   fecha: string;
   fecha_limite_pago: string;
   trabajador_id: string;
@@ -144,7 +151,10 @@ const emptyForm: FormState = {
   targa: '',
   monto: '',
   estado: 'PENDIENTE',
-  tipo: '',
+  // Solo hay peajes (mancati), no multas: el tipo ya no se elige.
+  tipo: 'PEAJE',
+  numero_mancato: '',
+  link_peaje: '',
   fecha: todayISO(),
   fecha_limite_pago: sumarDias(todayISO(), PLAZO_PAGO_DIAS),
   trabajador_id: '',
@@ -253,10 +263,10 @@ export default function PeajesScreen() {
   const [limiteManual, setLimiteManual] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (q?: string) => {
     try {
       const [pRes, vRes, tRes] = await Promise.all([
-        api.get('/peajes', { params: { take: 100 } }),
+        api.get('/peajes', { params: { take: 100, ...(q ? { q } : {}) } }),
         api.get('/vehiculos').catch(() => ({ data: [] })),
         api.get('/trabajadores').catch(() => ({ data: [] })),
       ]);
@@ -275,6 +285,14 @@ export default function PeajesScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // Búsqueda en el servidor (nº mancato / placa / comentarios) con un pequeño
+  // retardo para no pegarle a la API en cada tecla.
+  useEffect(() => {
+    const q = query.trim();
+    const t = setTimeout(() => { load(q || undefined); }, 350);
+    return () => clearTimeout(t);
+  }, [query, load]);
 
   // Resuelve el trabajador del chofer al UUID que usa el backend, buscándolo
   // en la lista por `id` o `id_trabajador` (con fallback al valor crudo).
@@ -298,12 +316,19 @@ export default function PeajesScreen() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return items;
+    // Nº de mancato primero: es único y es lo que el chofer busca para saber si ya
+    // está registrado. La lista se recarga del servidor con el mismo texto (ver
+    // efecto de abajo), así que también encuentra los que no estaban en las primeras 100.
     return items.filter(
       (p) =>
-        p.targa?.toLowerCase().includes(q) ||
-        p.tipo?.toLowerCase().includes(q)
+        (p.numero_mancato || '').toLowerCase().includes(q) ||
+        (p.id_multa || '').toLowerCase().includes(q) ||
+        (p.targa || '').toLowerCase().includes(q) ||
+        (p.trabajador_nombre || trabajadorLabel(p.trabajador_id) || '').toLowerCase().includes(q) ||
+        (p.comentarios || '').toLowerCase().includes(q) ||
+        (p.tipo || '').toLowerCase().includes(q)
     );
-  }, [items, query]);
+  }, [items, query, trabajadorLabel]);
 
   const stats = useMemo(() => {
     const total = items.length;
@@ -344,7 +369,9 @@ export default function PeajesScreen() {
       estado: (ESTADOS.includes((p.estado || '').toUpperCase() as Estado)
         ? ((p.estado || '').toUpperCase() as Estado)
         : 'PENDIENTE'),
-      tipo: p.tipo || '',
+      tipo: p.tipo || 'PEAJE',
+      numero_mancato: p.numero_mancato || p.id_multa || '',
+      link_peaje: p.link_peaje || p.archivo || '',
       fecha: p.fecha ? String(p.fecha).split('T')[0] : todayISO(),
       fecha_limite_pago: p.fecha_limite_pago ? String(p.fecha_limite_pago).split('T')[0] : '',
       trabajador_id: hideConductor ? resolvedMyWorkerId : (p.trabajador_id || ''),
@@ -357,7 +384,7 @@ export default function PeajesScreen() {
 
   const save = async () => {
     if (!form.targa.trim()) {
-      Alert.alert('Falta la placa', 'La placa (targa) es obligatoria.');
+      Alert.alert('Falta el vehículo', 'Selecciona el vehículo (targa) del peaje.');
       return;
     }
     if (!editing && !canEditAll && !programacionId) {
@@ -366,11 +393,18 @@ export default function PeajesScreen() {
     }
     setSaving(true);
     try {
+      const nro = form.numero_mancato.trim();
+      const link = form.link_peaje.trim();
       const payload = {
         targa: form.targa.trim(),
         monto: form.monto,
         estado: form.estado,
-        tipo: form.tipo || undefined,
+        tipo: form.tipo || 'PEAJE',
+        // Peaje suelto → id_multa/archivo; peaje de operación → numero_mancato/link_peaje.
+        id_multa: nro || undefined,
+        numero_mancato: nro || undefined,
+        archivo: link || undefined,
+        link_peaje: link || undefined,
         fecha: form.fecha || undefined,
         fecha_limite_pago: form.fecha_limite_pago || undefined,
         trabajador_id: form.trabajador_id || undefined,
@@ -476,7 +510,7 @@ export default function PeajesScreen() {
         </View>
 
         <View style={{ marginBottom: S.md }}>
-          <SearchBar value={query} onChangeText={setQuery} placeholder="Buscar por placa o tipo" />
+          <SearchBar value={query} onChangeText={setQuery} placeholder="Buscar por nº de mancato, placa o chofer" />
         </View>
 
         {loading ? (
@@ -593,7 +627,7 @@ export default function PeajesScreen() {
       <FormModal
         visible={formVisible}
         onClose={() => setFormVisible(false)}
-        title={editing ? 'Editar registro' : 'Nuevo peaje / multa'}
+        title={editing ? 'Editar peaje' : 'Nuevo peaje'}
         footer={<Button title={editing ? 'Guardar cambios' : 'Registrar'} loading={saving} onPress={save} />}
       >
         {vehiculos.length > 0 && (
@@ -606,12 +640,29 @@ export default function PeajesScreen() {
           />
         )}
 
+        {vehiculos.length === 0 && (
+          // Sin lista de vehículos (raro): se escribe la targa a mano.
+          <FormField
+            label="Placa *"
+            value={form.targa}
+            onChangeText={(t) => setForm({ ...form, targa: t })}
+            placeholder="ABC-123"
+            autoCapitalize="characters"
+          />
+        )}
         <FormField
-          label="Placa *"
-          value={form.targa}
-          onChangeText={(t) => setForm({ ...form, targa: t })}
-          placeholder="ABC-123"
+          label="Nº de mancato"
+          value={form.numero_mancato}
+          onChangeText={(t) => setForm({ ...form, numero_mancato: t })}
+          placeholder="Número del ticket / mancato"
           autoCapitalize="characters"
+        />
+        <FormField
+          label="Link de pago (web)"
+          value={form.link_peaje}
+          onChangeText={(t) => setForm({ ...form, link_peaje: t })}
+          placeholder="https://…"
+          autoCapitalize="none"
         />
 
         {canEditAll && (
@@ -625,14 +676,6 @@ export default function PeajesScreen() {
           />
         )}
 
-        <Select
-          label="Tipo"
-          value={form.tipo}
-          onChange={(v) => setForm({ ...form, tipo: v })}
-          options={TIPOS.map((t) => ({ value: t, label: t }))}
-          placeholder="Peaje / Multa"
-          searchable={false}
-        />
         <FormField
           label="Monto"
           value={form.monto}
