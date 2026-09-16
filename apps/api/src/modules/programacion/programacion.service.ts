@@ -22,8 +22,14 @@ export class ProgramacionService {
     // con el estimado de la ruta, para que sume a su mes (regla 2026-09-16). Best-effort:
     // nunca rompe el guardado de la operación.
     private async asegurarRecorridoSiEntregada(op: any) {
-        if (!op || !this.esEntregada(op)) return;
-        try { await this.recorridos.asegurarRecorridoDeEntrega(op.tenant_id, op); } catch (e) { console.warn('[Programacion] recorrido automático falló:', (e as any)?.message); }
+        if (!op) return;
+        try {
+            const entregada = this.esEntregada(op);
+            // Primero coherencia con lo que ya existe (borrar si dejó de estar entregada,
+            // mover de chofer si se reasignó) y luego crear si hace falta.
+            await this.recorridos.sincronizarRecorridoAuto(op.tenant_id, op, entregada);
+            if (entregada) await this.recorridos.asegurarRecorridoDeEntrega(op.tenant_id, op);
+        } catch (e) { console.warn('[Programacion] recorrido automático falló:', (e as any)?.message); }
     }
 
     // Only the columns the operaciones list/map actually render — keeps the
@@ -519,10 +525,13 @@ export class ProgramacionService {
         ]);
         const tar = tarPrecalculada ?? tarifasFromTenant(tenant);
 
-        const { horasDia, horasNoche } = recorrido
+        const { horasDia, horasNoche, diaMin, nocheMin } = recorrido
             ? horasDeRecorrido(recorrido, tar.corte)
-            : { horasDia: 0, horasNoche: 0 };
-        const pagoHoras = Math.round((horasDia * tar.giorno + horasNoche * tar.notte) * 100) / 100;
+            : { horasDia: 0, horasNoche: 0, diaMin: 0, nocheMin: 0 };
+        // El pago sale de los MINUTOS exactos (no de las horas ya redondeadas a 2
+        // decimales), igual que el resumen del mes: así Finanzas y Mi Resumen no
+        // difieren en centavos al sumar muchas operaciones.
+        const pagoHoras = Math.round(((diaMin / 60) * tar.giorno + (nocheMin / 60) * tar.notte) * 100) / 100;
 
         const reperibilita = !!op.reperibilita;
         const pagoReperibilita = reperibilita ? tar.reperibilita : 0;
@@ -830,6 +839,9 @@ export class ProgramacionService {
     }
 
     async remove(id: string, tenantId: string) {
+        // El recorrido automático existe solo por la operación: se va con ella (los
+        // reales de Mi Ruta quedan como historial del chofer).
+        await this.recorridos.borrarRecorridosAuto(tenantId, id);
         // Scoped by tenant: only delete records belonging to the caller's tenant
         return this.prisma.programacion.deleteMany({
             where: { id, tenant_id: tenantId },

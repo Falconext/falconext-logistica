@@ -598,25 +598,75 @@ export class RecorridosService {
         if (!trab) return { creado: false, motivo: 'chofer no encontrado' };
         const est = await this.estimarRuta(prog);
         if (!est) return { creado: false, motivo: 'sin estimado de ruta (direcciones)' };
+        // Si un supervisor ya había escrito km/tiempo a mano en la operación, ese número
+        // manda (queda 'manual'): la operación y el mes del chofer muestran lo mismo.
+        const kmManual = Number(prog.km) > 0 ? Math.round(Number(prog.km) * 10) / 10 : null;
+        const minManual = Number(prog.tiempo_min) > 0 ? Math.round(Number(prog.tiempo_min)) : null;
+        const totalKm = kmManual ?? est.km;
+        const totalMin = minManual ?? est.min;
         const iniciado = this.inicioDesdeProgramacion(prog);
-        const finalizado = new Date(iniciado.getTime() + est.min * 60000);
+        const finalizado = new Date(iniciado.getTime() + totalMin * 60000);
         if (aplicar) {
-            await this.prisma.recorrido.create({
-                data: {
-                    tenant_id: tenantId, trabajador_id: trab.id, programacion_id: prog.id, auto: true,
-                    origen_label: prog.lugar_retiro ?? null, destino_label: prog.lugar_entrega ?? null,
-                    estado: 'COMPLETADO', iniciado_en: iniciado, llegada_en: finalizado, finalizado_en: finalizado,
-                    esperado_km: est.km, esperado_min: est.min,
-                    total_km: est.km, total_min: est.min, manejo_min: est.min, km_fuente: 'ruta',
-                },
+            // Contra guardados simultáneos (doble clic / dos supervisores): se bloquea la
+            // fila de la operación y se re-verifica dentro de la transacción, así solo el
+            // primero crea el automático. El estimado (Google) ya se calculó fuera.
+            const creado = await this.prisma.$transaction(async (tx) => {
+                await tx.$queryRaw`SELECT id FROM programacion WHERE id = ${prog.id} FOR UPDATE`;
+                const ya = await tx.recorrido.findFirst({
+                    where: { tenant_id: tenantId, programacion_id: prog.id, estado: { not: 'CANCELADO' } },
+                    select: { id: true },
+                });
+                if (ya) return false;
+                await tx.recorrido.create({
+                    data: {
+                        tenant_id: tenantId, trabajador_id: trab.id, programacion_id: prog.id, auto: true,
+                        origen_label: prog.lugar_retiro ?? null, destino_label: prog.lugar_entrega ?? null,
+                        estado: 'COMPLETADO', iniciado_en: iniciado, llegada_en: finalizado, finalizado_en: finalizado,
+                        esperado_km: est.km, esperado_min: est.min,
+                        total_km: totalKm, total_min: totalMin, manejo_min: totalMin,
+                        km_fuente: kmManual != null || minManual != null ? 'manual' : 'ruta',
+                    },
+                });
+                return true;
             });
-            // Km/tiempo de la operación solo si no los tenía (un km escrito a mano se respeta).
+            if (!creado) return { creado: false, motivo: 'ya tiene recorrido' };
             const dataProg: any = {};
-            if (!(Number(prog.km) > 0)) dataProg.km = est.km;
-            if (!(Number(prog.tiempo_min) > 0)) dataProg.tiempo_min = est.min;
+            if (kmManual == null) dataProg.km = est.km;
+            if (minManual == null) dataProg.tiempo_min = est.min;
             if (Object.keys(dataProg).length) await this.prisma.programacion.updateMany({ where: { id: prog.id, tenant_id: tenantId }, data: dataProg });
         }
-        return { creado: true, trabajador_id: trab.id, km: est.km, min: est.min };
+        return { creado: true, trabajador_id: trab.id, km: totalKm, min: totalMin };
+    }
+
+    /**
+     * Mantiene coherente el recorrido AUTOMÁTICO con su operación después de editarla:
+     * si la operación dejó de estar entregada, el automático se borra (existía solo
+     * por la entrega); si cambió el chofer, el automático pasa al nuevo chofer.
+     * Los recorridos reales (Mi Ruta) no se tocan.
+     */
+    async sincronizarRecorridoAuto(tenantId: string, prog: { id: string; trabajador_id?: string | null }, entregada: boolean) {
+        const autos = await this.prisma.recorrido.findMany({
+            where: { tenant_id: tenantId, programacion_id: prog.id, auto: true },
+            select: { id: true, trabajador_id: true },
+        });
+        if (!autos.length) return;
+        if (!entregada) {
+            await this.prisma.recorrido.deleteMany({ where: { id: { in: autos.map((a) => a.id) } } });
+            return;
+        }
+        if (!prog.trabajador_id) return;
+        const trab = await this.prisma.trabajador.findFirst({
+            where: { tenant_id: tenantId, OR: [{ id: prog.trabajador_id }, { id_trabajador: prog.trabajador_id }] },
+            select: { id: true },
+        });
+        if (!trab) return;
+        const cambiar = autos.filter((a) => a.trabajador_id !== trab.id).map((a) => a.id);
+        if (cambiar.length) await this.prisma.recorrido.updateMany({ where: { id: { in: cambiar } }, data: { trabajador_id: trab.id } });
+    }
+
+    /** Al borrar una operación se borran sus recorridos automáticos (los reales quedan como historial). */
+    async borrarRecorridosAuto(tenantId: string, programacionId: string) {
+        await this.prisma.recorrido.deleteMany({ where: { tenant_id: tenantId, programacion_id: programacionId, auto: true } });
     }
 
     /**

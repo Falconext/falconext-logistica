@@ -160,7 +160,9 @@ export class RegistrosService {
 
         const oreDia = Math.round((diaMin / 60) * 100) / 100;
         const oreNoche = Math.round((nocheMin / 60) * 100) / 100;
-        const pagoHoras = Math.round((oreDia * tar.giorno + oreNoche * tar.notte) * 100) / 100;
+        // Pago desde los MINUTOS exactos (no desde las horas ya redondeadas): mismo
+        // criterio que costoChofer() en Finanzas, para que ambas pantallas cuadren.
+        const pagoHoras = Math.round(((diaMin / 60) * tar.giorno + (nocheMin / 60) * tar.notte) * 100) / 100;
         const pagoReperibilita = Math.round(reperibilita * tar.reperibilita * 100) / 100; // fijo por cada reperibilità
         const attesaHoras = Math.round(num(attesaAgg._sum.attesa_horas) * 100) / 100;
         const pagoAttesa = Math.round(attesaHoras * tar.attesaHora * 100) / 100; // €/h autorizada
