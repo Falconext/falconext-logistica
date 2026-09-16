@@ -1,9 +1,8 @@
 #!/bin/bash
-# QA funcional de la regla km/horas = ruta planeada (2026-09-16). Requiere API local
-# levantada con CRON_SECRET=testsecret y un usuario admin vinculado al trabajador G004
-# (users.trabajador_id) cuyo JWT va en $TOKEN. Crea/borra operaciones "QA *" en la
-# BD LOCAL. Ver memoria km-chofer-ruta-planeada.
-API=http://localhost:3005/api; T=${TOKEN:?export TOKEN=<jwt admin vinculado a G004>}; H1="Authorization: Bearer $T"; H2="Content-Type: application/json"
+# QA funcional (básica) de la regla km/horas = ruta planeada (2026-09-16). Requiere API
+# local con CRON_SECRET=testsecret, token.txt = JWT de un admin vinculado al trabajador
+# G004 (users.trabajador_id). Crea/borra operaciones "QA *" en la BD LOCAL.
+API=http://localhost:3005/api; T=$(cat token.txt); H1="Authorization: Bearer $T"; H2="Content-Type: application/json"
 export PGPASSWORD=$(grep '^DATABASE_URL' /Users/tradercode/logistica/apps/api/.env | sed -E 's/.*:\/\/[^:]+:([^@]+)@.*/\1/')
 SQL() { psql -h localhost -p 5439 -U logistica -d logistica -X -A -t -F'|' -c "$1"; }
 J() { python3 -c "import json,sys; d=json.load(sys.stdin); print($1)"; }
@@ -58,7 +57,7 @@ MR=$(curl -s "$API/registros/mias/resumen?from=2026-09-01&to=2026-09-30T23:59:59
 MD=$(curl -s "$API/registros/mias/mes-detalle?anio=2026&mes=9" -H "$H1")
 SUMA=$(echo "$MD" | J "float(round(sum(i['km'] for i in d['items']),1))"); TOT=$(echo "$MR" | J "float(d['km'])")
 check "E1 Mi Resumen km = suma del detalle del mes" "$TOT" "$SUMA"
-check "E2 km del mes = A + B + C(150)" "$TOT" "$(SQL "select round(sum(total_km)::numeric,1)::float from recorridos where trabajador_id='fcf3f940-fd30-4b31-80af-4dd92d41d588' and estado='COMPLETADO'")"
+check "E2 km del mes = A + B + C(150)" "$TOT" "$(python3 -c "print(float($(SQL "select round(sum(total_km)::numeric,1) from recorridos where trabajador_id='fcf3f940-fd30-4b31-80af-4dd92d41d588' and estado='COMPLETADO'")))")"
 HD=$(echo "$MD" | J "round(sum(i['oreDia']+i['oreNoche'] for i in d['items']),2)"); check "E3 horas detalle = resumen (±0.02)" "$(python3 -c "print(abs($HD-$(echo "$MR" | J "d['oreTotal']"))<=0.02)")" "True"
 echo "     Mi Resumen: km=$TOT oreDia=$(echo "$MR" | J "d['oreDia']") oreNoche=$(echo "$MR" | J "d['oreNoche']") ganancia=$(echo "$MR" | J "d['gananciaTotal']")"
 HM=$(curl -s "$API/registros/mias/historial-mensual?meses=2" -H "$H1"); check "E4 historial mensual sep = resumen" "$(echo "$HM" | J "[float(m['km']) for m in (d if isinstance(d,list) else d.get('meses',d.get('items',[]))) if m.get('mes')==9][0]")" "$TOT"

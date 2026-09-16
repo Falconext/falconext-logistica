@@ -126,19 +126,24 @@ export class RegistrosService {
         tenantId: string, trabajadorId: string, desde: Date, hasta: Date,
         tar: { giorno: number; notte: number; corte: number; reperibilita: number; attesaHora: number },
     ) {
+        // Programacion.trabajador_id guarda el CÓDIGO (G004) o el UUID según quién la
+        // creó: reperibilità y attesa se buscan por ambos (antes solo por UUID y las
+        // consegnas asignadas por código no sumaban al resumen del chofer).
+        const trab = await this.prisma.trabajador.findFirst({ where: { id: trabajadorId, tenant_id: tenantId }, select: { id_trabajador: true } });
+        const codigos = [trabajadorId, trab?.id_trabajador].filter(Boolean) as string[];
         const [recorridos, reperibilita, attesaAgg] = await Promise.all([
             this.prisma.recorrido.findMany({
                 where: { tenant_id: tenantId, trabajador_id: trabajadorId, finalizado_en: { gte: desde, lte: hasta } },
                 select: RECORRIDO_METRICAS_SELECT,
             }),
             this.prisma.programacion.count({
-                where: { tenant_id: tenantId, trabajador_id: trabajadorId, reperibilita: true, fecha: { gte: desde, lte: hasta } },
+                where: { tenant_id: tenantId, trabajador_id: { in: codigos }, reperibilita: true, fecha: { gte: desde, lte: hasta } },
             }),
             // Solo la attesa AUTORIZADA y de 1 HORA A MÁS se paga. Menos de
             // 1 hora no cuenta ni suma (regla del empresario).
             this.prisma.programacion.aggregate({
                 _sum: { attesa_horas: true },
-                where: { tenant_id: tenantId, trabajador_id: trabajadorId, attesa_estado: 'AUTORIZADO', attesa_horas: { gte: 1 }, fecha: { gte: desde, lte: hasta } },
+                where: { tenant_id: tenantId, trabajador_id: { in: codigos }, attesa_estado: 'AUTORIZADO', attesa_horas: { gte: 1 }, fecha: { gte: desde, lte: hasta } },
             }),
         ]);
 

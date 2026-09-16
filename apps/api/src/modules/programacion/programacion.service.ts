@@ -238,7 +238,7 @@ export class ProgramacionService {
     // tramo contra lo que reporta el cliente. null si el chofer nunca usó "Mi Ruta".
     private async paradasDeRuta(op: { id: string; tenant_id: string }) {
         const recorrido = await this.prisma.recorrido.findFirst({
-            where: { tenant_id: op.tenant_id, programacion_id: op.id },
+            where: { tenant_id: op.tenant_id, programacion_id: op.id, estado: { not: 'CANCELADO' } },
             orderBy: { iniciado_en: 'desc' },
             select: {
                 paradas: {
@@ -508,8 +508,11 @@ export class ProgramacionService {
     ) {
         const [tenant, recorrido] = await Promise.all([
             tarPrecalculada ? Promise.resolve(null) : this.prisma.tenant.findUnique({ where: { id: op.tenant_id }, select: TARIFAS_TENANT_SELECT }),
+            // El recorrido vigente de la operación: se ignoran los CANCELADOS (si el
+            // chofer canceló y luego el supervisor marcó entregada, el que cuenta es el
+            // automático), igual que hace el resumen del mes.
             this.prisma.recorrido.findFirst({
-                where: { tenant_id: op.tenant_id, programacion_id: op.id },
+                where: { tenant_id: op.tenant_id, programacion_id: op.id, estado: { not: 'CANCELADO' } },
                 orderBy: { iniciado_en: 'desc' },
                 select: RECORRIDO_METRICAS_SELECT,
             }),
