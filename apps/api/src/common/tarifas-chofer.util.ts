@@ -111,7 +111,10 @@ export function horasDeRecorrido(
     corte: number,
 ): { diaMin: number; nocheMin: number; horasDia: number; horasNoche: number } {
     let diaMin = 0, nocheMin = 0;
-    if (r.km_fuente === 'ruta' && r.iniciado_en && r.total_min != null) {
+    // 'manual' (corregido por un supervisor) conserva la misma ventana desde "Iniciar":
+    // la corrección cambia el número, no la forma de contar las horas.
+    // Sin tiempo de ruta (estimado sin duración) se cae al transcurrido real de abajo.
+    if ((r.km_fuente === 'ruta' || r.km_fuente === 'manual') && r.iniciado_en && num(r.total_min) > 0) {
         const fin = new Date(r.iniciado_en.getTime() + Math.max(0, num(r.total_min)) * 60000);
         const s = minutosDiaNoche(r.iniciado_en, fin, corte);
         diaMin = s.dia; nocheMin = s.noche;

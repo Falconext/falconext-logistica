@@ -527,8 +527,11 @@ export class RecorridosService {
         const { distanceKm: gpsKm, movingMin } = !conRuta && r.device_id
             ? await this.gps.getTripKmForPay(r.device_id, r.iniciado_en, now)
             : { distanceKm: 0, movingMin: 0 };
+        // Tiempo: el de la ruta; si el estimado vino sin duración, el transcurrido real
+        // (ida + vuelta) para no dejar las horas en cero.
+        const realMin = (Number(data.ida_min ?? r.ida_min) || 0) + (Number(data.vuelta_min ?? r.vuelta_min) || 0);
         const finalKm = Math.round((conRuta ? estKm : gpsKm) * 10) / 10;
-        const finalMin = Math.round(conRuta && estMin > 0 ? estMin : movingMin);
+        const finalMin = Math.round(conRuta ? (estMin > 0 ? estMin : realMin) : movingMin);
         data.total_km = finalKm;
         data.total_min = finalMin;
         data.manejo_min = finalMin;
@@ -686,7 +689,9 @@ export class RecorridosService {
                 continue;
             }
             const kmDespues = Math.round(estKm * 10) / 10;
-            const minDespues = Math.round(estMin > 0 ? estMin : minAntes);
+            // Sin duración estimada: se conserva el tiempo que ya tenía (o el transcurrido).
+            const realMin = (Number(r.ida_min) || 0) + (Number(r.vuelta_min) || 0);
+            const minDespues = Math.round(estMin > 0 ? estMin : (minAntes > 0 ? minAntes : realMin));
             filas.push({ recorrido_id: r.id, programacion_id: r.programacion_id, cliente: prog?.cliente ?? null, fecha: r.finalizado_en, km_antes: kmAntes, km_despues: kmDespues, min_antes: minAntes, min_despues: minDespues, fuente_antes: r.km_fuente, accion: recalculado ? 'ruta (estimado recalculado)' : 'ruta' });
             acc(r.trabajador_id, kmAntes, kmDespues);
             if (aplicar) {
