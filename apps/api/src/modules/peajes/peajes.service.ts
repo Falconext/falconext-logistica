@@ -37,6 +37,7 @@ export class PeajesService {
                 trabajador_id: data.trabajador_id || null,
                 comentarios: data.comentarios || null,
                 archivo: data.archivo || null,
+                comprobantes: Array.isArray(data.comprobantes) ? data.comprobantes.filter(Boolean) : [],
                 recibo_pago: data.recibo_pago || null,
                 tipo: data.tipo || null,
                 mes: data.mes || null,
@@ -257,7 +258,7 @@ export class PeajesService {
         // poder fusionarlos y paginar el conjunto combinado en memoria.
         const nativeSelect = {
             id: true, targa: true, estado: true, comentarios: true, fecha: true, hora: true, tipo: true, monto: true,
-            archivo: true, id_multa: true, recibo_pago: true, fecha_recepcion: true, fecha_limite_pago: true,
+            archivo: true, comprobantes: true, id_multa: true, recibo_pago: true, fecha_recepcion: true, fecha_limite_pago: true,
             trabajador_id: true,
             // Cuándo se subió el peaje al sistema (el admin da 48 h para subirlos).
             creado_en: true,
@@ -304,7 +305,7 @@ export class PeajesService {
             recibo_pago: null,
         }));
 
-        const merged = [...nativeItems.map((i) => ({ ...i, _origen: 'peaje', comprobantes: i.archivo ? [i.archivo] : [] })), ...gastoRows]
+        const merged = [...nativeItems.map((i) => ({ ...i, _origen: 'peaje', comprobantes: i.comprobantes?.length ? i.comprobantes : (i.archivo ? [i.archivo] : []) })), ...gastoRows]
             .sort((a, b) => new Date(b.fecha || 0).getTime() - new Date(a.fecha || 0).getTime());
         const total = merged.length;
         const items = merged.slice(skip, skip + take);
@@ -360,6 +361,7 @@ export class PeajesService {
                 data: {
                     estado: data.estado,
                     fecha_limite_pago: data.fecha_limite_pago ? new Date(data.fecha_limite_pago) : undefined,
+                    comprobantes: Array.isArray(data.comprobantes) ? data.comprobantes.filter(Boolean) : undefined,
                 },
             });
         }
@@ -387,6 +389,7 @@ export class PeajesService {
                 trabajador_id: data.trabajador_id,
                 comentarios: data.comentarios,
                 archivo: data.archivo,
+                comprobantes: Array.isArray(data.comprobantes) ? data.comprobantes.filter(Boolean) : undefined,
                 recibo_pago: data.recibo_pago,
                 tipo: data.tipo,
                 mes: data.mes,

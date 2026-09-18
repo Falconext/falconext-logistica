@@ -29,6 +29,7 @@ import type { Vehiculo, Trabajador } from '../../types';
 
 const C = Theme.colors;
 const S = Theme.spacing;
+const F = Theme.font;
 
 // El backend expone /peajes (multas/peajes de la flota). La lista responde
 // con la forma paginada { items, total, counts }.
@@ -130,6 +131,9 @@ type FormState = {
   // numero_mancato/link_peaje — se mandan ambos y el backend usa el que corresponde.
   numero_mancato: string;
   link_peaje: string;
+  // Foto(s) del ticket/mancato en el mismo formulario (audio empresario 2026-09-17:
+  // "no veo para subir la foto ahí mismo"; antes solo se podía desde el detalle).
+  comprobantes: string[];
   fecha: string;
   fecha_limite_pago: string;
   trabajador_id: string;
@@ -155,6 +159,7 @@ const emptyForm: FormState = {
   tipo: 'PEAJE',
   numero_mancato: '',
   link_peaje: '',
+  comprobantes: [],
   fecha: todayISO(),
   fecha_limite_pago: sumarDias(todayISO(), PLAZO_PAGO_DIAS),
   trabajador_id: '',
@@ -372,6 +377,9 @@ export default function PeajesScreen() {
       tipo: p.tipo || 'PEAJE',
       numero_mancato: p.numero_mancato || p.id_multa || '',
       link_peaje: p.link_peaje || p.archivo || '',
+      // Un peaje suelto viejo puede traer el link como "comprobante" (fallback del
+      // backend): no lo mostramos como foto.
+      comprobantes: (p.comprobantes || []).filter((u) => u !== p.archivo),
       fecha: p.fecha ? String(p.fecha).split('T')[0] : todayISO(),
       fecha_limite_pago: p.fecha_limite_pago ? String(p.fecha_limite_pago).split('T')[0] : '',
       trabajador_id: hideConductor ? resolvedMyWorkerId : (p.trabajador_id || ''),
@@ -405,6 +413,7 @@ export default function PeajesScreen() {
         numero_mancato: nro || undefined,
         archivo: link || undefined,
         link_peaje: link || undefined,
+        comprobantes: form.comprobantes,
         fecha: form.fecha || undefined,
         fecha_limite_pago: form.fecha_limite_pago || undefined,
         trabajador_id: form.trabajador_id || undefined,
@@ -619,6 +628,14 @@ export default function PeajesScreen() {
                 <InfoRow label="Comprobantes" value={`${(detail.comprobantes || []).length}`} />
               )
             )}
+            {detail._origen !== 'operacion' && (detail.comprobantes || []).some((u) => u !== detail.archivo) && (
+              // Peaje suelto: fotos subidas en el formulario (solo lectura aquí; se
+              // cambian con Editar). Se omite el `archivo` cuando es el link de pago.
+              <View style={{ marginTop: S.md }}>
+                <Text style={styles.detailDescLabel}>Foto del ticket / mancato</Text>
+                <MultiFileUpload value={(detail.comprobantes || []).filter((u) => u !== detail.archivo)} onChange={() => {}} disabled />
+              </View>
+            )}
           </View>
         )}
       </FormModal>
@@ -664,6 +681,14 @@ export default function PeajesScreen() {
           placeholder="https://…"
           autoCapitalize="none"
         />
+        <View style={{ marginBottom: S.md }}>
+          <Text style={styles.formLabel}>Foto del ticket / mancato</Text>
+          <MultiFileUpload
+            value={form.comprobantes}
+            onChange={(urls) => setForm({ ...form, comprobantes: urls })}
+            label="Agregar foto / comprobante"
+          />
+        </View>
 
         {canEditAll && (
           <Select
@@ -776,6 +801,8 @@ const makeStyles = () => StyleSheet.create({
   cost: { fontSize: 15, fontWeight: '700', color: C.text },
   detailDesc: { marginTop: S.md },
   detailDescLabel: { fontSize: 13, color: C.textMuted, marginBottom: 4 },
+  // Mismo label que FormField (ui/index.tsx) para la subida de fotos del formulario.
+  formLabel: { fontSize: F.size.sm, fontWeight: F.weight.medium, color: C.textMuted, marginBottom: 6 },
   detailDescText: { fontSize: 15, color: C.text, lineHeight: 21 },
   selectLabel: { fontSize: 13, fontWeight: '500', color: C.textMuted, marginBottom: 6 },
   selectWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: S.sm, marginBottom: S.md },

@@ -533,6 +533,10 @@ model Peaje {
   trabajador_id     String? // 'ID_ TRABAJADOR'
   comentarios       String? // 'COMENTARIOS'
   archivo           String? // 'ARCHIVO' (PDF link)
+  // Foto(s) del ticket/mancato (S3). El empresario pidió subirla en el mismo
+  // formulario de registro, no después; los peajes de operación ya lo tenían
+  // (GastoOperacion.comprobantes) y los sueltos solo un `archivo` de texto.
+  comprobantes      String[]  @default([])
   recibo_pago       String? // 'RECIBO DE PAGO'
   tipo              String? // 'TIPO'
   mes               String? // 'MES'

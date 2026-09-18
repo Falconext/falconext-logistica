@@ -15,7 +15,7 @@ const sumarDias = (ymd: string, dias: number): string => {
 import { createPortal } from 'react-dom';
 import { X, Save, Loader2 } from 'lucide-react';
 import api from '../../lib/api';
-import FileUpload from '../../components/FileUpload';
+import MultiFileUpload from '../../components/MultiFileUpload';
 import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
 import OperacionPicker from './OperacionPicker';
@@ -45,6 +45,8 @@ const emptyForm = () => ({
     comentarios: '',
     nota_autista: '',
     archivo: '',
+    // Foto(s) del ticket/mancato en el mismo formulario (antes: un solo "Archivo").
+    comprobantes: [] as string[],
 });
 
 export default function PeajeModal({ isOpen, onClose, onSuccess, record }: PeajeModalProps) {
@@ -98,6 +100,9 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
                 comentarios: record.comentarios || '',
                 nota_autista: record.nota_autista || '',
                 archivo: record.archivo || '',
+                // El listado ya trae `comprobantes` (peaje suelto o gasto de operación);
+                // un peaje viejo puede traer su `archivo` como fallback: se conserva como foto.
+                comprobantes: Array.isArray(record.comprobantes) ? record.comprobantes : (record.archivo ? [record.archivo] : []),
             });
         } else {
             setFormData(emptyForm());
@@ -286,14 +291,11 @@ export default function PeajeModal({ isOpen, onClose, onSuccess, record }: Peaje
                         </div>
 
                         <div className="col-span-1 sm:col-span-2 space-y-2">
-                            <label className="text-sm font-medium text-slate-700">Archivo (PDF / Imagen)</label>
-                            <FileUpload
-                                variant="wide"
-                                accept="image/*,application/pdf"
-                                label="Subir foto o PDF"
-                                value={formData.archivo}
-                                onChange={(url) => setFormData((f) => ({ ...f, archivo: url }))}
-                                onClear={() => setFormData((f) => ({ ...f, archivo: '' }))}
+                            <label className="text-sm font-medium text-slate-700">Foto del ticket / mancato (imagen o PDF)</label>
+                            <MultiFileUpload
+                                value={formData.comprobantes}
+                                onChange={(urls) => setFormData((f) => ({ ...f, comprobantes: urls }))}
+                                label="Agregar foto / comprobante"
                             />
                         </div>
                     </div>
