@@ -34,6 +34,15 @@ export const SPEDIZIONE_OPTIONS: { value: string; label: string }[] = [
     { value: 'EXTRAS STEFFANIA', label: 'Extras Steffania' },
 ];
 
+// Spedizioni "extras": las únicas que traen un CÓDIGO de entrega propio del cliente
+// (el supervisor identifica cada extra por ese código). En DHL / AB Service el campo
+// no se muestra y se guarda vacío. Debe coincidir con SPEDIZIONI_CON_CODIGO del
+// backend (apps/api/src/common/spedizioni.util.ts).
+export const SPEDIZIONI_CON_CODIGO = ['EXTRAS PIAZZA MILANO', 'EXTRAS PIAZZA ROMA', 'EXTRAS STEFFANIA'];
+
+export const spedizioneUsaCodigo = (spedizione?: string | null) =>
+    SPEDIZIONI_CON_CODIGO.includes(String(spedizione || '').trim().toUpperCase());
+
 // Estados de consegna (italiano). El value es el código canónico persistido.
 export const ESTADO_CONSEGNA_OPTIONS: { value: string; label: string }[] = [
     { value: 'RICHIESTA', label: 'Richiesta' },

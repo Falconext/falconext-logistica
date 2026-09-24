@@ -8,6 +8,16 @@ import { RecorridosService } from '../recorridos/recorridos.service';
 import { fechaLimitePago } from '../../common/plazo-pago.util';
 import { num, horasDeRecorrido, tarifasFromTenant, TARIFAS_TENANT_SELECT, TarifasChofer, RECORRIDO_METRICAS_SELECT } from '../../common/tarifas-chofer.util';
 import { ingresoSugerido, tarifasIngresoFromTenant, TARIFAS_INGRESO_TENANT_SELECT } from '../../common/ingreso-vehiculo.util';
+import { normalizarCodigo, spedizioneUsaCodigo } from '../../common/spedizioni.util';
+
+// Valores aceptados en la columna Spedizione del Excel de importación. Debe coincidir
+// con SPEDIZIONE_OPTIONS de apps/web/app/operaciones/constants.ts.
+const SPEDIZIONI_VALIDAS = [
+    'EXTRAS PIAZZA MILANO', 'EXTRAS PIAZZA ROMA', 'DHL MILANO', 'DHL ROMA', 'AB SERVICE', 'EXTRAS STEFFANIA',
+];
+
+// Estados aceptados en la columna Estado del Excel (los mismos que usa la web).
+const ESTADOS_VALIDOS = ['PENDIENTE', 'RETIRADO', 'ENTREGADO', 'ANULADO', 'REPROGRAMADO'];
 
 @Injectable()
 export class ProgramacionService {
@@ -42,6 +52,7 @@ export class ProgramacionService {
         trabajador_id: true,
         cliente: true,
         spedizione: true,
+        codigo: true,
         reperibilita: true,
         lugar_retiro: true,
         retiros: true,
@@ -163,6 +174,9 @@ export class ProgramacionService {
                 { vehiculo_id: { contains: q } },
                 { lugar_entrega: { contains: q } },
                 { id_programacion: { contains: q } },
+                // Código de entrega de los extras: el supervisor busca por él
+                // (se guarda en mayúsculas, por eso el contains no distingue caso).
+                { codigo: { contains: q, mode: 'insensitive' } },
             ];
         }
 
@@ -714,6 +728,53 @@ export class ProgramacionService {
         return data;
     }
 
+    /**
+     * Código de entrega (solo spedizioni EXTRAS). Normaliza lo que llega del
+     * formulario/importador y valida que no se repita dentro del tenant, que es lo
+     * que pidió el supervisor: no poder cargar dos veces la misma entrega.
+     *
+     * Muta `data` (pone el código normalizado, o null cuando la spedizione no lleva
+     * código) para que el create/update escriba siempre el valor canónico. Si el
+     * PATCH no toca ni `codigo` ni `spedizione`, no hace nada: una edición parcial
+     * desde la app no debe borrar el código ya guardado.
+     */
+    private async aplicarCodigo(
+        data: any,
+        tenantId: string,
+        opts: { excluirId?: string; spedizionePrevia?: string | null } = {},
+    ) {
+        if (data.codigo === undefined && data.spedizione === undefined) return;
+
+        const spedizione = data.spedizione !== undefined ? data.spedizione : opts.spedizionePrevia;
+        // Cambiar a una spedizione sin código (DHL / AB Service) limpia el que hubiera:
+        // si no, quedaría un código invisible en el formulario ocupando el índice único.
+        if (!spedizioneUsaCodigo(spedizione)) { data.codigo = null; return; }
+
+        // Sigue siendo una spedizione con código y el cliente no mandó `codigo` (la app
+        // móvil, por ejemplo, no conoce el campo): se deja el que ya está guardado.
+        if (data.codigo === undefined) return;
+
+        const codigo = normalizarCodigo(data.codigo);
+        data.codigo = codigo;
+        if (!codigo) return;
+
+        const repetida = await this.prisma.programacion.findFirst({
+            where: { tenant_id: tenantId, codigo, ...(opts.excluirId ? { id: { not: opts.excluirId } } : {}) },
+            select: { id: true, fecha: true, cliente: true },
+        });
+        if (repetida) throw new BadRequestException(this.mensajeCodigoRepetido(codigo, repetida));
+    }
+
+    private mensajeCodigoRepetido(codigo: string, otra?: { fecha?: Date | null; cliente?: string | null } | null) {
+        const detalle = [
+            // En Europe/Rome, como el resto de fechas que ve el usuario: la fecha se
+            // guarda a medianoche UTC y en la zona del servidor (Lima) saldría un día antes.
+            otra?.fecha ? new Date(otra.fecha).toLocaleDateString('es-ES', { timeZone: 'Europe/Rome' }) : null,
+            otra?.cliente || null,
+        ].filter(Boolean).join(' · ');
+        return `Ya existe una entrega con el código ${codigo}${detalle ? ` (${detalle})` : ''}.`;
+    }
+
     async create(data: any, tenantId?: string) {
         this.syncEstadosEntrega(data);
         this.aplicarDestinosFacturacion(data);
@@ -724,6 +785,7 @@ export class ProgramacionService {
         const resolvedTenant = tenantId
             || data.tenant_id
             || (await this.prisma.tenant.findFirst())?.id;
+        await this.aplicarCodigo(rest, resolvedTenant);
 
         const created = await this.prisma.programacion.create({
             data: {
@@ -788,9 +850,13 @@ export class ProgramacionService {
         // Lo mismo con las direcciones: si cambian, el recorrido se re-estima (ruta).
         const DIRS = ['lugar_retiro', 'lugar_entrega', 'retiros', 'destinos'] as const;
         const tocaDirs = DIRS.some((k) => rest[k] !== undefined);
-        const previo = rest.trabajador_id !== undefined || tocaDirs
-            ? await this.prisma.programacion.findUnique({ where: { id }, select: { trabajador_id: true, lugar_retiro: true, lugar_entrega: true, retiros: true, destinos: true } })
+        const tocaCodigo = rest.codigo !== undefined || rest.spedizione !== undefined;
+        const previo = rest.trabajador_id !== undefined || tocaDirs || tocaCodigo
+            ? await this.prisma.programacion.findUnique({ where: { id }, select: { tenant_id: true, trabajador_id: true, spedizione: true, lugar_retiro: true, lugar_entrega: true, retiros: true, destinos: true } })
             : null;
+        // El código de entrega es único por tenant: se valida contra las demás
+        // operaciones (excluyendo esta) antes de escribir.
+        if (tocaCodigo && previo) await this.aplicarCodigo(rest, previo.tenant_id, { excluirId: id, spedizionePrevia: previo.spedizione });
         const updated = await this.prisma.programacion.update({
             where: { id },
             data: rest,
@@ -846,6 +912,219 @@ export class ProgramacionService {
         if (body.horas !== undefined) data.attesa_horas = Number(body.horas) || 0;
         await this.prisma.programacion.update({ where: { id }, data });
         return this.findOne(id);
+    }
+
+    // ── Importación masiva desde Excel/CSV ───────────────────────────────
+    // La web parsea el archivo, mapea las cabeceras a estas claves y manda las filas
+    // ya canónicas; aquí se validan, se resuelven chofer/vehículo y se descartan las
+    // que YA están cargadas. `simular: true` hace la pasada completa sin escribir
+    // nada, para mostrarle al usuario qué va a entrar antes de confirmar.
+    //
+    // Cómo se reconoce una entrega ya subida (lo que pidió el supervisor):
+    //  - con código  → mismo código dentro del tenant (extras). Es el caso exacto.
+    //  - sin código  → misma fecha (día), mismo cliente y mismo destino: DHL/AB Service
+    //                  no traen identificador propio, así que esto es lo más cercano.
+    // En ambos casos la fila se marca DUPLICADA y NO se vuelve a crear.
+    async importar(
+        tenantId: string,
+        filas: any[],
+        opts: { simular?: boolean } = {},
+    ) {
+        if (!Array.isArray(filas) || !filas.length) {
+            throw new BadRequestException('El archivo no tiene filas para importar.');
+        }
+        if (filas.length > 2000) {
+            throw new BadRequestException('Demasiadas filas (máximo 2000 por archivo). Divide el Excel y vuelve a subirlo.');
+        }
+
+        const [trabajadores, vehiculos] = await Promise.all([
+            this.prisma.trabajador.findMany({
+                where: { tenant_id: tenantId },
+                select: { id: true, id_trabajador: true, nombre_completo: true },
+            }),
+            this.prisma.vehiculo.findMany({ select: { id: true, placa: true } }),
+        ]);
+        const clave = (v: string) => v.trim().toUpperCase();
+        const trabajadorPorClave = new Map<string, string>();
+        trabajadores.forEach((t) => {
+            // El vínculo se guarda por código (G001) cuando existe; si no, por UUID.
+            const ref = t.id_trabajador || t.id;
+            trabajadorPorClave.set(clave(t.nombre_completo), ref);
+            if (t.id_trabajador) trabajadorPorClave.set(clave(t.id_trabajador), ref);
+            trabajadorPorClave.set(clave(t.id), ref);
+        });
+        const placaPorClave = new Map<string, string>();
+        vehiculos.forEach((v) => { placaPorClave.set(clave(v.placa), v.placa); placaPorClave.set(clave(v.id), v.placa); });
+
+        // Códigos ya cargados en el tenant (para marcar duplicadas sin una query por fila).
+        const codigosExistentes = new Set(
+            (await this.prisma.programacion.findMany({
+                where: { tenant_id: tenantId, codigo: { not: null } },
+                select: { codigo: true },
+            })).map((o) => o.codigo as string),
+        );
+
+        const resultados: Array<{ fila: number; estado: 'NUEVA' | 'DUPLICADA' | 'ERROR'; codigo: string | null; mensaje?: string }> = [];
+        const aCrear: Array<{ idx: number; data: any }> = [];
+        const codigosDelArchivo = new Set<string>();
+        const huellasDelArchivo = new Set<string>();
+
+        for (let i = 0; i < filas.length; i++) {
+            const f = filas[i] || {};
+            // `fila` es el número de fila del Excel (1 = cabecera), para que el usuario
+            // la ubique en su archivo sin contar a mano.
+            const nfila = Number(f.__fila) || i + 2;
+            const push = (estado: 'DUPLICADA' | 'ERROR', codigo: string | null, mensaje: string) =>
+                resultados.push({ fila: nfila, estado, codigo, mensaje });
+
+            const fecha = this.parsearFechaImport(f.fecha);
+            if (!fecha) { push('ERROR', null, 'Fecha vacía o inválida (usa AAAA-MM-DD o DD/MM/AAAA).'); continue; }
+
+            const spedizione = f.spedizione ? clave(String(f.spedizione)) : null;
+            if (spedizione && !SPEDIZIONI_VALIDAS.includes(spedizione)) {
+                push('ERROR', null, `Spedizione desconocida: "${f.spedizione}". Usa una de: ${SPEDIZIONI_VALIDAS.join(', ')}.`);
+                continue;
+            }
+
+            const codigo = normalizarCodigo(f.codigo);
+            if (spedizioneUsaCodigo(spedizione)) {
+                if (!codigo) { push('ERROR', null, 'Falta el código de entrega (obligatorio en las spedizioni Extras).'); continue; }
+            } else if (codigo) {
+                push('ERROR', codigo, 'Solo las spedizioni Extras llevan código de entrega; quita el código o corrige la spedizione.');
+                continue;
+            }
+
+            let trabajadorId: string | null = null;
+            if (f.chofer) {
+                trabajadorId = trabajadorPorClave.get(clave(String(f.chofer))) || null;
+                if (!trabajadorId) { push('ERROR', codigo, `Chofer no encontrado: "${f.chofer}".`); continue; }
+            }
+            let placa: string | null = null;
+            if (f.placa) {
+                placa = placaPorClave.get(clave(String(f.placa))) || null;
+                if (!placa) { push('ERROR', codigo, `Placa no encontrada: "${f.placa}".`); continue; }
+            }
+
+            const cliente = f.cliente ? String(f.cliente).trim() : null;
+            const lugarRetiro = f.lugar_retiro ? String(f.lugar_retiro).trim() : null;
+            const lugarEntrega = f.lugar_entrega ? String(f.lugar_entrega).trim() : null;
+
+            // Duplicadas: por código (exacto) o, sin código, por fecha+cliente+destino.
+            const huella = [fecha.toISOString().slice(0, 10), clave(cliente || ''), clave(lugarEntrega || '')].join('|');
+            if (codigo) {
+                if (codigosExistentes.has(codigo)) { push('DUPLICADA', codigo, 'Ya está cargada: existe una entrega con este código.'); continue; }
+                if (codigosDelArchivo.has(codigo)) { push('DUPLICADA', codigo, 'El código se repite dentro del archivo.'); continue; }
+            } else {
+                if (huellasDelArchivo.has(huella)) { push('DUPLICADA', null, 'La fila se repite dentro del archivo (misma fecha, cliente y destino).'); continue; }
+                const yaEsta = await this.prisma.programacion.findFirst({
+                    where: {
+                        tenant_id: tenantId,
+                        fecha: { gte: new Date(huella.slice(0, 10) + 'T00:00:00.000Z'), lte: new Date(huella.slice(0, 10) + 'T23:59:59.999Z') },
+                        ...(cliente ? { cliente: { equals: cliente, mode: 'insensitive' } } : { cliente: null }),
+                        ...(lugarEntrega ? { lugar_entrega: { equals: lugarEntrega, mode: 'insensitive' } } : {}),
+                    },
+                    select: { id: true },
+                });
+                if (yaEsta) { push('DUPLICADA', null, 'Ya está cargada: misma fecha, cliente y destino.'); continue; }
+            }
+            const estado = f.estado ? clave(String(f.estado)) : 'PENDIENTE';
+            if (!ESTADOS_VALIDOS.includes(estado)) {
+                push('ERROR', codigo, `Estado desconocido: "${f.estado}". Usa uno de: ${ESTADOS_VALIDOS.join(', ')}.`);
+                continue;
+            }
+
+            const numero = (v: any) => (v === null || v === undefined || v === '' ? null : Number(String(v).replace(',', '.')));
+            const km = numero(f.km);
+            const kmFacturable = numero(f.km_facturable);
+            const ingreso = numero(f.ingreso);
+            if ([km, kmFacturable, ingreso].some((n) => n !== null && !Number.isFinite(n as number))) {
+                push('ERROR', codigo, 'Km o ingreso no son números válidos.');
+                continue;
+            }
+
+            // La fila pasó todas las validaciones: recién ahora cuenta para detectar
+            // repetidos DENTRO del archivo (si se registrara antes, una fila con error
+            // haría que la siguiente con el mismo código se marcara duplicada sin serlo).
+            if (codigo) codigosDelArchivo.add(codigo); else huellasDelArchivo.add(huella);
+
+            resultados.push({ fila: nfila, estado: 'NUEVA', codigo });
+            aCrear.push({
+                idx: resultados.length - 1,
+                data: {
+                    fecha,
+                    fecha_retiro: this.parsearFechaImport(f.fecha_retiro, f.hora_retiro) || this.parsearFechaImport(f.fecha, f.hora_retiro),
+                    fecha_entrega: this.parsearFechaImport(f.fecha_entrega, f.hora_entrega),
+                    codigo,
+                    spedizione,
+                    cliente,
+                    trabajador_id: trabajadorId,
+                    vehiculo_id: placa,
+                    lugar_retiro: lugarRetiro,
+                    lugar_entrega: lugarEntrega,
+                    km,
+                    km_facturable: kmFacturable,
+                    ingreso_estimado: ingreso,
+                    nota: f.nota ? String(f.nota).trim() : null,
+                    // Entregado y Consegnato son el mismo hecho: se sincronizan al
+                    // importar igual que al guardar desde el formulario.
+                    ...this.syncEstadosEntrega({ estado }),
+                    tenant_id: tenantId,
+                },
+            });
+        }
+
+        // Simulación: se devuelve el mismo informe sin tocar la base.
+        if (!opts.simular) {
+            for (const item of aCrear) {
+                try {
+                    // Sin push al chofer: una importación es carga histórica, no una
+                    // asignación nueva — notificar 300 filas le reventaría el teléfono.
+                    await this.prisma.programacion.create({ data: item.data });
+                } catch (e: any) {
+                    // El índice único (tenant_id, codigo) es el último filtro: cubre el caso
+                    // de que alguien cargue el mismo archivo desde dos pestañas a la vez.
+                    const repetido = e?.code === 'P2002';
+                    resultados[item.idx] = {
+                        ...resultados[item.idx],
+                        estado: repetido ? 'DUPLICADA' : 'ERROR',
+                        mensaje: repetido
+                            ? 'Ya está cargada: existe una entrega con este código.'
+                            : `No se pudo crear: ${e?.message || 'error desconocido'}`,
+                    };
+                }
+            }
+        }
+
+        const cuenta = (estado: string) => resultados.filter((r) => r.estado === estado).length;
+        return {
+            simulacion: !!opts.simular,
+            total: filas.length,
+            nuevas: cuenta('NUEVA'),
+            duplicadas: cuenta('DUPLICADA'),
+            errores: cuenta('ERROR'),
+            filas: resultados,
+        };
+    }
+
+    // Fecha de una celda del Excel: acepta Date (xlsx con cellDates), ISO (AAAA-MM-DD),
+    // DD/MM/AAAA y DD-MM-AAAA. La hora opcional (HH:MM) se le pega encima.
+    private parsearFechaImport(valor: any, hora?: any): Date | null {
+        if (valor === null || valor === undefined || valor === '') return null;
+        let base: Date | null = null;
+        if (valor instanceof Date) base = new Date(valor);
+        else {
+            const txt = String(valor).trim();
+            const dmy = txt.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+            if (dmy) base = new Date(Date.UTC(+dmy[3], +dmy[2] - 1, +dmy[1]));
+            else {
+                const d = new Date(txt);
+                base = isNaN(d.getTime()) ? null : d;
+            }
+        }
+        if (!base || isNaN(base.getTime())) return null;
+        const hm = hora ? String(hora).trim().match(/^(\d{1,2}):(\d{2})/) : null;
+        if (hm) base.setUTCHours(+hm[1], +hm[2], 0, 0);
+        return base;
     }
 
     async remove(id: string, tenantId: string) {

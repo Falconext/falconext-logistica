@@ -43,6 +43,16 @@ export class ProgramacionController {
     }
 
 
+    // Importación masiva desde Excel/CSV (solo web). La web parsea el archivo y manda
+    // las filas ya mapeadas; con `simular: true` devuelve el informe sin escribir nada,
+    // para que el usuario vea qué entra y qué está repetido antes de confirmar.
+    // Va antes de ':id' para que 'importar' no se interprete como un id.
+    @Post('importar')
+    importar(@Req() req, @Body() body: any) {
+        if (req.user?.soloPropios) throw new ForbiddenException('Solo un supervisor puede importar operaciones.');
+        return this.programacionService.importar(req.user.tenantId, body?.filas, { simular: !!body?.simular });
+    }
+
     // Gastos de un tipo (PEAJE/COMBUSTIBLE) del tenant, para los módulos respectivos.
     // Debe ir antes de ':id' para que 'gastos' no se interprete como un id.
     @Get('gastos')

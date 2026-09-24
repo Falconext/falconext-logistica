@@ -8,9 +8,10 @@ import { MapboxRouteMap } from '../../components/tracking/MapboxRouteMap';
 import { MapboxLiveMap as LiveMapReal } from '../../components/tracking/MapboxLiveMap';
 import NewRouteModal from './NewRouteModal';
 import ReporteMensualModal from './ReporteMensualModal';
+import ImportarModal from './ImportarModal';
 import { estadoConsegnaMeta, SPEDIZIONE_OPTIONS } from './constants';
 import {
-    Truck, Search, Plus, Package, Layers, FileSpreadsheet, FileBarChart, MapPin, User, Navigation, X, Check, Trash2, AlertTriangle, Loader2, Route, MapPinned, Smartphone, Boxes, Clock, SlidersHorizontal
+    Truck, Search, Plus, Package, Layers, FileSpreadsheet, FileBarChart, Upload, Hash, MapPin, User, Navigation, X, Check, Trash2, AlertTriangle, Loader2, Route, MapPinned, Smartphone, Boxes, Clock, SlidersHorizontal
 } from 'lucide-react';
 import { toast } from 'sonner';
 import clsx from 'clsx';
@@ -120,7 +121,7 @@ function RouteDetailCard({ selected, format, onEdit, onDelete, canDelete = true 
                     <span className="ml-auto font-semibold text-slate-900 tabular-nums">{format(selected.ingreso_estimado)}</span>
                 )}
             </div>
-            {(selected.km || selected.tiempo_min || selected.ciudad || selected.app || selected.spedizione || selected.compactado || selected.attesa) && (
+            {(selected.km || selected.tiempo_min || selected.ciudad || selected.app || selected.spedizione || selected.codigo || selected.compactado || selected.attesa) && (
                 <div className="mt-2 pt-2 border-t border-slate-100 flex items-center gap-4 text-xs text-slate-500 flex-wrap">
                     {selected.km ? (
                         <span className="flex items-center gap-1.5">
@@ -132,6 +133,8 @@ function RouteDetailCard({ selected, format, onEdit, onDelete, canDelete = true 
                     {selected.ciudad ? <span className="flex items-center gap-1.5"><MapPinned size={13} /> {selected.ciudad}</span> : null}
                     {selected.app ? <span className="flex items-center gap-1.5"><Smartphone size={13} /> {selected.app}</span> : null}
                     {selected.spedizione ? <span className="flex items-center gap-1.5"><Package size={13} /> {selected.spedizione}</span> : null}
+                    {/* Código de entrega del extra: es como el supervisor identifica la consegna. */}
+                    {selected.codigo ? <span className="flex items-center gap-1.5 font-mono font-semibold text-slate-700"><Hash size={13} /> {selected.codigo}</span> : null}
                     {selected.attesa ? <span className="flex items-center gap-1.5"><Clock size={13} /> Attesa: {selected.attesa}</span> : null}
                     {selected.compactado ? <span className="flex items-center gap-1.5 text-blue-600 font-medium"><Boxes size={13} /> Compactado</span> : null}
                 </div>
@@ -249,6 +252,7 @@ export default function OperacionesPage() {
     const [isNewRouteModalOpen, setIsNewRouteModalOpen] = useState(false);
     const [editingRuta, setEditingRuta] = useState<Programacion | null>(null);
     const [showReporteMensual, setShowReporteMensual] = useState(false);
+    const [showImportar, setShowImportar] = useState(false);
 
     const listRef = useRef<HTMLDivElement | null>(null);
 
@@ -424,6 +428,7 @@ export default function OperacionesPage() {
                 [t('operaciones.excel.conductor')]: r.trabajador_nombre || r.trabajador_id,
                 [t('operaciones.excel.estado')]: r.estado,
                 [t('operaciones.excel.spedizione')]: r.spedizione,
+                [t('operaciones.excel.codigo')]: r.codigo || '',
                 [t('operaciones.excel.origen')]: r.lugar_retiro,
                 [t('operaciones.excel.destino')]: r.lugar_entrega,
             })));
@@ -461,6 +466,13 @@ export default function OperacionesPage() {
                             <button onClick={exportToExcel} title={t('operaciones.exportarTitle')} className="w-9 h-9 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 transition">
                                 <FileSpreadsheet size={16} />
                             </button>
+                            {/* Importar Excel/CSV — carga masiva. Solo supervisores: un
+                                chofer no crea operaciones de otros. */}
+                            {canEditAll && (
+                                <button onClick={() => setShowImportar(true)} title={t('operaciones.importar.botonTitle')} className="w-9 h-9 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 transition">
+                                    <Upload size={16} />
+                                </button>
+                            )}
                         </div>
                     </div>
                     <div className="relative">
@@ -713,6 +725,10 @@ export default function OperacionesPage() {
                 canEditAll={canEditAll}
             />
 
+            {showImportar && (
+                <ImportarModal onClose={() => setShowImportar(false)} onSuccess={reloadFirstPage} />
+            )}
+
             {/* Confirmación de eliminación */}
             {deleting && mounted && createPortal(
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -802,6 +818,9 @@ const RouteCard = memo(function RouteCard({ ruta, isSelected, onSelect }: {
                 <span className="flex items-center gap-1 truncate"><User size={12} /> {ruta.trabajador_nombre || ruta.trabajador_id || t('operaciones.sinAsignar')}</span>
                 {ruta.app ? <span className="flex items-center gap-1"><Smartphone size={12} /> {ruta.app}</span> : null}
                 {ruta.spedizione ? <span className="flex items-center gap-1"><Package size={12} /> {ruta.spedizione}</span> : null}
+                {/* Código del extra: se muestra en la lista para poder ubicarlo de un vistazo
+                    (y porque el buscador encuentra por él). */}
+                {ruta.codigo ? <span className="flex items-center gap-1 font-mono font-semibold text-slate-700"><Hash size={12} /> {ruta.codigo}</span> : null}
                 {ruta.compactado ? <span className="flex items-center gap-1 text-blue-600 font-medium"><Boxes size={12} /> Compactado</span> : null}
             </div>
             {estadoConsegnaMeta(ruta.estado_consegna) && (

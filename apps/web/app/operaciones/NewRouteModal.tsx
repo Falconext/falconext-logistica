@@ -9,7 +9,7 @@ import DatePicker from '../../components/DatePicker';
 import Select from '../../components/Select';
 import MultiFileUpload from '../../components/MultiFileUpload';
 import { useCurrency } from '../../lib/useCurrency';
-import { APP_OPTIONS, SPEDIZIONE_OPTIONS, ESTADO_CONSEGNA_META, RETIRO_PRESETS, isCoords, GASTO_TIPOS_CON_PAGADOR, pagadorLabels, categoriaVehiculoLabel, calcularIngresoSugerido, TarifasIngreso } from './constants';
+import { APP_OPTIONS, SPEDIZIONE_OPTIONS, ESTADO_CONSEGNA_META, RETIRO_PRESETS, isCoords, GASTO_TIPOS_CON_PAGADOR, pagadorLabels, categoriaVehiculoLabel, calcularIngresoSugerido, spedizioneUsaCodigo, TarifasIngreso } from './constants';
 import { useGoogleMaps } from '../../components/tracking/googleMaps';
 import { fmtMin } from '../../components/tracking/MapboxRouteMap';
 
@@ -161,6 +161,8 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
         ciudad: '',
         app: '',
         spedizione: '',
+        // Código de entrega — solo para las spedizioni Extras (ver spedizioneUsaCodigo).
+        codigo: '',
         compactado: false,
         es_navetta: false,
         estado_consegna: '',
@@ -174,6 +176,10 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
 
         nota: ''
     });
+
+    // Las spedizioni Extras (Piazza Milano/Roma, Steffania) traen un código de entrega
+    // propio del cliente; DHL / AB Service no. El campo solo aparece en las primeras.
+    const usaCodigo = spedizioneUsaCodigo(formData.spedizione);
 
     // Categoría del vehículo elegido (vehiculo_id guarda la PLACA, no el id).
     const categoriaDeVehiculo = (vehiculoId: string) =>
@@ -283,6 +289,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 ciudad: src.ciudad || '',
                 app: src.app || '',
                 spedizione: src.spedizione || '',
+                codigo: src.codigo || '',
                 compactado: !!src.compactado,
                 es_navetta: !!src.es_navetta,
                 estado_consegna: src.estado_consegna || '',
@@ -341,6 +348,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 ciudad: '',
                 app: '',
                 spedizione: '',
+                codigo: '',
                 compactado: false,
                 es_navetta: false,
                 estado_consegna: '',
@@ -429,6 +437,9 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 ciudad: formData.ciudad || null,
                 app: formData.app || null,
                 spedizione: formData.spedizione || null,
+                // El backend lo guarda null si la spedizione no lleva código; lo
+                // limpiamos aquí también para no mandar basura del formulario.
+                codigo: usaCodigo ? (formData.codigo.trim() || null) : null,
                 compactado: formData.compactado,
                 es_navetta: formData.es_navetta,
                 estado_consegna: formData.estado_consegna || null,
@@ -484,6 +495,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                 ciudad: '',
                 app: '',
                 spedizione: '',
+                codigo: '',
                 compactado: false,
                 es_navetta: false,
                 estado_consegna: '',
@@ -497,7 +509,13 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
 
         } catch (error: any) {
             console.error(error);
-            toast.error(initialData ? 'Error al actualizar ruta' : 'Error al crear ruta');
+            // El backend explica el motivo cuando lo sabe (p. ej. código de entrega
+            // repetido) — mostrarlo tal cual evita el genérico "Error al crear ruta".
+            const detalle = error?.response?.data?.message;
+            toast.error(
+                (Array.isArray(detalle) ? detalle[0] : detalle)
+                || (initialData ? 'Error al actualizar ruta' : 'Error al crear ruta'),
+            );
         } finally {
             setSubmitting(false);
         }
@@ -1098,6 +1116,24 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                 onChange={(v) => setFormData((f) => aplicarIngresoAuto({ ...f, spedizione: v }))}
                                 options={SPEDIZIONE_OPTIONS}
                             />
+
+                            {/* CÓDIGO — solo en las spedizioni Extras: es el identificador
+                                único con el que el cliente y el supervisor reconocen cada extra. */}
+                            {usaCodigo && (
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-bold text-slate-500 uppercase">Código de entrega</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Ej: EX-10432"
+                                        className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 outline-none focus:ring-2 focus:ring-blue-500 text-sm text-slate-900 dark:text-white uppercase"
+                                        value={formData.codigo}
+                                        onChange={(e) => setFormData({ ...formData, codigo: e.target.value })}
+                                    />
+                                    <p className="text-xs text-slate-500">
+                                        Código único del extra. No puede repetirse: si ya existe una entrega con ese código, no se guardará.
+                                    </p>
+                                </div>
+                            )}
 
                             {/* Estado consegna se controla arriba con los botones de acción */}
 

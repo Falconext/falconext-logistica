@@ -96,6 +96,9 @@ export interface Programacion {
     ciudad?: string;
     app?: string;
     spedizione?: string;
+    // Código de entrega de los extras (Piazza Milano/Roma, Steffania): único por
+    // empresa. Ver SPEDIZIONI_CON_CODIGO en app/operaciones/constants.ts.
+    codigo?: string | null;
     compactado?: boolean;
     estado_consegna?: string; // CONSEGNATO | IN_CONSEGNA | IN_SOSPESO | RITIRATO | ANNULLATO | RISCHEDULATO
     attesa?: string; // Tiempo de espera del chofer al cliente
