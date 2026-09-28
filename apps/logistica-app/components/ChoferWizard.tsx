@@ -1063,8 +1063,11 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                               <PagadorToggle value={g.pagado_por_chofer} tipo={g.tipo} onChange={(v) => updateGasto(i, { pagado_por_chofer: v })} C={C} styles={styles} />
                             </>
                           )}
-                          {g.tipo === 'PEAJE' && !g.pagado_por_chofer && (<><Text style={styles.fieldLabel}>Nº de mancato</Text><TextField value={g.numero_mancato} onChangeText={(t) => updateGasto(i, { numero_mancato: t })} placeholder="Número de mancato" styles={styles} /></>)}
-                          {g.tipo === 'PEAJE' && !g.pagado_por_chofer && (<><Text style={styles.fieldLabel}>Link de peaje</Text><TextField value={g.link_peaje} onChangeText={(t) => updateGasto(i, { link_peaje: t })} placeholder="https://…" keyboardType="url" styles={styles} /></>)}
+                          {/* Nº de mancato y link: SIEMPRE visibles para PEAJE (antes solo
+                              cuando lo pagaba la empresa; el chofer que dejaba "Pagado" no
+                              tenía dónde ponerlos — audio empresario 2026-09-28). */}
+                          {g.tipo === 'PEAJE' && (<><Text style={styles.fieldLabel}>Nº de mancato</Text><TextField value={g.numero_mancato} onChangeText={(t) => updateGasto(i, { numero_mancato: t })} placeholder="Número de mancato" styles={styles} /></>)}
+                          {g.tipo === 'PEAJE' && (<><Text style={styles.fieldLabel}>Link de peaje</Text><TextField value={g.link_peaje} onChangeText={(t) => updateGasto(i, { link_peaje: t })} placeholder="https://…" keyboardType="url" styles={styles} /></>)}
                           <Text style={styles.fieldLabel}>Comprobante(s)</Text>
                           <MultiFileUpload value={g.comprobantes} onChange={(urls) => updateGasto(i, { comprobantes: urls })} />
                           <TouchableOpacity style={styles.removeRow} onPress={() => removeGasto(i)}><Trash2 size={14} color={C.danger} /><Text style={styles.removeText}>Quitar gasto</Text></TouchableOpacity>
@@ -1199,7 +1202,7 @@ export default function ChoferWizard({ visible, operacion, onClose, onSaved }: P
                           <Text style={styles.rendLabel}>¿Quién lo pagó?</Text>
                           <PagadorToggle value={g.pagado_por_chofer} tipo={g.tipo} onChange={(v) => rendSetGasto(i, { pagado_por_chofer: v })} C={C} styles={styles} />
                         </>)}
-                        {g.tipo === 'PEAJE' && !g.pagado_por_chofer && (<>
+                        {g.tipo === 'PEAJE' && (<>
                           <Text style={styles.rendLabel}>Nº de mancato</Text>
                           <TextInput style={styles.input} value={g.numero_mancato} onChangeText={(v) => rendSetGasto(i, { numero_mancato: v })} placeholder="Número de mancato" placeholderTextColor={C.textFaint} />
                           <Text style={styles.rendLabel}>Link de peaje</Text>

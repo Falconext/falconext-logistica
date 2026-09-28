@@ -124,7 +124,7 @@ const monthRangeISO = () => {
   };
 };
 
-type GastoRow = { id?: string | null; tipo: string; monto: string; descripcion: string; numero_mancato: string; comprobantes: string[]; pagado_por_chofer: boolean };
+type GastoRow = { id?: string | null; tipo: string; monto: string; descripcion: string; numero_mancato: string; link_peaje: string; comprobantes: string[]; pagado_por_chofer: boolean };
 
 // Fecha/hora de un retiro adicional (paralelo a `retiros[]` por índice).
 type RetiroDetalleRow = { fecha: string; hora: string };
@@ -624,6 +624,7 @@ export default function OperacionesScreen() {
       monto: g.monto != null ? String(g.monto) : '',
       descripcion: g.descripcion || '',
       numero_mancato: g.numero_mancato || '',
+      link_peaje: g.link_peaje || '',
       comprobantes: Array.isArray(g.comprobantes) ? g.comprobantes : [],
       pagado_por_chofer: g.pagado_por_chofer !== false,
     })) : [],
@@ -712,7 +713,7 @@ export default function OperacionesScreen() {
     setForm((f) => ({ ...f, retirosDetalle: f.retirosDetalle.map((d, idx) => (idx === i ? { ...d, ...patch } : d)) }));
 
   // --- Gastos (rendición) ---
-  const addGasto = () => setForm((f) => ({ ...f, gastos: [...f.gastos, { tipo: 'PEAJE', monto: '', descripcion: '', numero_mancato: '', comprobantes: [], pagado_por_chofer: true }] }));
+  const addGasto = () => setForm((f) => ({ ...f, gastos: [...f.gastos, { tipo: 'PEAJE', monto: '', descripcion: '', numero_mancato: '', link_peaje: '', comprobantes: [], pagado_por_chofer: true }] }));
   const updateGasto = (i: number, patch: Partial<GastoRow>) => setForm((f) => ({ ...f, gastos: f.gastos.map((g, idx) => (idx === i ? { ...g, ...patch } : g)) }));
   const removeGasto = (i: number) => setForm((f) => ({ ...f, gastos: f.gastos.filter((_, idx) => idx !== i) }));
   // Costo total de la ruta (todos los gastos, los pague quien los pague).
@@ -795,13 +796,14 @@ export default function OperacionesScreen() {
         foto_bolla: form.foto_bolla,
         anticipo: form.anticipo !== '' ? Number(form.anticipo) : null,
         gastos: form.gastos
-          .filter((g) => g.tipo && (g.monto !== '' || g.comprobantes.length || g.descripcion || g.numero_mancato))
+          .filter((g) => g.tipo && (g.monto !== '' || g.comprobantes.length || g.descripcion || g.numero_mancato || g.link_peaje))
           .map((g) => ({
             id: g.id ?? null,
             tipo: g.tipo,
             monto: g.monto !== '' ? Number(g.monto) : 0,
             descripcion: g.descripcion || null,
             numero_mancato: g.tipo === 'PEAJE' ? (g.numero_mancato || null) : null,
+            link_peaje: g.tipo === 'PEAJE' ? (g.link_peaje || null) : null,
             comprobantes: g.comprobantes,
             // Solo peaje/combustible ofrecen la opción; el resto siempre lo paga el chofer.
             pagado_por_chofer: GASTO_TIPOS_CON_PAGADOR.includes(g.tipo) ? g.pagado_por_chofer : true,
@@ -1872,12 +1874,25 @@ export default function OperacionesScreen() {
                 </View>
               );
             })()}
-            {g.tipo === 'PEAJE' && !g.pagado_por_chofer && (
+            {/* Nº de mancato y link: SIEMPRE visibles para PEAJE. Antes solo salían
+                cuando lo pagaba la empresa, así que el chofer que dejaba el toggle
+                en "Pagado" no tenía dónde ponerlos y los escribía en comentarios
+                (audio empresario 2026-09-28: "no aparece ninguna información"). */}
+            {g.tipo === 'PEAJE' && (
               <FormField
                 label="Nº de mancato"
                 value={g.numero_mancato}
                 onChangeText={(t) => updateGasto(i, { numero_mancato: t })}
                 placeholder="Número de mancato pagamento"
+              />
+            )}
+            {g.tipo === 'PEAJE' && (
+              <FormField
+                label="Link de pago"
+                value={g.link_peaje}
+                onChangeText={(t) => updateGasto(i, { link_peaje: t })}
+                placeholder="www.autostrade.it"
+                autoCapitalize="none"
               />
             )}
             <Text style={styles.fieldLabelSm}>Comprobante(s)</Text>

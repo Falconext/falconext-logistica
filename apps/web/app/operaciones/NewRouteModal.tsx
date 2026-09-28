@@ -1281,7 +1281,11 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                             </div>
                                         );
                                     })()}
-                                    {g.tipo === 'PEAJE' && !g.pagado_por_chofer && (
+                                    {/* Nº de mancato y link: SIEMPRE visibles para PEAJE. Antes solo
+                                        salían cuando lo pagaba la empresa, así que lo registrado como
+                                        "Pagado" quedaba sin número ni link en el panel de Peajes
+                                        (audio empresario 2026-09-28). */}
+                                    {g.tipo === 'PEAJE' && (
                                         <div className="space-y-1">
                                             <label className="text-[10px] font-bold text-slate-400 uppercase">Nº de mancato</label>
                                             <input
@@ -1293,7 +1297,7 @@ export default function NewRouteModal({ isOpen, onClose, onSuccess, initialData,
                                             />
                                         </div>
                                     )}
-                                    {g.tipo === 'PEAJE' && !g.pagado_por_chofer && (
+                                    {g.tipo === 'PEAJE' && (
                                         <div className="space-y-1">
                                             <label className="text-[10px] font-bold text-slate-400 uppercase">Link de peaje</label>
                                             <input
