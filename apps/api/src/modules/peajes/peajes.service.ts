@@ -300,7 +300,12 @@ export class PeajesService {
             hora: null,
             tipo: 'PEAJE',
             monto: g.monto,
-            archivo: (g.comprobantes && g.comprobantes[0]) || null,
+            // `archivo` en un Peaje nativo guarda el LINK de pago, así que la web lo
+            // usa de respaldo de `link_peaje`. Un gasto de operación no tiene link ahí:
+            // aliasarlo a la primera foto hacía que el panel mostrara la URL de la
+            // imagen en la columna "Link de pago" (captura del empresario 2026-09-28).
+            // Las fotos van solo en `comprobantes`.
+            archivo: null,
             comprobantes: g.comprobantes || [],
             recibo_pago: null,
         }));
